@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}Odonto Master | Totem{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/welcome.css') }}">
+{% endblock %}
+
+{% block body %}
+<main class="welcome">
+    <div class="welcome__card">
+        <img
+            class="welcome__logo"
+            src="{{ url_for('static', filename='images/logo-master.png') }}"
+            alt="Odonto Master"
+        >
+        <p class="welcome__tagline">Bem-vindo ao totem de autoatendimento</p>
+        <a class="welcome__button" href="{{ url_for('catalog') }}">
+            Acesse a loja
+            <span class="welcome__button-arrow" aria-hidden="true">&rarr;</span>
+        </a>
+    </div>
+    <footer class="welcome__footer">
+        <span>&copy; Odonto Master &middot; Autoatendimento</span>
+    </footer>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    try { sessionStorage.removeItem('totem_cart_v1'); } catch (_) {}
+</script>
+<script src="{{ url_for('static', filename='js/admin-entry.js') }}"></script>
+{% endblock %}

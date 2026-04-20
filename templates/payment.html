@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Pagamento | Odonto Master{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/payment.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/idle-timeout.css') }}">
+{% endblock %}
+
+{% block body %}
+<div class="payment">
+    <header class="payment__topbar">
+        <a class="payment__back" href="{{ url_for('catalog') }}" id="paymentBack">
+            <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+            Voltar ao catálogo
+        </a>
+        <a class="payment__brand" href="{{ url_for('welcome') }}" aria-label="Odonto Master">
+            <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
+        </a>
+    </header>
+
+    <main class="payment__content" id="paymentContent">
+        <section class="payment__section">
+            <h1 class="payment__section-title">
+                <i class="fa-solid fa-bag-shopping" aria-hidden="true"></i>
+                Resumo do pedido
+            </h1>
+            <div class="payment__items" id="paymentItems"></div>
+        </section>
+
+        <aside class="payment__section">
+            <h2 class="payment__section-title">
+                <i class="fa-solid fa-credit-card" aria-hidden="true"></i>
+                Pagamento
+            </h2>
+
+            <div class="payment__summary-rows">
+                <div class="payment__summary-row">
+                    <span>Itens</span>
+                    <strong id="paymentCount">0</strong>
+                </div>
+                <div class="payment__summary-row">
+                    <span>Subtotal</span>
+                    <strong id="paymentSubtotal">R$ 0,00</strong>
+                </div>
+            </div>
+
+            <div class="payment__summary-total">
+                <span class="payment__summary-total-label">Total</span>
+                <span class="payment__summary-total-value" id="paymentTotal">R$ 0,00</span>
+            </div>
+
+            <div class="payment__instructions">
+                <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                <div>
+                    <strong>Próximo passo</strong>
+                    Revise os itens e o total. Em seguida você será direcionado à tela
+                    <em>Aguardando pagamento</em>, onde poderá usar a maquininha e confirmar
+                    quando o pagamento for concluído.
+                </div>
+            </div>
+
+            <div class="payment__actions">
+                <button type="button" class="payment__btn payment__btn--next" id="paymentContinue">
+                    <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                    Continuar para o pagamento
+                </button>
+                <button type="button" class="payment__btn payment__btn--secondary" id="paymentCancel">
+                    Cancelar e voltar ao catálogo
+                </button>
+            </div>
+        </aside>
+    </main>
+</div>
+
+<div
+    id="idle-timeout-overlay"
+    class="idle-modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="idle-timeout-title"
+    aria-describedby="idle-timeout-desc"
+    aria-hidden="true"
+>
+    <div class="idle-modal-dialog" role="document">
+        <div class="idle-modal-dialog__icon" aria-hidden="true">
+            <i class="fa-regular fa-clock"></i>
+        </div>
+        <h2 id="idle-timeout-title" class="idle-modal-dialog__title">Ainda está aí?</h2>
+        <p id="idle-timeout-desc" class="idle-modal-dialog__text">
+            Toque no botão abaixo para continuar. Sem interação, o totem voltará à tela inicial em instantes.
+        </p>
+        <div class="idle-modal-dialog__actions">
+            <button type="button" class="idle-modal-dialog__btn" id="idle-timeout-continue">
+                Continuar
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/cart.js') }}"></script>
+<script src="{{ url_for('static', filename='js/idle-timeout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/payment.js') }}"></script>
+{% endblock %}

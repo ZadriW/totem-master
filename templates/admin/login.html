@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Administração | Odonto Master{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+{% endblock %}
+
+{% block body %}
+<main class="admin-login">
+    <form class="admin-login__card" method="post" autocomplete="off">
+        <div class="admin-login__brand">
+            <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
+        </div>
+        <h1 class="admin-login__title">Painel administrativo</h1>
+        <p class="admin-login__subtitle">Acesso restrito a administradores</p>
+
+        {% if error %}
+        <div class="admin-alert admin-alert--error" role="alert">
+            <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <label class="admin-field">
+            <span class="admin-field__label">Usuário</span>
+            <span class="admin-field__wrap">
+                <i class="fa-solid fa-user admin-field__icon" aria-hidden="true"></i>
+                <input
+                    class="admin-field__input"
+                    type="text"
+                    name="username"
+                    autocomplete="username"
+                    required
+                    autofocus
+                >
+            </span>
+        </label>
+
+        <label class="admin-field">
+            <span class="admin-field__label">Senha</span>
+            <span class="admin-field__wrap">
+                <i class="fa-solid fa-lock admin-field__icon" aria-hidden="true"></i>
+                <input
+                    class="admin-field__input"
+                    type="password"
+                    name="password"
+                    autocomplete="current-password"
+                    required
+                >
+            </span>
+        </label>
+
+        <button type="submit" class="admin-login__submit">
+            Entrar
+            <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+        </button>
+
+        <a class="admin-login__back" href="{{ url_for('welcome') }}">
+            <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+            Voltar ao totem
+        </a>
+    </form>
+</main>
+{% endblock %}

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block title %}Aguardando pagamento | Odonto Master{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/payment.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/idle-timeout.css') }}">
+{% endblock %}
+
+{% block body %}
+<div class="payment">
+    <header class="payment__topbar">
+        <button type="button" class="payment__back" id="waitingBack">
+            <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+            Voltar ao resumo
+        </button>
+        <a class="payment__brand" href="{{ url_for('welcome') }}" aria-label="Odonto Master">
+            <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
+        </a>
+    </header>
+
+    <main class="payment-wait" id="waitingContent">
+        <div class="payment-wait__hero">
+            <div class="payment-wait__pulse" aria-hidden="true">
+                <i class="fa-solid fa-credit-card"></i>
+            </div>
+            <h1 class="payment-wait__title">Aguardando pagamento</h1>
+            <p class="payment-wait__lead">
+                Utilize a <strong>maquininha</strong> ao lado do totem para concluir o pagamento.
+                Quando a operação for aprovada na maquininha, toque no botão abaixo para registrar
+                a venda e liberar a nota de retirada.
+            </p>
+        </div>
+
+        <section class="payment-wait__card">
+            <h2 class="payment-wait__card-title">
+                <i class="fa-solid fa-receipt" aria-hidden="true"></i>
+                Seu pedido
+            </h2>
+            <div class="payment__items payment-wait__items" id="waitingItems"></div>
+            <div class="payment-wait__total-row">
+                <span>Total a pagar</span>
+                <strong id="waitingTotal">R$ 0,00</strong>
+            </div>
+            <p class="payment-wait__hint">
+                <span id="waitingCount">0</span> unidade(s) no pedido
+            </p>
+        </section>
+
+        <div class="payment-wait__actions">
+            <button type="button" class="payment__btn payment__btn--primary" id="waitingConfirm">
+                <i class="fa-solid fa-check" aria-hidden="true"></i>
+                Pagamento realizado
+            </button>
+        </div>
+    </main>
+
+    <section class="payment__success" id="paymentSuccess" hidden>
+        <div class="payment__success-icon">
+            <i class="fa-solid fa-check" aria-hidden="true"></i>
+        </div>
+        <h2 class="payment__success-title">Pagamento confirmado!</h2>
+        <p class="payment__success-text">
+            Retire a nota impressa e apresente no balcão para retirar seus produtos.
+            <br>
+            O totem voltará à tela inicial em <span id="successCountdown">8</span>s.
+        </p>
+        <div class="payment__success-order" id="successOrder">Pedido #—</div>
+        <button type="button" class="payment__btn payment__btn--primary" id="successFinish">
+            Finalizar agora
+        </button>
+    </section>
+</div>
+
+<div
+    id="idle-timeout-overlay"
+    class="idle-modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="idle-timeout-title"
+    aria-describedby="idle-timeout-desc"
+    aria-hidden="true"
+>
+    <div class="idle-modal-dialog" role="document">
+        <div class="idle-modal-dialog__icon" aria-hidden="true">
+            <i class="fa-regular fa-clock"></i>
+        </div>
+        <h2 id="idle-timeout-title" class="idle-modal-dialog__title">Ainda está aí?</h2>
+        <p id="idle-timeout-desc" class="idle-modal-dialog__text">
+            Toque no botão abaixo para continuar. Sem interação, o totem voltará à tela inicial em instantes.
+        </p>
+        <div class="idle-modal-dialog__actions">
+            <button type="button" class="idle-modal-dialog__btn" id="idle-timeout-continue">
+                Continuar
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/cart.js') }}"></script>
+<script src="{{ url_for('static', filename='js/idle-timeout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/payment-waiting.js') }}"></script>
+{% endblock %}
