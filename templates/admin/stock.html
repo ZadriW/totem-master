@@ -1,0 +1,124 @@
+{% extends "admin/_layout.html" %}
+
+{% block title %}Estoque | Odonto Master{% endblock %}
+
+{% block admin_body %}
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <h1 class="admin-section__title">Controle de estoque</h1>
+            <p class="admin-section__subtitle">
+                {{ stock.products_count }} produtos cadastrados &middot;
+                {{ stock.units_in_stock }} unidades &middot;
+                <strong>{{ stock.below_min }}</strong> abaixo do mínimo
+            </p>
+        </div>
+        <a class="admin-btn admin-btn--ghost" href="{{ url_for('admin_movements') }}">
+            <i class="fa-solid fa-right-left" aria-hidden="true"></i>
+            Ver movimentações
+        </a>
+    </header>
+
+    <form class="admin-filters" method="get" action="{{ url_for('admin_stock') }}">
+        <label class="admin-filter">
+            <span class="admin-filter__label">Buscar</span>
+            <span class="admin-filter__wrap">
+                <i class="fa-solid fa-magnifying-glass admin-filter__icon" aria-hidden="true"></i>
+                <input
+                    type="search"
+                    name="q"
+                    value="{{ filters.q }}"
+                    placeholder="Nome ou descrição..."
+                    class="admin-filter__input"
+                >
+            </span>
+        </label>
+
+        <label class="admin-filter">
+            <span class="admin-filter__label">Categoria</span>
+            <select name="categoria" class="admin-filter__input">
+                <option value="todos" {% if filters.categoria == 'todos' %}selected{% endif %}>Todas</option>
+                {% for c in categories %}
+                <option value="{{ c }}" {% if filters.categoria == c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label class="admin-filter">
+            <span class="admin-filter__label">Situação</span>
+            <select name="status" class="admin-filter__input">
+                <option value="todos" {% if filters.status == 'todos' %}selected{% endif %}>Todas</option>
+                <option value="baixo" {% if filters.status == 'baixo' %}selected{% endif %}>Abaixo do mínimo</option>
+                <option value="sem_estoque" {% if filters.status == 'sem_estoque' %}selected{% endif %}>Sem estoque</option>
+                <option value="inativo" {% if filters.status == 'inativo' %}selected{% endif %}>Inativo</option>
+            </select>
+        </label>
+
+        <div class="admin-filters__actions">
+            <button type="submit" class="admin-btn admin-btn--primary">
+                <i class="fa-solid fa-filter" aria-hidden="true"></i>
+                Aplicar
+            </button>
+            <a href="{{ url_for('admin_stock') }}" class="admin-btn admin-btn--ghost">Limpar</a>
+        </div>
+    </form>
+
+    <div class="admin-table admin-stock" role="table" aria-label="Produtos em estoque">
+        <div class="admin-table__head admin-stock__row" role="row">
+            <span role="columnheader">Produto</span>
+            <span role="columnheader">SKU</span>
+            <span role="columnheader">Categoria</span>
+            <span class="admin-table__col--num" role="columnheader">Preço</span>
+            <span class="admin-table__col--num" role="columnheader">Estoque</span>
+            <span class="admin-table__col--num" role="columnheader">Mínimo</span>
+            <span role="columnheader">Situação</span>
+            <span role="columnheader" class="admin-stock__actions-head">Ações</span>
+        </div>
+
+        {% if products %}
+            {% for p in products %}
+            <div class="admin-stock__row" data-product-id="{{ p.id }}">
+                <span class="admin-stock__product">
+                    <img class="admin-stock__thumb" src="{{ p.imagem }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+                    <span>
+                        <strong>{{ p.nome }}</strong>
+                        <small>#{{ p.id }}</small>
+                    </span>
+                </span>
+                <span><code class="admin-stock__sku-code">{{ p.sku }}</code></span>
+                <span>{{ p.categoria }}</span>
+                <span class="admin-table__col--num">{{ p.preco | brl }}</span>
+                <span class="admin-table__col--num admin-stock__qty">
+                    <strong>{{ p.estoque }}</strong>
+                </span>
+                <span class="admin-table__col--num">{{ p.estoque_minimo }}</span>
+                <span>
+                    {% if not p.ativo %}
+                        <span class="admin-badge admin-badge--neutral">Inativo</span>
+                    {% elif p.sem_estoque %}
+                        <span class="admin-badge admin-badge--danger">Sem estoque</span>
+                    {% elif p.abaixo_minimo %}
+                        <span class="admin-badge admin-badge--warn">Abaixo do mínimo</span>
+                    {% else %}
+                        <span class="admin-badge admin-badge--success">OK</span>
+                    {% endif %}
+                </span>
+                <span class="admin-stock__actions">
+                    <a class="admin-btn admin-btn--ghost admin-btn--sm"
+                       href="{{ url_for('admin_stock_product', product_id=p.id) }}"
+                       title="Gerenciar">
+                        <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                        Gerenciar
+                    </a>
+                </span>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="admin-empty">
+                <i class="fa-regular fa-folder-open" aria-hidden="true"></i>
+                <p>Nenhum produto corresponde aos filtros aplicados.</p>
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

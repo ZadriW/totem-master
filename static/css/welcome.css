@@ -1,0 +1,119 @@
+.welcome {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    background: var(--color-bg);
+    position: relative;
+    overflow: hidden;
+}
+
+
+.welcome__card {
+    position: relative;
+    z-index: 1;
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 72px 88px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 36px;
+    max-width: 620px;
+    width: 100%;
+    animation: fadeInUp 500ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.welcome__logo {
+    width: 340px;
+    max-width: 100%;
+    height: auto;
+    user-select: none;
+}
+
+.welcome__tagline {
+    color: var(--color-text-muted);
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    text-align: center;
+}
+
+.welcome__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: var(--color-primary);
+    color: #ffffff;
+    padding: 22px 56px;
+    border-radius: var(--radius-pill);
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    box-shadow: 0 10px 26px rgba(14, 22, 122, 0.28);
+    transition: transform var(--transition), box-shadow var(--transition),
+        background var(--transition);
+    min-width: 260px;
+}
+
+.welcome__button:hover,
+.welcome__button:focus-visible {
+    background: var(--color-primary-light);
+    transform: translateY(-2px);
+    box-shadow: 0 14px 34px rgba(14, 22, 122, 0.36);
+    outline: none;
+}
+
+.welcome__button:active {
+    transform: translateY(0);
+    background: var(--color-primary-dark);
+}
+
+.welcome__button-arrow {
+    font-size: 22px;
+    transition: transform var(--transition);
+}
+
+.welcome__button:hover .welcome__button-arrow {
+    transform: translateX(4px);
+}
+
+.welcome__footer {
+    position: relative;
+    z-index: 1;
+    margin-top: 40px;
+    color: var(--color-text-muted);
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(24px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 640px) {
+    .welcome__card {
+        padding: 48px 28px;
+    }
+    .welcome__logo {
+        width: 240px;
+    }
+    .welcome__button {
+        padding: 18px 40px;
+        font-size: 18px;
+        min-width: 0;
+        width: 100%;
+    }
+}

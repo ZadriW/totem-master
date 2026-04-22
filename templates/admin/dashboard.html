@@ -1,0 +1,189 @@
+{% extends "admin/_layout.html" %}
+
+{% block title %}Dashboard | Odonto Master{% endblock %}
+
+{% block admin_body %}
+<section class="admin-section">
+    <header class="admin-section__header">
+        <h1 class="admin-section__title">Visão geral</h1>
+        <p class="admin-section__subtitle">Métricas agregadas de vendas confirmadas e do catálogo/estoque.</p>
+    </header>
+
+    <div class="admin-kpis">
+        <article class="kpi kpi--primary">
+            <span class="kpi__icon"><i class="fa-solid fa-receipt" aria-hidden="true"></i></span>
+            <span class="kpi__label">Transações totais</span>
+            <span class="kpi__value">{{ stats.transactions_count }}</span>
+            <span class="kpi__hint">{{ stats.transactions_today }} hoje</span>
+        </article>
+
+        <article class="kpi kpi--success">
+            <span class="kpi__icon"><i class="fa-solid fa-sack-dollar" aria-hidden="true"></i></span>
+            <span class="kpi__label">Montante arrecadado</span>
+            <span class="kpi__value">{{ stats.total_revenue | brl }}</span>
+            <span class="kpi__hint">{{ stats.revenue_today | brl }} hoje</span>
+        </article>
+
+        <article class="kpi">
+            <span class="kpi__icon"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i></span>
+            <span class="kpi__label">Itens vendidos</span>
+            <span class="kpi__value">{{ stats.items_sold }}</span>
+            <span class="kpi__hint">Unidades totais</span>
+        </article>
+
+        <article class="kpi">
+            <span class="kpi__icon"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>
+            <span class="kpi__label">Ticket médio</span>
+            <span class="kpi__value">
+                {% if stats.transactions_count > 0 %}
+                    {{ (stats.total_revenue / stats.transactions_count) | brl }}
+                {% else %}
+                    {{ 0 | brl }}
+                {% endif %}
+            </span>
+            <span class="kpi__hint">Por transação</span>
+        </article>
+    </div>
+</section>
+
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <h2 class="admin-section__title">Estoque</h2>
+            <p class="admin-section__subtitle">Situação atual do catálogo e do estoque físico.</p>
+        </div>
+        <a class="admin-btn admin-btn--primary" href="{{ url_for('admin_stock') }}">
+            <i class="fa-solid fa-arrow-right-long" aria-hidden="true"></i>
+            Gerenciar estoque
+        </a>
+    </header>
+
+    <div class="admin-kpis">
+        <article class="kpi">
+            <span class="kpi__icon"><i class="fa-solid fa-tags" aria-hidden="true"></i></span>
+            <span class="kpi__label">Produtos cadastrados</span>
+            <span class="kpi__value">{{ stock.products_count }}</span>
+            <span class="kpi__hint">{{ stock.products_active }} ativos</span>
+        </article>
+
+        <article class="kpi">
+            <span class="kpi__icon"><i class="fa-solid fa-warehouse" aria-hidden="true"></i></span>
+            <span class="kpi__label">Unidades em estoque</span>
+            <span class="kpi__value">{{ stock.units_in_stock }}</span>
+            <span class="kpi__hint">Somatório de todos os produtos</span>
+        </article>
+
+        <article class="kpi kpi--success">
+            <span class="kpi__icon"><i class="fa-solid fa-coins" aria-hidden="true"></i></span>
+            <span class="kpi__label">Valor em estoque</span>
+            <span class="kpi__value">{{ stock.stock_value | brl }}</span>
+            <span class="kpi__hint">A preço de venda</span>
+        </article>
+
+        <article class="kpi {% if stock.below_min > 0 %}kpi--warn{% endif %}">
+            <span class="kpi__icon"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></span>
+            <span class="kpi__label">Abaixo do mínimo</span>
+            <span class="kpi__value">{{ stock.below_min }}</span>
+            <span class="kpi__hint">{{ stock.out_of_stock }} sem estoque</span>
+        </article>
+    </div>
+</section>
+
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <h2 class="admin-section__title">Histórico de transações</h2>
+            <p class="admin-section__subtitle">
+                Exibindo {{ transactions|length }} transação{% if transactions|length != 1 %}ões{% endif %}.
+                Toque em uma linha para ver os detalhes.
+            </p>
+        </div>
+    </header>
+
+    <div class="admin-table" role="table" aria-label="Histórico de transações">
+        <div class="admin-table__head" role="row">
+            <span class="admin-table__col admin-table__col--toggle" aria-hidden="true"></span>
+            <span class="admin-table__col" role="columnheader">Pedido</span>
+            <span class="admin-table__col" role="columnheader">Data/Hora</span>
+            <span class="admin-table__col admin-table__col--num" role="columnheader">Itens</span>
+            <span class="admin-table__col admin-table__col--num" role="columnheader">Total</span>
+            <span class="admin-table__col" role="columnheader">Status</span>
+        </div>
+
+        {% if transactions %}
+            {% for tx in transactions %}
+            <div class="admin-tx" data-tx-id="{{ tx.id }}">
+                <button
+                    type="button"
+                    class="admin-tx__row"
+                    aria-expanded="false"
+                    aria-controls="tx-details-{{ tx.id }}"
+                >
+                    <span class="admin-table__col admin-table__col--toggle">
+                        <i class="fa-solid fa-chevron-right admin-tx__chevron" aria-hidden="true"></i>
+                    </span>
+                    <span class="admin-table__col admin-tx__order">
+                        <strong>#{{ tx.order_number }}</strong>
+                    </span>
+                    <span class="admin-table__col">{{ tx.created_at | datahora }}</span>
+                    <span class="admin-table__col admin-table__col--num">{{ tx.items_count }}</span>
+                    <span class="admin-table__col admin-table__col--num">
+                        <strong>{{ tx.total | brl }}</strong>
+                    </span>
+                    <span class="admin-table__col">
+                        <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else 'neutral' }}">
+                            {{ tx.status }}
+                        </span>
+                    </span>
+                </button>
+
+                <div
+                    class="admin-tx__details"
+                    id="tx-details-{{ tx.id }}"
+                    hidden
+                >
+                    <div class="admin-tx__details-inner">
+                        {% set tx_items = tx['items'] %}
+                        <h3 class="admin-tx__details-title">
+                            Itens do pedido
+                            <span class="admin-tx__details-count">
+                                {{ tx_items|length }} produto{% if tx_items|length != 1 %}s{% endif %}
+                            </span>
+                        </h3>
+                        <div class="admin-tx__items">
+                            <div class="admin-tx__items-head">
+                                <span>Produto</span>
+                                <span>SKU</span>
+                                <span>Categoria</span>
+                                <span class="admin-table__col--num">Qtd.</span>
+                                <span class="admin-table__col--num">Unit.</span>
+                                <span class="admin-table__col--num">Subtotal</span>
+                            </div>
+                            {% for it in tx_items %}
+                            <div class="admin-tx__items-row">
+                                <span class="admin-tx__product">{{ it.product_name }}</span>
+                                <span>{% if it.product_sku %}<code>{{ it.product_sku }}</code>{% else %}—{% endif %}</span>
+                                <span>{{ it.category or '-' }}</span>
+                                <span class="admin-table__col--num">{{ it.quantity }}</span>
+                                <span class="admin-table__col--num">{{ it.unit_price | brl }}</span>
+                                <span class="admin-table__col--num"><strong>{{ it.subtotal | brl }}</strong></span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <div class="admin-tx__summary">
+                            <span>Total da transação</span>
+                            <strong>{{ tx.total | brl }}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="admin-empty">
+                <i class="fa-regular fa-folder-open" aria-hidden="true"></i>
+                <p>Nenhuma transação registrada até o momento.</p>
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
