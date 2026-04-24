@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Odonto Master | Totem{% endblock %}
+{% block title %}Totem | Dental Odonto Master{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/welcome.css') }}">
@@ -14,14 +14,14 @@
             src="{{ url_for('static', filename='images/logo-master.png') }}"
             alt="Odonto Master"
         >
-        <p class="welcome__tagline">Bem-vindo ao totem de autoatendimento</p>
+        <p class="welcome__tagline">Bem-vindo ao Totem Master!</p>
         <a class="welcome__button" href="{{ url_for('catalog') }}">
             Acesse a loja
             <span class="welcome__button-arrow" aria-hidden="true">&rarr;</span>
         </a>
     </div>
     <footer class="welcome__footer">
-        <span>&copy; Odonto Master &middot; Autoatendimento</span>
+        <span>&copy; Todos os direitos reservados - ODM COMERCIO E SERVICOS DE EQUIPAMENTOS E MATERIAIS ODONTOLOGICOS LTDA - CNPJ: 07.030.958/0001-74 <br> Alameda das Cajazeiras, 430 - Caminho das Árvores - Salvador/BA - CEP: 41.820-470</span>
     </footer>
 </main>
 {% endblock %}

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{#
+    Layout compartilhado do painel administrativo (dashboard, estoque,
+    movimentações). Fornece topbar + menu + container de flash messages.
+    Páginas devem sobrescrever {% block admin_body %}.
+#}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+{% block admin_head %}{% endblock %}
+{% endblock %}
+
+{% block body %}
+<div class="admin-shell">
+    <header class="admin-topbar">
+        <a class="admin-topbar__brand" href="{{ url_for('admin_dashboard') }}">
+            <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
+            <span class="admin-topbar__badge">Admin</span>
+        </a>
+
+        <nav class="admin-nav" aria-label="Seções do painel">
+            <a class="admin-nav__item {% if active_section == 'dashboard' %}is-active{% endif %}"
+               href="{{ url_for('admin_dashboard') }}">
+                <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
+                Dashboard
+            </a>
+            <a class="admin-nav__item {% if active_section == 'estoque' %}is-active{% endif %}"
+               href="{{ url_for('admin_stock') }}">
+                <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
+                Estoque
+            </a>
+            <a class="admin-nav__item {% if active_section == 'movimentacoes' %}is-active{% endif %}"
+               href="{{ url_for('admin_movements') }}">
+                <i class="fa-solid fa-right-left" aria-hidden="true"></i>
+                Movimentações
+            </a>
+        </nav>
+
+        <div class="admin-topbar__meta">
+            <span class="admin-topbar__user">
+                <i class="fa-solid fa-user" aria-hidden="true"></i>
+                {{ admin_user }}
+            </span>
+            <span class="admin-topbar__clock">
+                <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                {{ now.strftime('%d/%m/%Y %H:%M') }}
+            </span>
+            <form method="post" action="{{ url_for('admin_logout') }}" class="admin-topbar__logout-form">
+                <button type="submit" class="admin-topbar__logout" title="Sair">
+                    <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+                    Sair
+                </button>
+            </form>
+        </div>
+    </header>
+
+    <main class="admin-main">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="admin-flashes">
+                {% for category, msg in messages %}
+                <div class="admin-flash admin-flash--{{ category }}" role="status">
+                    <i class="fa-solid {% if category == 'success' %}fa-circle-check{% elif category == 'error' %}fa-triangle-exclamation{% else %}fa-circle-info{% endif %}" aria-hidden="true"></i>
+                    <span>{{ msg }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block admin_body %}{% endblock %}
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% block admin_scripts %}{% endblock %}
+{% endblock %}

@@ -1,9 +1,16 @@
-"""Catálogo de produtos (placeholder).
+"""Catálogo de produtos — **seed inicial** do banco.
 
-Gera uma lista determinística de produtos fictícios para popular o
-catálogo enquanto o estoque real não é integrado. Mantém a estrutura de
-dados que o sistema real deve usar (id, nome, categoria, preço, etc.),
-facilitando a substituição futura.
+Historicamente este módulo servia o catálogo direto para o front. A partir
+da introdução do controle de estoque, ele passou a ser usado apenas como
+*seed* da tabela ``products`` (via ``database.init_db``) quando a base está
+vazia. A fonte de verdade do catálogo é o SQLite; o cadastro é mantido e
+editado pelo painel administrativo.
+
+Mantém a estrutura de dados original (id, **sku**, nome, categoria, preço, etc.) +
+``estoque_minimo`` para alimentar o ponto de reposição do painel.
+
+Cada item recebe um **SKU** estável no formato ``OM-NNNNN`` (prefixo Odonto Master
++ id numérico com 5 dígitos), alinhado ao estoque e às notas fiscais.
 """
 
 from __future__ import annotations
@@ -103,11 +110,15 @@ def _build_catalog() -> List[Dict]:
             products.append(
                 {
                     "id": product_id,
+                    "sku": f"OM-{product_id:05d}",
                     "nome": name,
                     "categoria": category,
                     "descricao": f"{name} — produto {category.lower()} de uso profissional.",
                     "preco": price,
                     "estoque": stock,
+                    # ponto de reposição sugerido ~ 20% do estoque inicial,
+                    # com mínimo de 5 unidades.
+                    "estoque_minimo": max(5, round(stock * 0.20)),
                     "imagem": _PLACEHOLDER_IMAGE.format(seed=product_id),
                 }
             )
@@ -118,6 +129,14 @@ def _build_catalog() -> List[Dict]:
 _CATALOG: List[Dict] = _build_catalog()
 
 
+def get_seed_products() -> List[Dict]:
+    """Retorna uma cópia do catálogo para *seed* do banco.
+
+    Usada por ``database.init_db`` quando a tabela ``products`` está vazia.
+    """
+    return list(_CATALOG)
+
+
+# Compatibilidade retroativa — algum código antigo pode importar get_products().
 def get_products() -> List[Dict]:
-    """Retorna uma cópia superficial da lista de produtos."""
     return list(_CATALOG)

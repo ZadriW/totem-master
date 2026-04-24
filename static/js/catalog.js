@@ -57,8 +57,11 @@
             const matchesCategory =
                 state.category === 'todos' ||
                 card.dataset.category === state.category;
+            const sku = card.dataset.sku || '';
             const matchesQuery =
-                !query || normalize(card.dataset.name).includes(query);
+                !query
+                || normalize(card.dataset.name).includes(query)
+                || (sku && normalize(sku).includes(query));
             const show = matchesCategory && matchesQuery;
             card.style.display = show ? '' : 'none';
             if (show) visible += 1;
@@ -217,6 +220,7 @@
                 <div class="cart-item__info">
                     <span class="cart-item__category">${item.categoria || ''}</span>
                     <h3 class="cart-item__name">${item.nome}</h3>
+                    ${item.sku ? `<p class="cart-item__sku">SKU ${item.sku}</p>` : ''}
                     <p class="cart-item__price">
                         ${unit} un. &middot; <strong>${subtotal}</strong>
                     </p>

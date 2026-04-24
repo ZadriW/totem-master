@@ -29,6 +29,7 @@
                 <div class="payment-item__info">
                     <span class="payment-item__category">${item.categoria || ''}</span>
                     <h3 class="payment-item__name">${item.nome}</h3>
+                    ${item.sku ? `<p class="payment-item__sku">SKU ${item.sku}</p>` : ''}
                     <p class="payment-item__meta">
                         ${item.quantidade} × ${unit}
                     </p>
@@ -53,6 +54,9 @@
 
     continueBtn.addEventListener('click', () => {
         if (Cart.isEmpty()) return;
+        if (!window.PaymentForm || !window.PaymentForm.save()) {
+            return;
+        }
         window.location.assign(WAITING_URL);
     });
 

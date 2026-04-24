@@ -173,6 +173,14 @@
     overflow: hidden;
 }
 
+.cart-item__sku {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+    letter-spacing: 0.03em;
+}
+
 .cart-item__price {
     font-size: 15px;
     color: var(--color-text-muted);

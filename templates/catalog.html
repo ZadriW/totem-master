@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Catálogo | Odonto Master{% endblock %}
+{% block title %}Catálogo | Dental Odonto Master{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/catalog.css') }}">
@@ -76,6 +76,7 @@
             data-id="{{ product.id }}"
             data-category="{{ product.categoria }}"
             data-name="{{ product.nome|lower }}"
+            data-sku="{{ (product.sku or '')|lower }}"
             data-estoque="{{ product.estoque }}"
         >
             <div class="product-card__image">
@@ -84,6 +85,9 @@
             <div class="product-card__body">
                 <span class="product-card__category">{{ product.categoria }}</span>
                 <h2 class="product-card__name">{{ product.nome }}</h2>
+                {% if product.sku %}
+                <span class="product-card__sku">SKU {{ product.sku }}</span>
+                {% endif %}
                 <p class="product-card__price">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
             </div>
             <div class="product-card__actions">

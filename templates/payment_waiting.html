@@ -56,19 +56,21 @@
     </main>
 
     <section class="payment__success" id="paymentSuccess" hidden>
-        <div class="payment__success-icon">
-            <i class="fa-solid fa-check" aria-hidden="true"></i>
+        <div class="payment__success-card">
+            <div class="payment__success-icon">
+                <i class="fa-solid fa-check" aria-hidden="true"></i>
+            </div>
+            <h2 class="payment__success-title">Pagamento confirmado!</h2>
+            <p class="payment__success-text">
+                Retire a nota impressa e apresente no balcão para retirar seus produtos.
+                <br>
+                O totem voltará à tela inicial em <span id="successCountdown">30</span>s.
+            </p>
+            <div class="payment__success-order" id="successOrder">Pedido #—</div>
+            <button type="button" class="payment__btn payment__btn--primary" id="successFinish">
+                Finalizar agora
+            </button>
         </div>
-        <h2 class="payment__success-title">Pagamento confirmado!</h2>
-        <p class="payment__success-text">
-            Retire a nota impressa e apresente no balcão para retirar seus produtos.
-            <br>
-            O totem voltará à tela inicial em <span id="successCountdown">8</span>s.
-        </p>
-        <div class="payment__success-order" id="successOrder">Pedido #—</div>
-        <button type="button" class="payment__btn payment__btn--primary" id="successFinish">
-            Finalizar agora
-        </button>
     </section>
 </div>
 
@@ -101,5 +103,6 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
 <script src="{{ url_for('static', filename='js/idle-timeout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/payment-form.js') }}"></script>
 <script src="{{ url_for('static', filename='js/payment-waiting.js') }}"></script>
 {% endblock %}

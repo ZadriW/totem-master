@@ -26,6 +26,148 @@
                 Resumo do pedido
             </h1>
             <div class="payment__items" id="paymentItems"></div>
+
+            <hr class="payment__divider">
+
+            <h2 class="payment__section-title payment__section-title--sub">
+                <i class="fa-solid fa-user" aria-hidden="true"></i>
+                Dados para retirada
+            </h2>
+
+            <form class="payment-form" id="paymentForm" novalidate>
+                <label class="payment-field">
+                    <span class="payment-field__label">Nome completo <span class="payment-field__required">*</span></span>
+                    <input
+                        type="text"
+                        name="name"
+                        class="payment-field__input"
+                        placeholder="Ex.: João Silva"
+                        required
+                        autocomplete="name"
+                    >
+                </label>
+
+                <label class="payment-field">
+                    <span class="payment-field__label">CPF <span class="payment-field__required">*</span></span>
+                    <input
+                        type="text"
+                        name="cpf"
+                        class="payment-field__input"
+                        placeholder="000.000.000-00"
+                        required
+                        maxlength="14"
+                        inputmode="numeric"
+                        autocomplete="off"
+                    >
+                </label>
+
+                <label class="payment-field payment-field--half">
+                    <span class="payment-field__label">CEP <span class="payment-field__required">*</span></span>
+                    <div class="payment-field__wrap">
+                        <input
+                            type="text"
+                            name="zipcode"
+                            id="paymentZipcode"
+                            class="payment-field__input"
+                            placeholder="00000-000"
+                            required
+                            maxlength="9"
+                            inputmode="numeric"
+                            autocomplete="postal-code"
+                        >
+                        <button type="button" class="payment-field__cep-btn" id="paymentSearchCep" disabled>
+                            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <span class="payment-field__loading" id="cepLoading" hidden>
+                        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                        Buscando...
+                    </span>
+                </label>
+
+                <label class="payment-field payment-field--wide">
+                    <span class="payment-field__label">Endereço <span class="payment-field__required">*</span></span>
+                    <input
+                        type="text"
+                        name="address"
+                        id="paymentAddress"
+                        class="payment-field__input"
+                        placeholder="Rua, avenida..."
+                        required
+                        autocomplete="street-address"
+                    >
+                </label>
+
+                <label class="payment-field payment-field--quarter">
+                    <span class="payment-field__label">Número <span class="payment-field__required">*</span></span>
+                    <input
+                        type="text"
+                        name="number"
+                        class="payment-field__input"
+                        placeholder="123"
+                        required
+                        autocomplete="off"
+                    >
+                </label>
+
+                <label class="payment-field payment-field--three-quarters">
+                    <span class="payment-field__label">Complemento</span>
+                    <input
+                        type="text"
+                        name="complement"
+                        class="payment-field__input"
+                        placeholder="Apto, bloco..."
+                        autocomplete="off"
+                    >
+                </label>
+
+                <label class="payment-field payment-field--half">
+                    <span class="payment-field__label">Cidade <span class="payment-field__required">*</span></span>
+                    <input
+                        type="text"
+                        name="city"
+                        id="paymentCity"
+                        class="payment-field__input"
+                        placeholder="Ex.: São Paulo"
+                        required
+                        autocomplete="address-level2"
+                    >
+                </label>
+
+                <label class="payment-field payment-field--half">
+                    <span class="payment-field__label">Estado <span class="payment-field__required">*</span></span>
+                    <select name="state" id="paymentState" class="payment-field__input" required autocomplete="address-level1">
+                        <option value="">Selecione...</option>
+                        <option value="AC">Acre</option>
+                        <option value="AL">Alagoas</option>
+                        <option value="AP">Amapá</option>
+                        <option value="AM">Amazonas</option>
+                        <option value="BA">Bahia</option>
+                        <option value="CE">Ceará</option>
+                        <option value="DF">Distrito Federal</option>
+                        <option value="ES">Espírito Santo</option>
+                        <option value="GO">Goiás</option>
+                        <option value="MA">Maranhão</option>
+                        <option value="MT">Mato Grosso</option>
+                        <option value="MS">Mato Grosso do Sul</option>
+                        <option value="MG">Minas Gerais</option>
+                        <option value="PA">Pará</option>
+                        <option value="PB">Paraíba</option>
+                        <option value="PR">Paraná</option>
+                        <option value="PE">Pernambuco</option>
+                        <option value="PI">Piauí</option>
+                        <option value="RJ">Rio de Janeiro</option>
+                        <option value="RN">Rio Grande do Norte</option>
+                        <option value="RS">Rio Grande do Sul</option>
+                        <option value="RO">Rondônia</option>
+                        <option value="RR">Roraima</option>
+                        <option value="SC">Santa Catarina</option>
+                        <option value="SP">São Paulo</option>
+                        <option value="SE">Sergipe</option>
+                        <option value="TO">Tocantins</option>
+                    </select>
+                </label>
+            </form>
         </section>
 
         <aside class="payment__section">
@@ -102,5 +244,6 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
 <script src="{{ url_for('static', filename='js/idle-timeout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/payment-form.js') }}"></script>
 <script src="{{ url_for('static', filename='js/payment.js') }}"></script>
 {% endblock %}

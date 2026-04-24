@@ -11,7 +11,7 @@
     const SUMMARY_URL = '/pagamento';
     const CATALOG_URL = '/catalogo';
     const HOME_URL = '/';
-    const SUCCESS_REDIRECT_MS = 8000;
+    const SUCCESS_REDIRECT_MS = 30000;
 
     const content = document.getElementById('waitingContent');
     const success = document.getElementById('paymentSuccess');
@@ -35,6 +35,7 @@
                 <div class="payment-item__info">
                     <span class="payment-item__category">${item.categoria || ''}</span>
                     <h3 class="payment-item__name">${item.nome}</h3>
+                    ${item.sku ? `<p class="payment-item__sku">SKU ${item.sku}</p>` : ''}
                     <p class="payment-item__meta">${item.quantidade} × ${unit}</p>
                 </div>
                 <div class="payment-item__total">${subtotal}</div>
@@ -63,7 +64,11 @@
     }
 
     async function registerTransaction() {
-        const payload = { items: Cart.getItems() };
+        const clientData = window.PaymentForm ? window.PaymentForm.load() : null;
+        const payload = {
+            items: Cart.getItems(),
+            client: clientData || {},
+        };
         try {
             const response = await fetch('/api/transacoes', {
                 method: 'POST',
@@ -84,6 +89,7 @@
         content.hidden = true;
         success.hidden = false;
         Cart.clear();
+        if (window.PaymentForm) window.PaymentForm.clear();
 
         let remaining = Math.floor(SUCCESS_REDIRECT_MS / 1000);
         successCountdown.textContent = String(remaining);

@@ -7,7 +7,7 @@
  * telas se mantenham em sincronia sem acoplamento.
  *
  * Estrutura de cada item:
- * { id, nome, categoria, preco, imagem, estoque?, quantidade }
+ * { id, sku, nome, categoria, preco, imagem, estoque?, quantidade }
  */
 (() => {
     'use strict';
@@ -69,6 +69,7 @@
             } else {
                 items.push({
                     id: product.id,
+                    sku: product.sku || '',
                     nome: product.nome,
                     categoria: product.categoria,
                     preco: Number(product.preco) || 0,
