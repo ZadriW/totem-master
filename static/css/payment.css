@@ -390,6 +390,109 @@ button.payment__back {
     gap: 10px;
 }
 
+.payment-pin[hidden] {
+    display: none !important;
+}
+
+.payment-pin {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+}
+
+.payment-pin__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.58);
+    backdrop-filter: blur(3px);
+}
+
+.payment-pin__dialog {
+    position: relative;
+    z-index: 1;
+    width: min(100%, 440px);
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 32px 28px 26px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    text-align: center;
+}
+
+.payment-pin__icon {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(14, 22, 122, 0.10);
+    color: var(--color-primary);
+    font-size: 28px;
+}
+
+.payment-pin__title {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--color-text);
+}
+
+.payment-pin__text {
+    max-width: 320px;
+    color: var(--color-text-muted);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.payment-pin__input {
+    width: 180px;
+    height: 58px;
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-size: 30px;
+    font-weight: 800;
+    text-align: center;
+    letter-spacing: 0.28em;
+    padding: 0 10px 0 18px;
+    font-variant-numeric: tabular-nums;
+}
+
+.payment-pin__input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 4px rgba(14, 22, 122, 0.10);
+    background: #fff;
+}
+
+.payment-pin__error {
+    color: #b91c1c;
+    background: rgba(220, 38, 38, 0.10);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    width: 100%;
+}
+
+.payment-pin__error[hidden] {
+    display: none;
+}
+
+.payment-pin__actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 6px;
+}
+
 /* Área de sucesso: preenche o espaço sob a topbar e centraliza o cartão */
 .payment .payment__success {
     margin: 0;

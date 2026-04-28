@@ -1,62 +1,51 @@
 {% extends "base.html" %}
 
-{#
-    Layout compartilhado do painel administrativo (dashboard, estoque,
-    movimentações). Fornece topbar + menu + container de flash messages.
-    Páginas devem sobrescrever {% block admin_body %}.
-#}
-
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
-{% block admin_head %}{% endblock %}
+{% block seller_head %}{% endblock %}
 {% endblock %}
 
 {% block body %}
 <div class="admin-shell">
     <header class="admin-topbar">
-        <a class="admin-topbar__brand" href="{{ url_for('admin_dashboard') }}">
+        <a class="admin-topbar__brand" href="{{ url_for('seller_dashboard') }}">
             <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
-            <span class="admin-topbar__badge">Admin</span>
+            <span class="admin-topbar__badge">Vendedor</span>
         </a>
 
-        <nav class="admin-nav" aria-label="Seções do painel">
+        <nav class="admin-nav" aria-label="Seções do painel do vendedor">
             <a class="admin-nav__item {% if active_section == 'dashboard' %}is-active{% endif %}"
-               href="{{ url_for('admin_dashboard') }}">
+               href="{{ url_for('seller_dashboard') }}">
                 <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
                 Dashboard
             </a>
             <a class="admin-nav__item {% if active_section == 'estoque' %}is-active{% endif %}"
-               href="{{ url_for('admin_stock') }}">
+               href="{{ url_for('seller_stock') }}">
                 <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
                 Estoque
             </a>
             <a class="admin-nav__item {% if active_section == 'movimentacoes' %}is-active{% endif %}"
-               href="{{ url_for('admin_movements') }}">
+               href="{{ url_for('seller_movements') }}">
                 <i class="fa-solid fa-right-left" aria-hidden="true"></i>
                 Movimentações
-            </a>
-            <a class="admin-nav__item {% if active_section == 'vendedores' %}is-active{% endif %}"
-               href="{{ url_for('admin_sellers') }}">
-                <i class="fa-solid fa-users" aria-hidden="true"></i>
-                Vendedores
             </a>
         </nav>
 
         <div class="admin-topbar__meta">
             <span class="admin-topbar__user">
                 <i class="fa-solid fa-user" aria-hidden="true"></i>
-                {{ admin_user }}
+                {{ seller_name }}
             </span>
             <span class="admin-topbar__clock">
                 <i class="fa-regular fa-clock" aria-hidden="true"></i>
                 {{ now.strftime('%d/%m/%Y %H:%M') }}
             </span>
-            <form method="post" action="{{ url_for('admin_logout') }}" class="admin-topbar__logout-form">
+            <form method="post" action="{{ url_for('seller_logout') }}" class="admin-topbar__logout-form">
                 <button
                     type="submit"
                     class="admin-topbar__logout"
                     title="Sair"
-                    aria-label="Sair do painel administrativo"
+                    aria-label="Sair do painel do vendedor"
                 >
                     <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
                     <span class="admin-topbar__logout-label">Sair</span>
@@ -79,12 +68,12 @@
             {% endif %}
         {% endwith %}
 
-        {% block admin_body %}{% endblock %}
+        {% block seller_body %}{% endblock %}
     </main>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
-{% block admin_scripts %}{% endblock %}
+{% block seller_scripts %}{% endblock %}
 {% endblock %}

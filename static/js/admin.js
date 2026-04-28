@@ -10,16 +10,16 @@
     'use strict';
 
     // --- 1. Expansão de linhas do histórico de transações --------------------
-    const rows = document.querySelectorAll('.admin-tx__row');
-    rows.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const expanded = btn.getAttribute('aria-expanded') === 'true';
-            const targetId = btn.getAttribute('aria-controls');
-            const details = targetId ? document.getElementById(targetId) : null;
-            btn.setAttribute('aria-expanded', String(!expanded));
-            btn.classList.toggle('is-open', !expanded);
-            if (details) details.hidden = expanded;
-        });
+    // Delegação para linhas injetadas depois (ex.: atualização ao vivo no painel do vendedor).
+    document.querySelector('.admin-main')?.addEventListener('click', event => {
+        const btn = event.target.closest('.admin-tx__row');
+        if (!btn) return;
+        const expanded = btn.getAttribute('aria-expanded') === 'true';
+        const targetId = btn.getAttribute('aria-controls');
+        const details = targetId ? document.getElementById(targetId) : null;
+        btn.setAttribute('aria-expanded', String(!expanded));
+        btn.classList.toggle('is-open', !expanded);
+        if (details) details.hidden = expanded;
     });
 
     // --- 2. Confirmação de formulários sensíveis -----------------------------

@@ -49,8 +49,6 @@ query FetchProducts($first: Int!, $after: String) {
       productId
       productName
       sku
-      stock
-      available
       prices {
         price
         listPrice
@@ -175,9 +173,9 @@ def _primary_category(categories: list) -> str:
 def fetch_products(page_size: int = 50, max_pages: int = 20) -> List[Dict]:
     """Busca todos os produtos da loja Wake com paginação automática.
 
-    Retorna lista normalizada com campos compatíveis ao schema local:
-    ``id``, ``sku``, ``nome``, ``categoria``, ``descricao``, ``preco``,
-    ``imagem``, ``estoque``, ``estoque_minimo``, ``ativo``.
+    Retorna lista normalizada com campos compatíveis ao schema local.
+    A Wake é usada como biblioteca de produtos; estoque, estoque mínimo e
+    ativação comercial são controlados localmente pelo administrador.
     """
     all_products: List[Dict] = []
     cursor: Optional[str] = None
@@ -198,7 +196,6 @@ def fetch_products(page_size: int = 50, max_pages: int = 20) -> List[Dict]:
             image_url = images[0].get("url", "") if images else ""
             cats = node.get("productCategories") or []
             category = _primary_category(cats)
-            stock = int(node.get("stock") or 0)
 
             all_products.append({
                 "id": int(node["productId"]),
@@ -208,9 +205,6 @@ def fetch_products(page_size: int = 50, max_pages: int = 20) -> List[Dict]:
                 "descricao": f"{node.get('productName', '')} — {category}",
                 "preco": float(price),
                 "imagem": image_url,
-                "estoque": max(0, stock),
-                "estoque_minimo": max(3, round(stock * 0.15)),
-                "ativo": bool(node.get("available", True)),
             })
 
         page_info = products_data.get("pageInfo") or {}

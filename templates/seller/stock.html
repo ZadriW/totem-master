@@ -1,25 +1,26 @@
-{% extends "admin/_layout.html" %}
+{% extends "seller/_layout.html" %}
 
-{% block title %}Estoque | Odonto Master{% endblock %}
+{% block title %}Estoque do vendedor | Odonto Master{% endblock %}
 
-{% block admin_body %}
+{% block seller_body %}
 <section class="admin-section">
     <header class="admin-section__header admin-section__header--row">
         <div>
-            <h1 class="admin-section__title">Controle de estoque</h1>
-            <p class="admin-section__subtitle">
+            <h1 class="admin-section__title">Estoque</h1>
+            <p class="admin-section__subtitle" data-seller-stock-subtitle>
                 {{ stock.products_count }} produtos cadastrados &middot;
                 {{ stock.units_in_stock }} unidades &middot;
-                <strong>{{ stock.below_min }}</strong> abaixo do mínimo
+                <strong>{{ stock.below_min }}</strong> abaixo do mínimo.
+                Visualização somente leitura.
             </p>
         </div>
-        <a class="admin-btn admin-btn--ghost" href="{{ url_for('admin_movements') }}">
+        <a class="admin-btn admin-btn--ghost" href="{{ url_for('seller_movements') }}">
             <i class="fa-solid fa-right-left" aria-hidden="true"></i>
             Ver movimentações
         </a>
     </header>
 
-    <form class="admin-filters" method="get" action="{{ url_for('admin_stock') }}">
+    <form class="admin-filters" method="get" action="{{ url_for('seller_stock') }}">
         <label class="admin-filter">
             <span class="admin-filter__label">Buscar</span>
             <span class="admin-filter__wrap">
@@ -28,7 +29,7 @@
                     type="search"
                     name="q"
                     value="{{ filters.q }}"
-                    placeholder="Nome ou descrição..."
+                    placeholder="Nome, descrição ou SKU..."
                     class="admin-filter__input"
                 >
             </span>
@@ -59,16 +60,16 @@
                 <i class="fa-solid fa-filter" aria-hidden="true"></i>
                 Aplicar
             </button>
-            <a href="{{ url_for('admin_stock') }}" class="admin-btn admin-btn--ghost">Limpar</a>
+            <a href="{{ url_for('seller_stock') }}" class="admin-btn admin-btn--ghost">Limpar</a>
         </div>
     </form>
 
     <div
         class="admin-table admin-stock"
         role="table"
-        aria-label="Produtos em estoque"
-        data-admin-stock-list
-        data-api-url="{{ url_for('admin_api_stock') }}"
+        aria-label="Produtos em estoque para vendedor"
+        data-seller-stock-list
+        data-api-url="{{ url_for('seller_api_stock') }}"
     >
         <div class="admin-table__head admin-stock__row" role="row">
             <span role="columnheader">Produto</span>
@@ -78,7 +79,6 @@
             <span class="admin-table__col--num" role="columnheader">Estoque</span>
             <span class="admin-table__col--num" role="columnheader">Mínimo</span>
             <span role="columnheader">Situação</span>
-            <span role="columnheader" class="admin-stock__actions-head">Ações</span>
         </div>
 
         {% if products %}
@@ -94,9 +94,7 @@
                 <span><code class="admin-stock__sku-code">{{ p.sku }}</code></span>
                 <span>{{ p.categoria }}</span>
                 <span class="admin-table__col--num">{{ p.preco | brl }}</span>
-                <span class="admin-table__col--num admin-stock__qty" data-stock-qty>
-                    <strong>{{ p.estoque }}</strong>
-                </span>
+                <span class="admin-table__col--num admin-stock__qty" data-stock-qty><strong>{{ p.estoque }}</strong></span>
                 <span class="admin-table__col--num">{{ p.estoque_minimo }}</span>
                 <span data-stock-status>
                     {% if not p.ativo %}
@@ -108,14 +106,6 @@
                     {% else %}
                         <span class="admin-badge admin-badge--success">OK</span>
                     {% endif %}
-                </span>
-                <span class="admin-stock__actions">
-                    <a class="admin-btn admin-btn--ghost admin-btn--sm"
-                       href="{{ url_for('admin_stock_product', product_id=p.id) }}"
-                       title="Gerenciar"
-                       aria-label="Gerenciar {{ p.nome }}">
-                        <i class="fa-solid fa-sliders" aria-hidden="true"></i>
-                    </a>
                 </span>
             </div>
             {% endfor %}
@@ -129,6 +119,6 @@
 </section>
 {% endblock %}
 
-{% block admin_scripts %}
+{% block seller_scripts %}
 <script src="{{ url_for('static', filename='js/admin-stock-live.js') }}"></script>
 {% endblock %}

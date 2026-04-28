@@ -1,0 +1,198 @@
+{% extends "admin/_layout.html" %}
+
+{% block title %}{{ seller.name }} | Vendedores | Odonto Master{% endblock %}
+
+{% block admin_body %}
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <a class="admin-breadcrumb" href="{{ url_for('admin_sellers') }}">
+                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                Voltar aos vendedores
+            </a>
+            <h1 class="admin-section__title">{{ seller.name }}</h1>
+            <p class="admin-section__subtitle">
+                {{ seller.email }} &middot;
+                {% if seller.active %}Conta ativa{% else %}Conta inativa{% endif %} &middot;
+                PIN {% if seller.pin_hash %}configurado{% else %}pendente{% endif %} &middot;
+                Último login: {{ seller.last_login_at | datahora }}
+            </p>
+        </div>
+    </header>
+
+    <div class="admin-kpis">
+        <article class="kpi kpi--primary">
+            <span class="kpi__icon"><i class="fa-solid fa-receipt" aria-hidden="true"></i></span>
+            <span class="kpi__label">Vendas vinculadas</span>
+            <span class="kpi__value">{{ stats.transactions_count }}</span>
+            <span class="kpi__hint">{{ stats.transactions_today }} hoje</span>
+        </article>
+
+        <article class="kpi kpi--success">
+            <span class="kpi__icon"><i class="fa-solid fa-sack-dollar" aria-hidden="true"></i></span>
+            <span class="kpi__label">Faturamento</span>
+            <span class="kpi__value">{{ stats.total_revenue | brl }}</span>
+            <span class="kpi__hint">{{ stats.revenue_today | brl }} hoje</span>
+        </article>
+
+        <article class="kpi">
+            <span class="kpi__icon"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i></span>
+            <span class="kpi__label">Itens vendidos</span>
+            <span class="kpi__value">{{ stats.items_sold }}</span>
+            <span class="kpi__hint">Unidades totais</span>
+        </article>
+
+        <article class="kpi">
+            <span class="kpi__icon"><i class="fa-solid fa-ticket" aria-hidden="true"></i></span>
+            <span class="kpi__label">Ticket médio</span>
+            <span class="kpi__value">
+                {% if stats.transactions_count > 0 %}
+                    {{ (stats.total_revenue / stats.transactions_count) | brl }}
+                {% else %}
+                    {{ 0 | brl }}
+                {% endif %}
+            </span>
+            <span class="kpi__hint">Por venda vinculada</span>
+        </article>
+    </div>
+</section>
+
+<section class="admin-section">
+    <header class="admin-section__header">
+        <h2 class="admin-section__title">Dados e acesso</h2>
+        <p class="admin-section__subtitle">Atualize cadastro, status e senha de acesso do vendedor.</p>
+    </header>
+
+    <article class="admin-card">
+        <form
+            method="post"
+            action="{{ url_for('admin_seller_update', seller_id=seller.id) }}"
+            class="admin-card__form"
+        >
+            <div class="admin-field">
+                <label class="admin-field__label" for="seller-name">Nome</label>
+                <input id="seller-name" class="admin-field__input" type="text" name="name" value="{{ seller.name }}" maxlength="120" required>
+            </div>
+            <div class="admin-field">
+                <label class="admin-field__label" for="seller-email">E-mail</label>
+                <input id="seller-email" class="admin-field__input" type="email" name="email" value="{{ seller.email }}" maxlength="160" required>
+            </div>
+            <div class="admin-field">
+                <label class="admin-field__label" for="seller-active">Status</label>
+                <select id="seller-active" name="active" class="admin-field__input">
+                    <option value="1" {% if seller.active %}selected{% endif %}>Ativo</option>
+                    <option value="0" {% if not seller.active %}selected{% endif %}>Inativo</option>
+                </select>
+            </div>
+            <div class="admin-field">
+                <label class="admin-field__label" for="seller-password">Nova senha</label>
+                <input id="seller-password" class="admin-field__input" type="password" name="password" minlength="6" placeholder="Deixe em branco para manter">
+            </div>
+            <div class="admin-field">
+                <label class="admin-field__label" for="seller-pin">Novo PIN de venda</label>
+                <input
+                    id="seller-pin"
+                    class="admin-field__input"
+                    type="password"
+                    name="pin"
+                    inputmode="numeric"
+                    pattern="[0-9]{4}"
+                    maxlength="4"
+                    minlength="4"
+                    placeholder="Deixe em branco para manter"
+                    oninput="this.value = this.value.replace(/\D/g, '').slice(0, 4)"
+                >
+            </div>
+            <button type="submit" class="admin-btn admin-btn--primary admin-btn--block">
+                <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                Salvar vendedor
+            </button>
+        </form>
+    </article>
+</section>
+
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <h2 class="admin-section__title">Vendas do vendedor</h2>
+            <p class="admin-section__subtitle">
+                Exibindo {{ transactions|length }} {% if transactions|length == 1 %}transação{% else %}transações{% endif %} vinculadas.
+            </p>
+        </div>
+    </header>
+
+    <div class="admin-table" role="table" aria-label="Vendas do vendedor">
+        <div class="admin-table__head" role="row">
+            <span class="admin-table__col admin-table__col--toggle" aria-hidden="true"></span>
+            <span class="admin-table__col" role="columnheader">Pedido</span>
+            <span class="admin-table__col" role="columnheader">Data/Hora</span>
+            <span class="admin-table__col admin-table__col--num" role="columnheader">Itens</span>
+            <span class="admin-table__col admin-table__col--num" role="columnheader">Total</span>
+            <span class="admin-table__col" role="columnheader">Status</span>
+        </div>
+
+        {% if transactions %}
+            {% for tx in transactions %}
+            <div class="admin-tx" data-tx-id="{{ tx.id }}">
+                <button
+                    type="button"
+                    class="admin-tx__row"
+                    aria-expanded="false"
+                    aria-controls="seller-admin-tx-details-{{ tx.id }}"
+                >
+                    <span class="admin-table__col admin-table__col--toggle">
+                        <i class="fa-solid fa-chevron-right admin-tx__chevron" aria-hidden="true"></i>
+                    </span>
+                    <span class="admin-table__col admin-tx__order"><strong>#{{ tx.order_number }}</strong></span>
+                    <span class="admin-table__col">{{ tx.created_at | datahora }}</span>
+                    <span class="admin-table__col admin-table__col--num">{{ tx.items_count }}</span>
+                    <span class="admin-table__col admin-table__col--num"><strong>{{ tx.total | brl }}</strong></span>
+                    <span class="admin-table__col">
+                        <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else 'neutral' }}">
+                            {{ tx.status }}
+                        </span>
+                    </span>
+                </button>
+
+                <div class="admin-tx__details" id="seller-admin-tx-details-{{ tx.id }}" hidden>
+                    <div class="admin-tx__details-inner">
+                        {% set tx_items = tx['items'] %}
+                        <h3 class="admin-tx__details-title">
+                            Itens do pedido
+                            <span class="admin-tx__details-count">
+                                {{ tx_items|length }} produto{% if tx_items|length != 1 %}s{% endif %}
+                            </span>
+                        </h3>
+                        <div class="admin-tx__items">
+                            <div class="admin-tx__items-head">
+                                <span>Produto</span>
+                                <span>SKU</span>
+                                <span>Categoria</span>
+                                <span class="admin-table__col--num">Qtd.</span>
+                                <span class="admin-table__col--num">Unit.</span>
+                                <span class="admin-table__col--num">Subtotal</span>
+                            </div>
+                            {% for it in tx_items %}
+                            <div class="admin-tx__items-row">
+                                <span class="admin-tx__product">{{ it.product_name }}</span>
+                                <span>{% if it.product_sku %}<code>{{ it.product_sku }}</code>{% else %}—{% endif %}</span>
+                                <span>{{ it.category or '-' }}</span>
+                                <span class="admin-table__col--num">{{ it.quantity }}</span>
+                                <span class="admin-table__col--num">{{ it.unit_price | brl }}</span>
+                                <span class="admin-table__col--num"><strong>{{ it.subtotal | brl }}</strong></span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="admin-empty">
+                <i class="fa-regular fa-folder-open" aria-hidden="true"></i>
+                <p>Nenhuma venda vinculada a este vendedor até o momento.</p>
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

@@ -1,47 +1,45 @@
-{% extends "admin/_layout.html" %}
+{% extends "seller/_layout.html" %}
 
-{% block title %}Dashboard | Dental Odonto Master{% endblock %}
+{% block title %}Dashboard do vendedor | Odonto Master{% endblock %}
 
-{% block admin_body %}
+{% block seller_body %}
+<div id="seller-dashboard-live" hidden data-api-url="{{ url_for('seller_api_dashboard') }}"></div>
+
 <section class="admin-section">
     <header class="admin-section__header">
-        <h1 class="admin-section__title">Visão geral</h1>
-        <p class="admin-section__subtitle">Métricas agregadas de vendas confirmadas e do catálogo/estoque.</p>
+        <h1 class="admin-section__title">Dashboard do vendedor</h1>
+        <p class="admin-section__subtitle">
+            Visão somente leitura das vendas confirmadas, estoque atual e movimentações dos totens.
+        </p>
     </header>
 
     <div class="admin-kpis">
         <article class="kpi kpi--primary">
             <span class="kpi__icon"><i class="fa-solid fa-receipt" aria-hidden="true"></i></span>
             <span class="kpi__label">Transações totais</span>
-            <span class="kpi__value">{{ stats.transactions_count }}</span>
-            <span class="kpi__hint">{{ stats.transactions_today }} hoje</span>
+            <span class="kpi__value" data-dash-kpi="transactions_count">{{ stats.transactions_count }}</span>
+            <span class="kpi__hint" data-dash-kpi="transactions_today">{{ stats.transactions_today }} hoje</span>
         </article>
 
         <article class="kpi kpi--success">
             <span class="kpi__icon"><i class="fa-solid fa-sack-dollar" aria-hidden="true"></i></span>
             <span class="kpi__label">Montante arrecadado</span>
-            <span class="kpi__value">{{ stats.total_revenue | brl }}</span>
-            <span class="kpi__hint">{{ stats.revenue_today | brl }} hoje</span>
+            <span class="kpi__value" data-dash-kpi="total_revenue">{{ stats.total_revenue | brl }}</span>
+            <span class="kpi__hint" data-dash-kpi="revenue_today">{{ stats.revenue_today | brl }} hoje</span>
         </article>
 
         <article class="kpi">
             <span class="kpi__icon"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i></span>
             <span class="kpi__label">Itens vendidos</span>
-            <span class="kpi__value">{{ stats.items_sold }}</span>
+            <span class="kpi__value" data-dash-kpi="items_sold">{{ stats.items_sold }}</span>
             <span class="kpi__hint">Unidades totais</span>
         </article>
 
-        <article class="kpi">
-            <span class="kpi__icon"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>
-            <span class="kpi__label">Ticket médio</span>
-            <span class="kpi__value">
-                {% if stats.transactions_count > 0 %}
-                    {{ (stats.total_revenue / stats.transactions_count) | brl }}
-                {% else %}
-                    {{ 0 | brl }}
-                {% endif %}
-            </span>
-            <span class="kpi__hint">Por transação</span>
+        <article class="kpi {% if stock.below_min > 0 %}kpi--warn{% endif %}" data-dash-kpi-card="below_min">
+            <span class="kpi__icon"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></span>
+            <span class="kpi__label">Abaixo do mínimo</span>
+            <span class="kpi__value" data-dash-kpi="below_min">{{ stock.below_min }}</span>
+            <span class="kpi__hint" data-dash-kpi="out_of_stock">{{ stock.out_of_stock }} sem estoque</span>
         </article>
     </div>
 </section>
@@ -50,11 +48,11 @@
     <header class="admin-section__header admin-section__header--row">
         <div>
             <h2 class="admin-section__title">Estoque</h2>
-            <p class="admin-section__subtitle">Situação atual do catálogo e do estoque físico.</p>
+            <p class="admin-section__subtitle">Situação atual do catálogo físico, sem ações de alteração.</p>
         </div>
-        <a class="admin-btn admin-btn--primary" href="{{ url_for('admin_stock') }}">
+        <a class="admin-btn admin-btn--ghost" href="{{ url_for('seller_stock') }}">
             <i class="fa-solid fa-arrow-right-long" aria-hidden="true"></i>
-            Gerenciar estoque
+            Ver estoque
         </a>
     </header>
 
@@ -62,99 +60,37 @@
         <article class="kpi">
             <span class="kpi__icon"><i class="fa-solid fa-tags" aria-hidden="true"></i></span>
             <span class="kpi__label">Produtos cadastrados</span>
-            <span class="kpi__value">{{ stock.products_count }}</span>
-            <span class="kpi__hint">{{ stock.products_active }} ativos</span>
+            <span class="kpi__value" data-dash-kpi="products_count">{{ stock.products_count }}</span>
+            <span class="kpi__hint" data-dash-kpi="products_active">{{ stock.products_active }} ativos</span>
         </article>
 
         <article class="kpi">
             <span class="kpi__icon"><i class="fa-solid fa-warehouse" aria-hidden="true"></i></span>
             <span class="kpi__label">Unidades em estoque</span>
-            <span class="kpi__value">{{ stock.units_in_stock }}</span>
-            <span class="kpi__hint">Somatório de todos os produtos</span>
+            <span class="kpi__value" data-dash-kpi="units_in_stock">{{ stock.units_in_stock }}</span>
+            <span class="kpi__hint">Somatório dos produtos</span>
         </article>
 
         <article class="kpi kpi--success">
             <span class="kpi__icon"><i class="fa-solid fa-coins" aria-hidden="true"></i></span>
             <span class="kpi__label">Valor em estoque</span>
-            <span class="kpi__value">{{ stock.stock_value | brl }}</span>
+            <span class="kpi__value" data-dash-kpi="stock_value">{{ stock.stock_value | brl }}</span>
             <span class="kpi__hint">A preço de venda</span>
         </article>
-
-        <article class="kpi {% if stock.below_min > 0 %}kpi--warn{% endif %}">
-            <span class="kpi__icon"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></span>
-            <span class="kpi__label">Abaixo do mínimo</span>
-            <span class="kpi__value">{{ stock.below_min }}</span>
-            <span class="kpi__hint">{{ stock.out_of_stock }} sem estoque</span>
-        </article>
-    </div>
-</section>
-
-<section class="admin-section admin-section--wake">
-    <header class="admin-section__header admin-section__header--row">
-        <div>
-            <h2 class="admin-section__title">
-                <i class="fa-solid fa-cloud-arrow-down" aria-hidden="true"></i>
-                Integração Wake Commerce
-            </h2>
-            <p class="admin-section__subtitle">
-                Sincronize a biblioteca de produtos do totem com a plataforma Wake Commerce
-                (Dental Odonto Master). Produtos existentes terão dados de catálogo atualizados;
-                novos produtos serão adicionados com estoque zerado para configuração manual.
-            </p>
-        </div>
-        <form method="POST" action="{{ url_for('admin_sync_wake') }}" id="wakeSyncForm">
-            <button type="submit" class="admin-btn admin-btn--wake" id="wakeSyncBtn">
-                <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
-                Sincronizar agora
-            </button>
-        </form>
-    </header>
-</section>
-
-<section class="admin-section admin-section--danger-zone">
-    <header class="admin-section__header">
-        <h2 class="admin-section__title">Reinício do sistema</h2>
-        <p class="admin-section__subtitle">
-            Use apenas em ambiente de demonstração ou quando precisar zerar o histórico.
-            Esta ação <strong>apaga todas as vendas</strong> (e dados de clientes),
-            <strong>apaga todo o histórico de movimentações de estoque</strong>
-            e <strong>zera a quantidade em estoque</strong> de cada produto, registrando um novo
-            <em>estoque inicial</em> com saldo zero para o administrador reabastecer manualmente.
-            Não é possível desfazer.
-        </p>
-    </header>
-
-    <div class="admin-reset-panel">
-        <form
-            method="post"
-            action="{{ url_for('admin_reset_system') }}"
-            class="admin-reset-form"
-            id="adminResetForm"
-        >
-            <label class="admin-reset-confirm">
-                <input type="checkbox" name="confirm_reset" value="1" id="adminResetConfirm">
-                <span>Entendo que esta operação é irreversível e desejo reiniciar o sistema.</span>
-            </label>
-            <button type="submit" class="admin-btn admin-btn--danger-solid" id="adminResetSubmit" disabled>
-                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
-                Reiniciar sistema ao estado padrão
-            </button>
-        </form>
     </div>
 </section>
 
 <section class="admin-section">
     <header class="admin-section__header admin-section__header--row">
         <div>
-            <h2 class="admin-section__title">Histórico de transações</h2>
-            <p class="admin-section__subtitle">
+            <h2 class="admin-section__title">Últimas transações</h2>
+            <p class="admin-section__subtitle" data-seller-tx-subtitle>
                 Exibindo {{ transactions|length }} {% if transactions|length == 1 %}transação{% else %}transações{% endif %}.
-                Toque em uma linha para ver os detalhes.
             </p>
         </div>
     </header>
 
-    <div class="admin-table" role="table" aria-label="Histórico de transações">
+    <div class="admin-table" role="table" aria-label="Histórico de transações do vendedor">
         <div class="admin-table__head" role="row">
             <span class="admin-table__col admin-table__col--toggle" aria-hidden="true"></span>
             <span class="admin-table__col" role="columnheader">Pedido</span>
@@ -164,6 +100,7 @@
             <span class="admin-table__col" role="columnheader">Status</span>
         </div>
 
+        <div data-seller-transactions-root>
         {% if transactions %}
             {% for tx in transactions %}
             <div class="admin-tx" data-tx-id="{{ tx.id }}">
@@ -171,19 +108,15 @@
                     type="button"
                     class="admin-tx__row"
                     aria-expanded="false"
-                    aria-controls="tx-details-{{ tx.id }}"
+                    aria-controls="seller-tx-details-{{ tx.id }}"
                 >
                     <span class="admin-table__col admin-table__col--toggle">
                         <i class="fa-solid fa-chevron-right admin-tx__chevron" aria-hidden="true"></i>
                     </span>
-                    <span class="admin-table__col admin-tx__order">
-                        <strong>#{{ tx.order_number }}</strong>
-                    </span>
+                    <span class="admin-table__col admin-tx__order"><strong>#{{ tx.order_number }}</strong></span>
                     <span class="admin-table__col">{{ tx.created_at | datahora }}</span>
                     <span class="admin-table__col admin-table__col--num">{{ tx.items_count }}</span>
-                    <span class="admin-table__col admin-table__col--num">
-                        <strong>{{ tx.total | brl }}</strong>
-                    </span>
+                    <span class="admin-table__col admin-table__col--num"><strong>{{ tx.total | brl }}</strong></span>
                     <span class="admin-table__col">
                         <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else 'neutral' }}">
                             {{ tx.status }}
@@ -191,11 +124,7 @@
                     </span>
                 </button>
 
-                <div
-                    class="admin-tx__details"
-                    id="tx-details-{{ tx.id }}"
-                    hidden
-                >
+                <div class="admin-tx__details" id="seller-tx-details-{{ tx.id }}" hidden>
                     <div class="admin-tx__details-inner">
                         {% set tx_items = tx['items'] %}
                         <h3 class="admin-tx__details-title">
@@ -224,10 +153,6 @@
                             </div>
                             {% endfor %}
                         </div>
-                        <div class="admin-tx__summary">
-                            <span>Total da transação</span>
-                            <strong>{{ tx.total | brl }}</strong>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -238,10 +163,11 @@
                 <p>Nenhuma transação registrada até o momento.</p>
             </div>
         {% endif %}
+        </div>
     </div>
 </section>
 {% endblock %}
 
-{% block admin_scripts %}
-<script src="{{ url_for('static', filename='js/admin-reset.js') }}"></script>
+{% block seller_scripts %}
+<script src="{{ url_for('static', filename='js/admin-stock-live.js') }}"></script>
 {% endblock %}

@@ -82,6 +82,48 @@
     font-size: 14px;
 }
 
+.admin-field__wrap--has-toggle .admin-field__input {
+    padding-right: 44px;
+}
+
+.admin-field__toggle-pass {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: color var(--transition), background var(--transition);
+}
+
+.admin-field__toggle-pass:hover {
+    color: var(--color-primary);
+    background: rgba(14, 22, 122, 0.06);
+}
+
+.admin-field__toggle-pass:focus {
+    outline: none;
+}
+
+.admin-field__toggle-pass:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.admin-field__toggle-pass i {
+    font-size: 17px;
+    line-height: 1;
+}
+
 .admin-field__input {
     width: 100%;
     height: 48px;
@@ -154,6 +196,46 @@
 .admin-alert--error {
     background: rgba(220, 38, 38, 0.10);
     color: #b91c1c;
+}
+
+/* ---------- Vendedores ---------- */
+.admin-seller-create {
+    margin-top: 20px;
+}
+
+.admin-sellers__row {
+    display: grid;
+    grid-template-columns: minmax(220px, 1.4fr) 0.7fr 0.8fr 0.5fr 0.8fr 0.9fr 0.5fr;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 14px;
+}
+
+.admin-sellers__row:last-child {
+    border-bottom: none;
+}
+
+.admin-sellers__person {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.admin-sellers__person strong {
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-sellers__person small {
+    color: var(--color-text-muted);
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* ---------- Shell do dashboard ---------- */
@@ -1110,6 +1192,7 @@
 }
 
 .admin-table > .admin-mov__row:last-child { border-bottom: none; }
+.admin-table > .admin-mov__wrapper:last-child .admin-mov__row { border-bottom: none; }
 
 .admin-mov__badge {
     padding: 4px 10px;
@@ -1146,7 +1229,8 @@
     min-width: 0;
 }
 
-.admin-mov__product a {
+.admin-mov__product a,
+.admin-mov__product > span {
     color: var(--color-text);
     font-weight: 600;
     overflow: hidden;
@@ -1191,48 +1275,578 @@
 @media (max-width: 900px) {
     .admin-topbar {
         flex-wrap: wrap;
+        align-items: center;
+        justify-content: center;
         gap: 12px;
     }
+    .admin-topbar__brand {
+        order: 1;
+        flex: 0 0 100%;
+        width: 100%;
+        justify-content: center;
+    }
+    .admin-topbar__meta {
+        order: 2;
+        flex: 1 1 auto;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px 12px;
+    }
+    .admin-topbar__user {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1 1 auto;
+        max-width: 42%;
+    }
+    .admin-topbar__clock {
+        flex-shrink: 0;
+        font-size: 12px;
+        gap: 6px;
+    }
+    .admin-topbar__logout-form {
+        flex-shrink: 0;
+        margin: 0;
+    }
+    .admin-topbar__logout {
+        padding: 8px;
+        gap: 0;
+        border: none;
+        background: transparent;
+        color: #c62828;
+        border-radius: 10px;
+    }
+    .admin-topbar__logout:hover {
+        color: #b71c1c;
+        background: rgba(198, 40, 40, 0.1);
+        border-color: transparent;
+    }
+    .admin-topbar__logout:focus-visible {
+        outline: 2px solid #c62828;
+        outline-offset: 2px;
+    }
+    .admin-topbar__logout i {
+        font-size: 18px;
+    }
+    .admin-topbar__logout-label {
+        display: none;
+    }
+    /* Força nova linha: nav sempre abaixo da marca + meta (ordem visual 1→2→3). */
     .admin-nav {
         order: 3;
+        flex: 0 0 auto;
+        flex-basis: 100%;
         width: 100%;
+        max-width: 100%;
         justify-content: flex-start;
-        overflow-x: auto;
         flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+    }
+    .admin-nav__item {
+        gap: 2px !important;
     }
     .admin-card__form {
         grid-template-columns: 1fr;
     }
     .admin-stock__row {
-        grid-template-columns: 1fr auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         grid-template-areas:
             "product qty"
-            "meta    actions";
-        gap: 8px 12px;
-        padding: 14px 16px;
+            "sku     sku"
+            "category category"
+            "price   min"
+            "status  actions";
+        align-items: start;
+        gap: 10px 12px;
+        padding: 14px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        margin-bottom: 12px;
     }
-    .admin-stock__row > :nth-child(1) { grid-area: product; }
+    .admin-stock__row > :nth-child(1) {
+        grid-area: product;
+        align-self: center;
+    }
     .admin-stock__row > :nth-child(2),
     .admin-stock__row > :nth-child(3),
     .admin-stock__row > :nth-child(4),
-    .admin-stock__row > :nth-child(6),
-    .admin-stock__row > :nth-child(7) {
-        grid-area: meta;
+    .admin-stock__row > :nth-child(6) {
         display: inline-flex;
-        gap: 10px;
+        align-items: center;
+        min-width: 0;
         font-size: 12px;
         color: var(--color-text-muted);
     }
-    .admin-stock__row > :nth-child(5) { grid-area: qty; text-align: right; }
-    .admin-stock__row > :nth-child(8) { grid-area: actions; justify-content: flex-end; }
-    .admin-stock .admin-table__head { display: none; }
-
-    .admin-mov__row,
-    .admin-mov__row--wide {
-        grid-template-columns: 1fr 1fr;
-        gap: 6px 12px;
+    .admin-stock__row > :nth-child(2)::before { content: "SKU"; }
+    .admin-stock__row > :nth-child(3)::before { content: "Categoria"; }
+    .admin-stock__row > :nth-child(4)::before { content: "Preço"; }
+    .admin-stock__row > :nth-child(6)::before { content: "Mín."; }
+    .admin-stock__row > :nth-child(2)::before,
+    .admin-stock__row > :nth-child(3)::before,
+    .admin-stock__row > :nth-child(4)::before,
+    .admin-stock__row > :nth-child(6)::before {
+        margin-right: 6px;
+        color: var(--color-text-muted);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+    .admin-stock__row > :nth-child(2) {
+        grid-area: sku;
+    }
+    .admin-stock__row > :nth-child(3) {
+        grid-area: category;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .admin-stock__row > :nth-child(4) {
+        grid-area: price;
+    }
+    .admin-stock__row > :nth-child(6) {
+        grid-area: min;
+        justify-self: end;
+    }
+    .admin-stock__row > :nth-child(5) {
+        grid-area: qty;
+        align-self: center;
+        justify-self: end;
+        min-width: 56px;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-stock__row > :nth-child(7) {
+        grid-area: status;
+        align-self: center;
+        min-width: 0;
+    }
+    .admin-stock__row > :nth-child(8) {
+        grid-area: actions;
+        justify-content: flex-end;
+        align-self: center;
+    }
+    .admin-stock__product {
+        gap: 10px;
+    }
+    .admin-stock__thumb {
+        width: 46px;
+        height: 46px;
+        border-radius: 12px;
+    }
+    .admin-stock__product strong {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        white-space: normal;
+        line-height: 1.25;
         font-size: 13px;
     }
+    .admin-stock__product small {
+        font-size: 11px;
+    }
+    .admin-stock__sku-code {
+        font-size: 11px;
+    }
+    .admin-stock__qty strong {
+        font-size: 20px;
+    }
+    .admin-stock__actions .admin-btn {
+        width: 38px;
+        height: 38px;
+        justify-content: center;
+        padding: 0;
+        border-radius: 12px;
+    }
+    .admin-stock__actions .admin-btn i {
+        font-size: 15px;
+    }
+    .admin-stock {
+        display: block;
+        background: transparent;
+        box-shadow: none;
+    }
+    .admin-stock .admin-table__head { display: none; }
+
+    /* Movimentações — mesmo “card” visual do estoque (mobile) */
+    .admin-table:has(.admin-mov__wrapper),
+    .admin-table:has(> .admin-mov__row:not(.admin-table__head)) {
+        display: block;
+        background: transparent;
+        box-shadow: none;
+        overflow: visible;
+    }
+
+    .admin-mov__wrapper {
+        margin-bottom: 12px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        overflow: hidden;
+    }
+
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "product product"
+            "date    type"
+            "delta   balance"
+            "reason  reason"
+            "user    user";
+        gap: 10px 12px;
+        padding: 14px;
+        align-items: start;
+        border-bottom: none;
+        font-size: 13px;
+    }
+
+    .admin-mov__wrapper .admin-mov__row > :nth-child(1) {
+        grid-area: date;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-mov__wrapper .admin-mov__row > :nth-child(2) {
+        grid-area: product;
+    }
+    .admin-mov__wrapper .admin-mov__row > :nth-child(3) {
+        grid-area: type;
+        justify-self: end;
+        align-self: start;
+    }
+    .admin-mov__wrapper .admin-mov__row > :nth-child(4) {
+        grid-area: delta;
+        justify-self: start;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-mov__wrapper .admin-mov__row > :nth-child(4).admin-table__col--num,
+    .admin-mov__wrapper .admin-mov__row > :nth-child(5).admin-table__col--num {
+        text-align: center;
+    }
+    .admin-mov__wrapper .admin-mov__row > :nth-child(5) {
+        grid-area: balance;
+        justify-self: end;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-mov__wrapper .admin-mov__row > :nth-child(6) {
+        grid-area: reason;
+        white-space: normal;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .admin-mov__wrapper .admin-mov__row > :nth-child(7) {
+        grid-area: user;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+
+    .admin-mov__wrapper .admin-mov__row > :nth-child(1)::before {
+        content: "Data";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-mov__wrapper .admin-mov__row > :nth-child(4)::before {
+        content: "Delta";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-mov__wrapper .admin-mov__row > :nth-child(5)::before {
+        content: "Saldo";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-mov__wrapper .admin-mov__row > :nth-child(6)::before {
+        content: "Motivo / ref.";
+        display: block;
+        margin-bottom: 4px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-mov__wrapper .admin-mov__row > :nth-child(7)::before {
+        content: "Usuário";
+        display: block;
+        margin-bottom: 4px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+
+    .admin-mov__wrapper .admin-mov__product a,
+    .admin-mov__wrapper .admin-mov__product > span {
+        white-space: normal;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        line-height: 1.25;
+        font-size: 13px;
+    }
+
+    .admin-mov__wrapper .admin-mov__details {
+        border-top: 1px solid var(--color-border);
+    }
+    .admin-mov__wrapper .admin-mov__details-content {
+        padding: 12px 14px 14px;
+    }
+
+    /* Página do produto: 6 colunas dentro do wrapper (mesmo grid que linha direta) */
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) {
+        margin-bottom: 0;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "date type"
+            "delta balance"
+            "reason reason"
+            "user user";
+        gap: 10px 12px;
+        padding: 14px;
+        align-items: start;
+        border-bottom: none;
+        font-size: 13px;
+    }
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(1) {
+        grid-area: date;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(2) {
+        grid-area: type;
+        justify-self: end;
+        align-self: start;
+    }
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(3) {
+        grid-area: delta;
+        justify-self: start;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(3).admin-table__col--num,
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(4).admin-table__col--num {
+        text-align: center;
+    }
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(4) {
+        grid-area: balance;
+        justify-self: end;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(5) {
+        grid-area: reason;
+        white-space: normal;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(6) {
+        grid-area: user;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(1)::before {
+        content: "Data";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(3)::before {
+        content: "Delta";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(4)::before {
+        content: "Saldo";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(5)::before {
+        content: "Motivo / ref.";
+        display: block;
+        margin-bottom: 4px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(6)::before {
+        content: "Usuário";
+        display: block;
+        margin-bottom: 4px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+
+    /* Página do produto: linhas sem wrapper (6 colunas) — legado */
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) {
+        margin-bottom: 12px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "date type"
+            "delta balance"
+            "reason reason"
+            "user user";
+        gap: 10px 12px;
+        padding: 14px;
+        align-items: start;
+        border-bottom: none;
+        font-size: 13px;
+    }
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(1) {
+        grid-area: date;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(2) {
+        grid-area: type;
+        justify-self: end;
+        align-self: start;
+    }
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(3) {
+        grid-area: delta;
+        justify-self: start;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(3).admin-table__col--num,
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(4).admin-table__col--num {
+        text-align: center;
+    }
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(4) {
+        grid-area: balance;
+        justify-self: end;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(5) {
+        grid-area: reason;
+        white-space: normal;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(6) {
+        grid-area: user;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(1)::before {
+        content: "Data";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(3)::before {
+        content: "Delta";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(4)::before {
+        content: "Saldo";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(5)::before {
+        content: "Motivo / ref.";
+        display: block;
+        margin-bottom: 4px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(6)::before {
+        content: "Usuário";
+        display: block;
+        margin-bottom: 4px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+
     .admin-table > .admin-mov__row.admin-table__head { display: none; }
 }
 
@@ -1243,6 +1857,29 @@
     }
     .admin-main {
         padding: 24px 16px 44px;
+    }
+    .admin-kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+    .admin-kpis .kpi {
+        padding: 16px 14px 14px;
+    }
+    .admin-kpis .kpi__icon {
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+    }
+    .admin-kpis .kpi__label {
+        font-size: 10px;
+        letter-spacing: 0.06em;
+    }
+    .admin-kpis .kpi__value {
+        font-size: 20px;
+    }
+    .admin-kpis .kpi__hint {
+        font-size: 11px;
+        line-height: 1.35;
     }
     .admin-table__head {
         display: none;
@@ -1478,6 +2115,61 @@
 
 .admin-btn--wake:active {
     transform: scale(0.97);
+}
+
+@media (max-width: 760px) {
+    .admin-sellers {
+        display: block;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .admin-sellers .admin-table__head {
+        display: none;
+    }
+
+    .admin-sellers__row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "person status"
+            "pin    pin"
+            "sales  revenue"
+            "login  action";
+        margin-bottom: 12px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        padding: 14px;
+        border-bottom: none;
+        gap: 10px 12px;
+    }
+
+    .admin-sellers__row > :nth-child(1) { grid-area: person; }
+    .admin-sellers__row > :nth-child(2) {
+        grid-area: status;
+        justify-self: end;
+    }
+    .admin-sellers__row > :nth-child(3) {
+        grid-area: pin;
+    }
+    .admin-sellers__row > :nth-child(4) {
+        grid-area: sales;
+        justify-self: start;
+    }
+    .admin-sellers__row > :nth-child(5) {
+        grid-area: revenue;
+        justify-self: end;
+    }
+    .admin-sellers__row > :nth-child(6) {
+        grid-area: login;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-sellers__row > :nth-child(7) {
+        grid-area: action;
+        justify-self: end;
+    }
 }
 
 .admin-btn--wake:disabled {

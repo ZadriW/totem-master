@@ -82,6 +82,25 @@
     transform: translateX(4px);
 }
 
+.welcome__seller-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-primary);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    transition: color var(--transition), transform var(--transition);
+}
+
+.welcome__seller-link:hover,
+.welcome__seller-link:focus-visible {
+    color: var(--color-primary-light);
+    transform: translateY(-1px);
+    outline: none;
+}
+
 .welcome__footer {
     position: relative;
     z-index: 1;

@@ -3,7 +3,11 @@
 {% block title %}{{ product.nome }} | Estoque | Odonto Master{% endblock %}
 
 {% block admin_body %}
-<section class="admin-section">
+<section
+    class="admin-section"
+    data-admin-product
+    data-api-url="{{ url_for('admin_api_stock_product', product_id=product.id) }}"
+>
     <header class="admin-section__header admin-section__header--row">
         <div>
             <a class="admin-breadcrumb" href="{{ url_for('admin_stock') }}">
@@ -17,7 +21,7 @@
             </p>
         </div>
 
-        <div class="admin-product__status">
+        <div class="admin-product__status" data-product-status>
             {% if not product.ativo %}
                 <span class="admin-badge admin-badge--neutral">Inativo</span>
             {% elif product.sem_estoque %}
@@ -42,21 +46,22 @@
                 </div>
                 <div>
                     <dt>Estoque atual</dt>
-                    <dd><strong>{{ product.estoque }}</strong> un.</dd>
+                    <dd data-product-stock><strong>{{ product.estoque }}</strong> un.</dd>
                 </div>
                 <div>
                     <dt>Estoque mínimo</dt>
-                    <dd>{{ product.estoque_minimo }} un.</dd>
+                    <dd data-product-min-stock>{{ product.estoque_minimo }} un.</dd>
                 </div>
                 <div>
                     <dt>Valor em estoque</dt>
-                    <dd>{{ (product.estoque * product.preco) | brl }}</dd>
+                    <dd data-product-stock-value>{{ (product.estoque * product.preco) | brl }}</dd>
                 </div>
             </dl>
 
             <form method="post"
                   action="{{ url_for('admin_stock_min', product_id=product.id) }}"
-                  class="admin-product__inline-form">
+                  class="admin-product__inline-form"
+                  data-live-stock-form>
                 <label class="admin-field__label" for="min_stock">Novo estoque mínimo</label>
                 <div class="admin-product__inline-wrap">
                     <input id="min_stock" type="number" name="min_stock" min="0" step="1"
@@ -67,7 +72,8 @@
 
             <form method="post"
                   action="{{ url_for('admin_stock_toggle_active', product_id=product.id) }}"
-                  class="admin-product__toggle">
+                  class="admin-product__toggle"
+                  data-live-stock-form>
                 {% if product.ativo %}
                     <input type="hidden" name="active" value="0">
                     <button type="submit" class="admin-btn admin-btn--ghost admin-btn--danger"
@@ -96,7 +102,8 @@
                 </header>
                 <form method="post"
                       action="{{ url_for('admin_stock_entry', product_id=product.id) }}"
-                      class="admin-card__form">
+                      class="admin-card__form"
+                      data-live-stock-form>
                     <div class="admin-field">
                         <label class="admin-field__label" for="entrada-qty">Quantidade</label>
                         <input id="entrada-qty" type="number" name="quantity" min="1" step="1"
@@ -130,7 +137,8 @@
                 <form method="post"
                       action="{{ url_for('admin_stock_exit', product_id=product.id) }}"
                       class="admin-card__form"
-                      data-confirm="Confirmar saída manual de estoque?">
+                      data-confirm="Confirmar saída manual de estoque?"
+                      data-live-stock-form>
                     <div class="admin-field">
                         <label class="admin-field__label" for="saida-qty">Quantidade</label>
                         <input id="saida-qty" type="number" name="quantity" min="1" step="1"
@@ -162,7 +170,8 @@
                 <form method="post"
                       action="{{ url_for('admin_stock_adjust', product_id=product.id) }}"
                       class="admin-card__form"
-                      data-confirm="Ajustar o estoque para o valor informado?">
+                      data-confirm="Ajustar o estoque para o valor informado?"
+                      data-live-stock-form>
                     <div class="admin-field">
                         <label class="admin-field__label" for="ajuste-stock">Novo saldo</label>
                         <input id="ajuste-stock" type="number" name="new_stock" min="0" step="1"
@@ -189,11 +198,11 @@
     <header class="admin-section__header">
         <h2 class="admin-section__title">Histórico de movimentações</h2>
         <p class="admin-section__subtitle">
-            Últimas {{ movements|length }} movimentação{% if movements|length != 1 %}ões{% endif %} deste produto.
+            Últimas {{ movements|length }} {% if movements|length == 1 %}movimentação{% else %}movimentações{% endif %} deste produto.
         </p>
     </header>
 
-    <div class="admin-table" role="table" aria-label="Movimentações do produto">
+    <div class="admin-table" role="table" aria-label="Movimentações do produto" data-product-movements>
         <div class="admin-table__head admin-mov__row" role="row">
             <span role="columnheader">Data/Hora</span>
             <span role="columnheader">Tipo</span>
@@ -205,22 +214,78 @@
 
         {% if movements %}
             {% for m in movements %}
-            <div class="admin-mov__row" role="row">
-                <span>{{ m.created_at | datahora }}</span>
-                <span>
-                    <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
-                        {{ m.movement_type | movlabel }}
+            <div class="admin-mov__wrapper" data-movement-id="{{ m.id }}">
+                <div class="admin-mov__row" role="row">
+                    <span>{{ m.created_at | datahora }}</span>
+                    <span class="admin-mov__type-cell">
+                        <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
+                            {{ m.movement_type | movlabel }}
+                        </span>
+                        {% if m.movement_type == 'venda' and m.transaction_id %}
+                            <button type="button" class="admin-mov__toggle" data-toggle="{{ m.id }}" aria-expanded="false" aria-controls="details-{{ m.id }}" aria-label="Exibir ou ocultar dados do cliente">
+                                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                            </button>
+                        {% endif %}
                     </span>
-                </span>
-                <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% else %}negative{% endif %}">
-                    {{ m.delta | signed }}
-                </span>
-                <span class="admin-table__col--num"><strong>{{ m.balance_after }}</strong></span>
-                <span class="admin-mov__reason">
-                    {% if m.reference %}<code>{{ m.reference }}</code>{% endif %}
-                    {{ m.reason or '-' }}
-                </span>
-                <span>{{ m.created_by or '-' }}</span>
+                    <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% else %}negative{% endif %}">
+                        {{ m.delta | signed }}
+                    </span>
+                    <span class="admin-table__col--num"><strong>{{ m.balance_after }}</strong></span>
+                    <span class="admin-mov__reason">
+                        {% if m.reference %}<code>{{ m.reference }}</code>{% endif %}
+                        {{ m.reason or '-' }}
+                    </span>
+                    <span class="admin-mov__user-cell">
+                        {{ m.created_by or '-' }}
+                        {% if m.movement_type == 'venda' and m.reference %}
+                            <a
+                                href="{{ url_for('receipt', order_number=m.reference) }}"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="admin-mov__note-btn"
+                                title="Abrir nota de retirada ({{ m.reference }})"
+                                aria-label="Abrir nota de retirada do pedido {{ m.reference }}"
+                            >
+                                <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
+                            </a>
+                        {% endif %}
+                    </span>
+                </div>
+                {% if m.movement_type == 'venda' and m.transaction_id %}
+                <div class="admin-mov__details" id="details-{{ m.id }}" hidden>
+                    <div class="admin-mov__details-content">
+                        <h4 class="admin-mov__details-title">
+                            <i class="fa-solid fa-user" aria-hidden="true"></i>
+                            Dados do cliente (pedido)
+                        </h4>
+                        <dl class="admin-mov__details-list">
+                            <div class="admin-mov__details-item">
+                                <dt>Nome</dt>
+                                <dd>{{ m.client_name or '—' }}</dd>
+                            </div>
+                            <div class="admin-mov__details-item">
+                                <dt>CPF</dt>
+                                <dd>{{ m.client_cpf or '—' }}</dd>
+                            </div>
+                            <div class="admin-mov__details-item">
+                                <dt>CEP</dt>
+                                <dd>{{ m.client_zipcode or '—' }}</dd>
+                            </div>
+                            <div class="admin-mov__details-item admin-mov__details-item--wide">
+                                <dt>Endereço</dt>
+                                <dd>
+                                    {% if m.client_address or m.client_number or m.client_city %}
+                                        {{ m.client_address or '—' }}{% if m.client_number %}, {{ m.client_number }}{% endif %}{% if m.client_complement %} — {{ m.client_complement }}{% endif %}<br>
+                                        {{ m.client_city or '—' }}{% if m.client_state %} — {{ m.client_state }}{% endif %}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+                {% endif %}
             </div>
             {% endfor %}
         {% else %}
@@ -231,4 +296,8 @@
         {% endif %}
     </div>
 </section>
+{% endblock %}
+
+{% block admin_scripts %}
+<script src="{{ url_for('static', filename='js/admin-stock-live.js') }}"></script>
 {% endblock %}

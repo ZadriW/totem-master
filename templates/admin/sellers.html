@@ -1,0 +1,124 @@
+{% extends "admin/_layout.html" %}
+
+{% block title %}Vendedores | Odonto Master{% endblock %}
+
+{% block admin_body %}
+<section class="admin-section">
+    <header class="admin-section__header">
+        <h1 class="admin-section__title">Vendedores</h1>
+        <p class="admin-section__subtitle">
+            Cadastre logins de vendedores e acompanhe as vendas vinculadas a cada conta.
+        </p>
+    </header>
+
+    <article class="admin-card admin-seller-create">
+        <header class="admin-card__header">
+            <i class="fa-solid fa-user-plus admin-card__icon" aria-hidden="true"></i>
+            <div>
+                <h2 class="admin-card__title">Criar login de vendedor</h2>
+                <p class="admin-card__subtitle">O vendedor acessa pelo link “Sou vendedor” na tela inicial.</p>
+            </div>
+        </header>
+        <form method="post" action="{{ url_for('admin_sellers') }}" class="admin-card__form">
+            <div class="admin-field">
+                <label class="admin-field__label" for="seller-name">Nome</label>
+                <input id="seller-name" class="admin-field__input" type="text" name="name" maxlength="120" required>
+            </div>
+            <div class="admin-field">
+                <label class="admin-field__label" for="seller-email">E-mail</label>
+                <input id="seller-email" class="admin-field__input" type="email" name="email" maxlength="160" required>
+            </div>
+            <div class="admin-field">
+                <label class="admin-field__label" for="seller-password">Senha inicial</label>
+                <input id="seller-password" class="admin-field__input" type="password" name="password" minlength="6" required>
+            </div>
+            <div class="admin-field">
+                <label class="admin-field__label" for="seller-pin">PIN de venda</label>
+                <input
+                    id="seller-pin"
+                    class="admin-field__input"
+                    type="password"
+                    name="pin"
+                    inputmode="numeric"
+                    pattern="[0-9]{4}"
+                    maxlength="4"
+                    minlength="4"
+                    placeholder="0000"
+                    oninput="this.value = this.value.replace(/\D/g, '').slice(0, 4)"
+                    required
+                >
+            </div>
+            <button type="submit" class="admin-btn admin-btn--primary admin-btn--block">
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                Criar vendedor
+            </button>
+        </form>
+    </article>
+</section>
+
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <h2 class="admin-section__title">Contas cadastradas</h2>
+            <p class="admin-section__subtitle">
+                Exibindo {{ sellers|length }} {% if sellers|length == 1 %}vendedor{% else %}vendedores{% endif %}.
+            </p>
+        </div>
+    </header>
+
+    <div class="admin-table admin-sellers" role="table" aria-label="Vendedores cadastrados">
+        <div class="admin-table__head admin-sellers__row" role="row">
+            <span role="columnheader">Vendedor</span>
+            <span role="columnheader">Status</span>
+            <span role="columnheader">PIN</span>
+            <span class="admin-table__col--num" role="columnheader">Vendas</span>
+            <span class="admin-table__col--num" role="columnheader">Faturamento</span>
+            <span role="columnheader">Último login</span>
+            <span role="columnheader">Ações</span>
+        </div>
+
+        {% if sellers %}
+            {% for seller in sellers %}
+            <div class="admin-sellers__row" role="row">
+                <span class="admin-sellers__person">
+                    <strong>{{ seller.name }}</strong>
+                    <small>{{ seller.email }}</small>
+                </span>
+                <span>
+                    {% if seller.active %}
+                        <span class="admin-badge admin-badge--success">Ativo</span>
+                    {% else %}
+                        <span class="admin-badge admin-badge--neutral">Inativo</span>
+                    {% endif %}
+                </span>
+                <span>
+                    {% if seller.pin_hash %}
+                        <span class="admin-badge admin-badge--success">Configurado</span>
+                    {% else %}
+                        <span class="admin-badge admin-badge--warn">Pendente</span>
+                    {% endif %}
+                </span>
+                <span class="admin-table__col--num">{{ seller.transactions_count }}</span>
+                <span class="admin-table__col--num"><strong>{{ seller.total_revenue | brl }}</strong></span>
+                <span>{{ seller.last_login_at | datahora }}</span>
+                <span class="admin-stock__actions">
+                    <a
+                        class="admin-btn admin-btn--ghost admin-btn--sm"
+                        href="{{ url_for('admin_seller_detail', seller_id=seller.id) }}"
+                        aria-label="Ver dashboard de {{ seller.name }}"
+                        title="Ver dashboard"
+                    >
+                        <i class="fa-solid fa-chart-line" aria-hidden="true"></i>
+                    </a>
+                </span>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="admin-empty">
+                <i class="fa-regular fa-folder-open" aria-hidden="true"></i>
+                <p>Nenhum vendedor cadastrado.</p>
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

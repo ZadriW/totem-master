@@ -7,6 +7,7 @@
 - ``/api/...``         Endpoints JSON consumidos pelo front.
 - ``/admin/...``       Painel administrativo autenticado (dashboard, estoque,
                        movimentações).
+- ``/vendedor/...``    Painel dos vendedores (somente leitura).
 """
 
 from __future__ import annotations
@@ -26,15 +27,23 @@ from flask import (
     session,
     url_for,
 )
+from itsdangerous import BadSignature, URLSafeSerializer
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from data.products import CATEGORIES
 from database import (
+    create_seller_account,
     create_transaction,
+    ensure_seller_account,
+    get_seller,
+    get_seller_by_email,
     get_product,
     get_stats,
     get_stock_stats,
     get_transaction_by_order_number,
     init_db,
+    list_seller_pin_hashes,
+    list_sellers,
     list_products_admin,
     list_products_for_client,
     list_stock_movements,
@@ -45,6 +54,8 @@ from database import (
     reset_totem_to_default_state,
     set_product_active,
     sync_products_from_wake,
+    update_seller_account,
+    update_seller_last_login,
     update_product_min_stock,
 )
 import wake_api
@@ -64,8 +75,34 @@ app.secret_key = os.environ.get("TOTEM_SECRET_KEY") or secrets.token_hex(32)
 ADMIN_USERNAME = os.environ.get("TOTEM_ADMIN_USER", "adminmaster")
 ADMIN_PASSWORD = os.environ.get("TOTEM_ADMIN_PASS", "adminmaster430@")
 
+# Conta inicial do painel de vendedores. Em produção, sobrescreva por ambiente.
+SELLER_DEFAULT_NAME = os.environ.get("TOTEM_SELLER_NAME", "Vendedor")
+SELLER_DEFAULT_EMAIL = os.environ.get("TOTEM_SELLER_EMAIL", "vendedor@odontomaster.local")
+SELLER_DEFAULT_PASSWORD = os.environ.get("TOTEM_SELLER_PASS", "vendedor123")
+SELLER_DEFAULT_PIN = os.environ.get("TOTEM_SELLER_PIN", "0000")
+
+ADMIN_AUTH_COOKIE = "totem_admin_auth"
+SELLER_AUTH_COOKIE = "totem_seller_auth"
+ADMIN_AUTH_SALT = "totem-admin-auth"
+SELLER_AUTH_SALT = "totem-seller-auth"
+AUTH_COOKIE_OPTIONS = {
+    "httponly": True,
+    "samesite": "Lax",
+}
+
 # Inicializa o schema e popula o catálogo inicial (se vazio).
 init_db()
+
+# Garante uma conta inicial para o painel de vendedores.
+try:
+    ensure_seller_account(
+        SELLER_DEFAULT_NAME,
+        SELLER_DEFAULT_EMAIL,
+        generate_password_hash(SELLER_DEFAULT_PASSWORD),
+        generate_password_hash(SELLER_DEFAULT_PIN),
+    )
+except Exception as exc:
+    app.logger.warning("Conta inicial de vendedor indisponivel: %s", exc)
 
 # Tenta sincronizar com a Wake Commerce no startup (silencioso se falhar).
 try:
@@ -84,8 +121,89 @@ except Exception as exc:
     app.logger.warning("Sync Wake Commerce indisponivel no startup: %s", exc)
 
 
+def _auth_serializer(salt: str) -> URLSafeSerializer:
+    return URLSafeSerializer(app.secret_key, salt=salt)
+
+
+def _load_auth_cookie(cookie_name: str, salt: str) -> dict | None:
+    token = request.cookies.get(cookie_name)
+    if not token:
+        return None
+    try:
+        data = _auth_serializer(salt).loads(token)
+    except BadSignature:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _set_auth_cookie(response, cookie_name: str, salt: str, payload: dict):
+    response.set_cookie(
+        cookie_name,
+        _auth_serializer(salt).dumps(payload),
+        **AUTH_COOKIE_OPTIONS,
+    )
+    return response
+
+
+def _delete_auth_cookie(response, cookie_name: str):
+    response.delete_cookie(cookie_name, samesite=AUTH_COOKIE_OPTIONS["samesite"])
+    return response
+
+
+def _admin_auth() -> dict | None:
+    data = _load_auth_cookie(ADMIN_AUTH_COOKIE, ADMIN_AUTH_SALT)
+    if data and data.get("is_admin"):
+        return data
+    if session.get("is_admin"):
+        return {
+            "is_admin": True,
+            "admin_user": session.get("admin_user", "admin"),
+        }
+    return None
+
+
+def _seller_auth() -> dict | None:
+    data = _load_auth_cookie(SELLER_AUTH_COOKIE, SELLER_AUTH_SALT)
+    if data and data.get("is_seller") and data.get("seller_id"):
+        return data
+    if session.get("is_seller") and session.get("seller_id"):
+        return {
+            "is_seller": True,
+            "seller_id": int(session["seller_id"]),
+            "seller_name": session.get("seller_name", "Vendedor"),
+            "seller_email": session.get("seller_email", ""),
+        }
+    return None
+
+
 def _is_admin_logged_in() -> bool:
-    return bool(session.get("is_admin"))
+    return bool(_admin_auth())
+
+
+def _is_seller_logged_in() -> bool:
+    return bool(_seller_auth())
+
+
+def _clear_admin_session() -> None:
+    """Remove apenas credenciais do painel admin (preserva vendedor na mesma sessão)."""
+    for key in ("is_admin", "admin_user"):
+        session.pop(key, None)
+
+
+def _clear_seller_session() -> None:
+    """Remove apenas credenciais do painel do vendedor (preserva admin na mesma sessão)."""
+    for key in ("is_seller", "seller_id", "seller_name", "seller_email"):
+        session.pop(key, None)
+
+
+def _current_admin_user() -> str:
+    auth = _admin_auth() or {}
+    return auth.get("admin_user") or "admin"
+
+
+def _current_seller_id() -> int:
+    auth = _seller_auth() or {}
+    return int(auth["seller_id"])
 
 
 def admin_required(view):
@@ -96,6 +214,47 @@ def admin_required(view):
         return view(*args, **kwargs)
 
     return wrapped
+
+
+def seller_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        auth = _seller_auth()
+        if not auth:
+            return redirect(url_for("seller_login", next=request.path))
+        seller = get_seller(int(auth["seller_id"]))
+        if seller is None or not seller.get("active"):
+            response = redirect(url_for("seller_login"))
+            _clear_seller_session()
+            return _delete_auth_cookie(response, SELLER_AUTH_COOKIE)
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def _normalize_seller_pin(pin: str) -> str:
+    value = (pin or "").strip()
+    if not (value.isdigit() and len(value) == 4):
+        raise ValueError("O PIN deve conter exatamente 4 dígitos.")
+    return value
+
+
+def _seller_for_pin(pin: str) -> dict | None:
+    value = _normalize_seller_pin(pin)
+    for seller in list_seller_pin_hashes():
+        if seller.get("active") and check_password_hash(seller["pin_hash"], value):
+            return seller
+    return None
+
+
+def _pin_is_available(pin: str, *, ignore_seller_id: int | None = None) -> bool:
+    value = _normalize_seller_pin(pin)
+    for seller in list_seller_pin_hashes():
+        if ignore_seller_id is not None and int(seller["id"]) == int(ignore_seller_id):
+            continue
+        if check_password_hash(seller["pin_hash"], value):
+            return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -147,8 +306,15 @@ def api_create_transaction():
     items = payload.get("items") or payload.get("itens") or []
     client = payload.get("client") or {}
     try:
+        seller_pin = _normalize_seller_pin(str(payload.get("seller_pin") or ""))
+        seller = _seller_for_pin(seller_pin)
+        if seller is None:
+            raise ValueError("PIN do vendedor inválido ou inativo.")
         result = create_transaction(
             items,
+            created_by=f"vendedor:{seller['name']}",
+            seller_id=int(seller["id"]),
+            seller_name=seller["name"],
             client_name=client.get("name"),
             client_cpf=client.get("cpf"),
             client_zipcode=client.get("zipcode"),
@@ -187,21 +353,227 @@ def admin_login():
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
         if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
-            session.clear()
-            session["is_admin"] = True
-            session["admin_user"] = username
             next_url = request.args.get("next") or url_for("admin_dashboard")
             if not next_url.startswith("/"):
                 next_url = url_for("admin_dashboard")
-            return redirect(next_url)
+            response = redirect(next_url)
+            return _set_auth_cookie(
+                response,
+                ADMIN_AUTH_COOKIE,
+                ADMIN_AUTH_SALT,
+                {"is_admin": True, "admin_user": username},
+            )
         error = "Usuário ou senha inválidos."
     return render_template("admin/login.html", error=error)
 
 
 @app.route("/admin/logout", methods=["POST", "GET"])
 def admin_logout():
-    session.clear()
-    return redirect(url_for("admin_login"))
+    _clear_admin_session()
+    response = redirect(url_for("admin_login"))
+    return _delete_auth_cookie(response, ADMIN_AUTH_COOKIE)
+
+
+# ---------------------------------------------------------------------------
+# Painel do vendedor — autenticação e leitura
+# ---------------------------------------------------------------------------
+
+@app.route("/vendedor")
+def seller_index():
+    if not _is_seller_logged_in():
+        return redirect(url_for("seller_login"))
+    return redirect(url_for("seller_dashboard"))
+
+
+@app.route("/vendedor/login", methods=["GET", "POST"])
+def seller_login():
+    if _is_seller_logged_in():
+        return redirect(url_for("seller_dashboard"))
+
+    error = None
+    email = ""
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip().lower()
+        password = request.form.get("password") or ""
+        seller = get_seller_by_email(email)
+        if seller and seller.get("active") and check_password_hash(
+            seller["password_hash"], password
+        ):
+            update_seller_last_login(int(seller["id"]))
+            next_url = request.args.get("next") or url_for("seller_dashboard")
+            if not next_url.startswith("/vendedor"):
+                next_url = url_for("seller_dashboard")
+            response = redirect(next_url)
+            return _set_auth_cookie(
+                response,
+                SELLER_AUTH_COOKIE,
+                SELLER_AUTH_SALT,
+                {
+                    "is_seller": True,
+                    "seller_id": int(seller["id"]),
+                    "seller_name": seller["name"],
+                    "seller_email": seller["email"],
+                },
+            )
+        error = "E-mail ou senha inválidos."
+
+    return render_template("seller/login.html", error=error, email=email)
+
+
+@app.route("/vendedor/logout", methods=["POST", "GET"])
+def seller_logout():
+    _clear_seller_session()
+    response = redirect(url_for("seller_login"))
+    return _delete_auth_cookie(response, SELLER_AUTH_COOKIE)
+
+
+def _seller_shell_context(**extra):
+    auth = _seller_auth() or {}
+    return {
+        "seller_name": auth.get("seller_name", "Vendedor"),
+        "seller_email": auth.get("seller_email", ""),
+        "now": datetime.now(),
+        **extra,
+    }
+
+
+def _filtered_admin_products():
+    q = (request.args.get("q") or "").strip().lower()
+    category = (request.args.get("categoria") or "").strip()
+    status = (request.args.get("status") or "").strip()
+
+    products = list_products_admin()
+    if q:
+        products = [
+            p for p in products
+            if q in p["nome"].lower()
+            or q in (p["descricao"] or "").lower()
+            or q in (p.get("sku") or "").lower()
+        ]
+    if category and category.lower() != "todos":
+        products = [p for p in products if p["categoria"].lower() == category.lower()]
+    if status == "baixo":
+        products = [p for p in products if p["abaixo_minimo"] and not p["sem_estoque"]]
+    elif status == "sem_estoque":
+        products = [p for p in products if p["sem_estoque"]]
+    elif status == "inativo":
+        products = [p for p in products if not p["ativo"]]
+
+    return products, {
+        "q": q,
+        "categoria": category or "todos",
+        "status": status or "todos",
+    }
+
+
+@app.route("/vendedor/dashboard")
+@seller_required
+def seller_dashboard():
+    seller_id = _current_seller_id()
+    stats = get_stats(seller_id=seller_id)
+    stock = get_stock_stats()
+    transactions = list_transactions(limit=100, seller_id=seller_id)
+    movements = list_stock_movements(limit=80)
+    return render_template(
+        "seller/dashboard.html",
+        stats=stats,
+        stock=stock,
+        transactions=transactions,
+        movements=movements,
+        **_seller_shell_context(active_section="dashboard"),
+    )
+
+
+@app.route("/vendedor/estoque")
+@seller_required
+def seller_stock():
+    products, filters = _filtered_admin_products()
+    return render_template(
+        "seller/stock.html",
+        products=products,
+        stock=get_stock_stats(),
+        categories=CATEGORIES,
+        filters=filters,
+        **_seller_shell_context(active_section="estoque"),
+    )
+
+
+@app.route("/vendedor/movimentacoes")
+@seller_required
+def seller_movements():
+    movement_type = (request.args.get("tipo") or "").strip()
+    product_id_raw = request.args.get("produto") or ""
+    product_id = _parse_int(product_id_raw, 0) or None
+    pedido = (request.args.get("pedido") or "").strip()
+
+    movements = list_stock_movements(
+        product_id=product_id,
+        movement_type=movement_type or None,
+        reference=pedido or None,
+        limit=500,
+    )
+    return render_template(
+        "seller/movements.html",
+        movements=movements,
+        products=list_products_admin(),
+        filters={
+            "tipo": movement_type or "todos",
+            "produto": product_id or 0,
+            "pedido": pedido,
+        },
+        **_seller_shell_context(active_section="movimentacoes"),
+    )
+
+
+def _seller_transaction_api(tx: dict) -> dict:
+    """Serializa uma transação para `/vendedor/api/dashboard` (somente leitura)."""
+    items = tx.get("items") or []
+    return {
+        "id": int(tx["id"]),
+        "order_number": tx["order_number"],
+        "created_at_display": datahora_filter(tx["created_at"]),
+        "items_count": int(tx["items_count"] or 0),
+        "total_display": brl_filter(tx["total"]),
+        "status": tx["status"],
+        "items": [
+            {
+                "product_name": it.get("product_name") or "",
+                "product_sku": it.get("product_sku"),
+                "category": it.get("category") or "-",
+                "quantity": int(it.get("quantity") or 0),
+                "unit_price_display": brl_filter(it.get("unit_price")),
+                "subtotal_display": brl_filter(it.get("subtotal")),
+            }
+            for it in items
+        ],
+    }
+
+
+@app.route("/vendedor/api/estoque")
+@seller_required
+def seller_api_stock():
+    products = list_products_admin()
+    return jsonify({
+        "stock": get_stock_stats(),
+        "products": [
+            {**p, "status": _product_status(p)}
+            for p in products
+        ],
+    })
+
+
+@app.route("/vendedor/api/dashboard")
+@seller_required
+def seller_api_dashboard():
+    seller_id = _current_seller_id()
+    transactions = list_transactions(limit=100, seller_id=seller_id)
+    latest_tx_id = max((int(t["id"]) for t in transactions), default=0)
+    return jsonify({
+        "stats": get_stats(seller_id=seller_id),
+        "stock": get_stock_stats(),
+        "latest_tx_id": latest_tx_id,
+        "transactions": [_seller_transaction_api(t) for t in transactions],
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -219,16 +591,105 @@ def admin_dashboard():
         stats=stats,
         stock=stock,
         transactions=transactions,
-        admin_user=session.get("admin_user", "admin"),
+        admin_user=_current_admin_user(),
         now=datetime.now(),
         active_section="dashboard",
     )
 
 
+# ---------------------------------------------------------------------------
+# Painel administrativo — vendedores
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/vendedores", methods=["GET", "POST"])
+@admin_required
+def admin_sellers():
+    if request.method == "POST":
+        name = (request.form.get("name") or "").strip()
+        email = (request.form.get("email") or "").strip().lower()
+        password = request.form.get("password") or ""
+        pin = request.form.get("pin") or ""
+        try:
+            if len(password) < 6:
+                raise ValueError("A senha deve ter pelo menos 6 caracteres.")
+            pin = _normalize_seller_pin(pin)
+            if not _pin_is_available(pin):
+                raise ValueError("Este PIN já está em uso por outro vendedor.")
+            seller = create_seller_account(
+                name,
+                email,
+                generate_password_hash(password),
+                generate_password_hash(pin),
+            )
+            flash(f"Vendedor {seller['name']} criado com sucesso.", "success")
+            return redirect(url_for("admin_seller_detail", seller_id=seller["id"]))
+        except ValueError as exc:
+            flash(str(exc), "error")
+
+    sellers = list_sellers()
+    return render_template(
+        "admin/sellers.html",
+        sellers=sellers,
+        **_admin_shell_context(active_section="vendedores"),
+    )
+
+
+@app.route("/admin/vendedores/<int:seller_id>")
+@admin_required
+def admin_seller_detail(seller_id: int):
+    seller = get_seller(seller_id)
+    if seller is None:
+        flash("Vendedor não encontrado.", "error")
+        return redirect(url_for("admin_sellers"))
+    stats = get_stats(seller_id=seller_id)
+    transactions = list_transactions(limit=200, seller_id=seller_id)
+    return render_template(
+        "admin/seller_detail.html",
+        seller=seller,
+        stats=stats,
+        transactions=transactions,
+        **_admin_shell_context(active_section="vendedores"),
+    )
+
+
+@app.route("/admin/vendedores/<int:seller_id>/editar", methods=["POST"])
+@admin_required
+def admin_seller_update(seller_id: int):
+    name = (request.form.get("name") or "").strip()
+    email = (request.form.get("email") or "").strip().lower()
+    active = request.form.get("active") == "1"
+    password = request.form.get("password") or ""
+    pin = (request.form.get("pin") or "").strip()
+    try:
+        password_hash = None
+        if password:
+            if len(password) < 6:
+                raise ValueError("A nova senha deve ter pelo menos 6 caracteres.")
+            password_hash = generate_password_hash(password)
+        pin_hash = None
+        if pin:
+            pin = _normalize_seller_pin(pin)
+            if not _pin_is_available(pin, ignore_seller_id=seller_id):
+                raise ValueError("Este PIN já está em uso por outro vendedor.")
+            pin_hash = generate_password_hash(pin)
+        seller = update_seller_account(
+            seller_id,
+            name=name,
+            email=email,
+            active=active,
+            password_hash=password_hash,
+            pin_hash=pin_hash,
+        )
+        flash(f"Dados de {seller['name']} atualizados.", "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("admin_seller_detail", seller_id=seller_id))
+
+
 @app.route("/admin/sincronizar-wake", methods=["POST"])
 @admin_required
 def admin_sync_wake():
-    """Sincroniza produtos e estoque com a Wake Commerce."""
+    """Sincroniza a biblioteca de produtos com a Wake Commerce."""
     try:
         products = wake_api.fetch_products()
         if not products:
@@ -242,7 +703,8 @@ def admin_sync_wake():
         flash(
             f"Sincronizacao concluida: {result['inserted']} produto(s) novo(s), "
             f"{result['updated']} atualizado(s). "
-            f"Total de {len(products)} produto(s) da Wake Commerce.",
+            f"Total de {len(products)} produto(s) da Wake Commerce. "
+            "O estoque do totem foi preservado e segue sendo controlado pelo administrador.",
             "success",
         )
     except (ConnectionError, PermissionError) as exc:
@@ -259,7 +721,7 @@ def admin_sync_wake():
 @app.route("/admin/reiniciar-sistema", methods=["POST"])
 @admin_required
 def admin_reset_system():
-    """Apaga vendas, dados de clientes e movimentações após o estoque inicial."""
+    """Apaga vendas, dados de clientes, histórico de estoque e zera todos os produtos."""
     if request.form.get("confirm_reset") != "1":
         flash(
             "Para reiniciar o sistema, marque a caixa de confirmação e tente novamente.",
@@ -271,8 +733,9 @@ def admin_reset_system():
         flash(
             "Sistema reiniciado com sucesso. "
             f"{result['transactions_deleted']} venda(s) e dados de cliente removidos; "
-            f"{result['movements_deleted']} movimentação(ões) apagadas (mantidas apenas as de estoque inicial); "
-            f"estoque de {result['products_restored']} produto(s) restaurado ao padrão.",
+            f"{result['movements_deleted']} movimentação(ões) apagadas; "
+            f"estoque de {result['products_restored']} produto(s) zerado "
+            "(novo registro de estoque inicial com saldo 0).",
             "success",
         )
     except Exception:
@@ -291,7 +754,7 @@ def admin_reset_system():
 def _admin_shell_context(**extra):
     """Contexto comum para todas as telas do painel (topbar/nav)."""
     return {
-        "admin_user": session.get("admin_user", "admin"),
+        "admin_user": _current_admin_user(),
         "now": datetime.now(),
         **extra,
     }
@@ -364,6 +827,66 @@ def _parse_float(value):
         return None
 
 
+def _wants_json_response() -> bool:
+    """Detecta chamadas AJAX/API sem mudar o fluxo HTML existente."""
+    return (
+        request.accept_mimetypes.best == "application/json"
+        or request.headers.get("X-Requested-With") == "fetch"
+        or request.args.get("format") == "json"
+    )
+
+
+def _product_status(product: dict) -> dict:
+    if not product["ativo"]:
+        return {"label": "Inativo", "kind": "neutral"}
+    if product["sem_estoque"]:
+        return {"label": "Sem estoque", "kind": "danger"}
+    if product["abaixo_minimo"]:
+        return {"label": "Abaixo do mínimo", "kind": "warn"}
+    return {"label": "OK", "kind": "success"}
+
+
+def _movement_payload(movement: dict) -> dict:
+    reference = movement.get("reference")
+    movement_type = movement.get("movement_type")
+    tx_id = movement.get("transaction_id")
+    return {
+        **movement,
+        "created_at_display": datahora_filter(movement.get("created_at")),
+        "movement_label": mov_label_filter(movement_type),
+        "delta_display": signed_filter(movement.get("delta")),
+        "delta_kind": "positive" if int(movement.get("delta") or 0) > 0 else "negative",
+        "product_url": url_for("admin_stock_product", product_id=movement["product_id"]),
+        "receipt_url": (
+            url_for("receipt", order_number=reference)
+            if movement_type == "venda" and reference
+            else None
+        ),
+        "has_customer_details": movement_type == "venda" and bool(tx_id),
+    }
+
+
+def _stock_product_payload(product_id: int, *, limit: int = 100) -> dict:
+    product = get_product(product_id)
+    if product is None:
+        raise ValueError("Produto não encontrado.")
+    movements = list_stock_movements(product_id=product_id, limit=limit)
+    return {
+        "product": {
+            **product,
+            "status": _product_status(product),
+            "stock_value_display": brl_filter(product["estoque"] * product["preco"]),
+        },
+        "movements": [_movement_payload(m) for m in movements],
+    }
+
+
+def _json_stock_success(message: str, product_id: int, status_code: int = 200):
+    payload = _stock_product_payload(product_id)
+    payload["message"] = message
+    return jsonify(payload), status_code
+
+
 @app.route("/admin/estoque/<int:product_id>/entrada", methods=["POST"])
 @admin_required
 def admin_stock_entry(product_id: int):
@@ -376,10 +899,15 @@ def admin_stock_entry(product_id: int):
             quantity,
             unit_cost=unit_cost,
             reason=reason,
-            created_by=session.get("admin_user", "admin"),
+            created_by=_current_admin_user(),
         )
-        flash(f"Entrada de {quantity} un. registrada.", "success")
+        message = f"Entrada de {quantity} un. registrada."
+        if _wants_json_response():
+            return _json_stock_success(message, product_id)
+        flash(message, "success")
     except ValueError as exc:
+        if _wants_json_response():
+            return jsonify({"error": str(exc)}), 400
         flash(str(exc), "error")
     return redirect(request.referrer or url_for("admin_stock_product", product_id=product_id))
 
@@ -394,10 +922,15 @@ def admin_stock_exit(product_id: int):
             product_id,
             quantity,
             reason=reason,
-            created_by=session.get("admin_user", "admin"),
+            created_by=_current_admin_user(),
         )
-        flash(f"Saída de {quantity} un. registrada.", "success")
+        message = f"Saída de {quantity} un. registrada."
+        if _wants_json_response():
+            return _json_stock_success(message, product_id)
+        flash(message, "success")
     except ValueError as exc:
+        if _wants_json_response():
+            return jsonify({"error": str(exc)}), 400
         flash(str(exc), "error")
     return redirect(request.referrer or url_for("admin_stock_product", product_id=product_id))
 
@@ -412,10 +945,15 @@ def admin_stock_adjust(product_id: int):
             product_id,
             new_stock,
             reason=reason,
-            created_by=session.get("admin_user", "admin"),
+            created_by=_current_admin_user(),
         )
-        flash(f"Estoque ajustado para {new_stock} un.", "success")
+        message = f"Estoque ajustado para {new_stock} un."
+        if _wants_json_response():
+            return _json_stock_success(message, product_id)
+        flash(message, "success")
     except ValueError as exc:
+        if _wants_json_response():
+            return jsonify({"error": str(exc)}), 400
         flash(str(exc), "error")
     return redirect(request.referrer or url_for("admin_stock_product", product_id=product_id))
 
@@ -425,8 +963,13 @@ def admin_stock_adjust(product_id: int):
 def admin_stock_min(product_id: int):
     min_stock = _parse_int(request.form.get("min_stock"), 0)
     if update_product_min_stock(product_id, min_stock):
-        flash(f"Estoque mínimo atualizado para {max(0, min_stock)} un.", "success")
+        message = f"Estoque mínimo atualizado para {max(0, min_stock)} un."
+        if _wants_json_response():
+            return _json_stock_success(message, product_id)
+        flash(message, "success")
     else:
+        if _wants_json_response():
+            return jsonify({"error": "Não foi possível atualizar o estoque mínimo."}), 400
         flash("Não foi possível atualizar o estoque mínimo.", "error")
     return redirect(request.referrer or url_for("admin_stock_product", product_id=product_id))
 
@@ -436,14 +979,63 @@ def admin_stock_min(product_id: int):
 def admin_stock_toggle_active(product_id: int):
     active = request.form.get("active") == "1"
     if set_product_active(product_id, active):
-        flash(
+        message = (
             "Produto ativado e disponível no totem." if active
-            else "Produto desativado — não aparecerá no totem.",
-            "success",
+            else "Produto desativado — não aparecerá no totem."
         )
+        if _wants_json_response():
+            return _json_stock_success(message, product_id)
+        flash(message, "success")
     else:
+        if _wants_json_response():
+            return jsonify({"error": "Não foi possível atualizar o produto."}), 400
         flash("Não foi possível atualizar o produto.", "error")
     return redirect(request.referrer or url_for("admin_stock_product", product_id=product_id))
+
+
+@app.route("/admin/api/estoque/<int:product_id>")
+@admin_required
+def admin_api_stock_product(product_id: int):
+    try:
+        return jsonify(_stock_product_payload(product_id))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 404
+
+
+@app.route("/admin/api/estoque")
+@admin_required
+def admin_api_stock():
+    products = list_products_admin()
+    return jsonify({
+        "stock": get_stock_stats(),
+        "products": [
+            {
+                **p,
+                "status": _product_status(p),
+            }
+            for p in products
+        ],
+    })
+
+
+@app.route("/admin/api/movimentacoes")
+@admin_required
+def admin_api_movements():
+    movement_type = (request.args.get("tipo") or "").strip()
+    product_id_raw = request.args.get("produto") or ""
+    product_id = _parse_int(product_id_raw, 0) or None
+    pedido = (request.args.get("pedido") or "").strip()
+
+    movements = list_stock_movements(
+        product_id=product_id,
+        movement_type=movement_type or None,
+        reference=pedido or None,
+        limit=500,
+    )
+    return jsonify({
+        "movements": [_movement_payload(m) for m in movements],
+        "latest_id": max([int(m["id"]) for m in movements], default=0),
+    })
 
 
 @app.route("/admin/movimentacoes")

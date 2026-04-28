@@ -75,6 +75,49 @@
 </div>
 
 <div
+    class="payment-pin"
+    id="sellerPinModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="sellerPinTitle"
+    aria-describedby="sellerPinDesc"
+    aria-hidden="true"
+    hidden
+>
+    <div class="payment-pin__backdrop" data-pin-close></div>
+    <form class="payment-pin__dialog" id="sellerPinForm" autocomplete="off">
+        <div class="payment-pin__icon" aria-hidden="true">
+            <i class="fa-solid fa-user-tie"></i>
+        </div>
+        <h2 class="payment-pin__title" id="sellerPinTitle">Identifique o vendedor</h2>
+        <p class="payment-pin__text" id="sellerPinDesc">
+            Digite o PIN de 4 dígitos do vendedor responsável por esta venda.
+        </p>
+        <input
+            class="payment-pin__input"
+            id="sellerPinInput"
+            type="password"
+            inputmode="numeric"
+            pattern="[0-9]{4}"
+            maxlength="4"
+            minlength="4"
+            autocomplete="one-time-code"
+            aria-label="PIN do vendedor"
+            required
+        >
+        <p class="payment-pin__error" id="sellerPinError" role="alert" hidden></p>
+        <div class="payment-pin__actions">
+            <button type="button" class="payment__btn payment__btn--secondary" data-pin-close>
+                Cancelar
+            </button>
+            <button type="submit" class="payment__btn payment__btn--primary">
+                Confirmar venda
+            </button>
+        </div>
+    </form>
+</div>
+
+<div
     id="idle-timeout-overlay"
     class="idle-modal-overlay"
     role="dialog"

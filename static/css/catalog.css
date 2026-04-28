@@ -108,17 +108,58 @@
 }
 
 /* ==========================================================================
-   Categorias (chips)
+   Categorias (chips) + limpar filtros
    ========================================================================== */
-.categories {
+.categories-bar {
     display: flex;
-    justify-content: center;
-    gap: 10px;
-    padding: 20px 32px;
-    overflow-x: auto;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 32px 16px 24px;
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
+    flex-wrap: wrap;
+}
+
+.categories {
+    display: flex;
+    justify-content: flex-start;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 10px;
+    padding: 4px 0;
+    overflow-x: auto;
     scrollbar-width: thin;
+}
+
+.categories-clear {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: var(--radius-pill);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-primary);
+    background: var(--color-bg);
+    border: 1.5px solid var(--color-primary);
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition), box-shadow var(--transition);
+    white-space: nowrap;
+}
+
+.categories-clear:hover {
+    background: rgba(14, 22, 122, 0.08);
+    box-shadow: 0 4px 12px rgba(14, 22, 122, 0.12);
+}
+
+.categories-clear:active {
+    transform: scale(0.98);
+}
+
+.categories-clear i {
+    font-size: 15px;
+    opacity: 0.9;
 }
 
 .category-chip {
@@ -270,7 +311,7 @@
     display: flex;
     align-items: stretch;
     gap: 10px;
-    margin: 0 18px 18px;
+    margin: 0 10px 10px;
 }
 
 .product-card__counter {
@@ -379,8 +420,21 @@
     .topbar__search input {
         height: 46px;
     }
+    .categories-bar {
+        padding: 12px 16px;
+        gap: 10px;
+    }
+
+    .categories-clear {
+        width: 100%;
+        justify-content: center;
+        order: 2;
+    }
+
     .categories {
-        padding: 14px 16px;
+        order: 1;
+        width: 100%;
+        padding: 2px 0;
     }
     .catalog {
         padding: 24px 16px 48px;

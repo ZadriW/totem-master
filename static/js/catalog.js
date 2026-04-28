@@ -5,6 +5,8 @@
     const cards = Array.from(grid.querySelectorAll('.product-card'));
     const searchInput = document.getElementById('searchInput');
     const chips = document.querySelectorAll('.category-chip');
+    const clearFiltersBtn = document.getElementById('clearCatalogFilters');
+    const categoriesScroll = document.querySelector('.categories');
     const emptyState = document.getElementById('emptyState');
     const resultsInfo = document.getElementById('resultsInfo');
     const cartCountEl = document.getElementById('cartCount');
@@ -22,6 +24,8 @@
         category: 'todos',
         query: '',
     };
+
+    let searchTimer;
 
     /* -------------------------------------------------------------------- */
     /* Utilidades do catálogo                                               */
@@ -47,6 +51,20 @@
         n = Math.max(1, n);
         if (stock > 0) n = Math.min(n, stock);
         return n;
+    }
+
+    function resetFiltersToDefault() {
+        clearTimeout(searchTimer);
+        state.category = 'todos';
+        state.query = '';
+        if (searchInput) searchInput.value = '';
+        chips.forEach(c => {
+            c.classList.toggle('is-active', c.dataset.category === 'todos');
+        });
+        if (categoriesScroll) {
+            categoriesScroll.scrollTo({ left: 0, behavior: 'smooth' });
+        }
+        applyFilters();
     }
 
     function applyFilters() {
@@ -93,7 +111,12 @@
         });
     });
 
-    let searchTimer;
+    if (clearFiltersBtn) {
+        clearFiltersBtn.addEventListener('click', () => {
+            resetFiltersToDefault();
+        });
+    }
+
     searchInput.addEventListener('input', event => {
         clearTimeout(searchTimer);
         const value = event.target.value;

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Administração | Odonto Master{% endblock %}
+{% block title %}Login do vendedor | Odonto Master{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
@@ -12,8 +12,8 @@
         <div class="admin-login__brand">
             <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
         </div>
-        <h1 class="admin-login__title">Painel administrativo</h1>
-        <p class="admin-login__subtitle">Acesso restrito a administradores</p>
+        <h1 class="admin-login__title">Painel do vendedor</h1>
+        <p class="admin-login__subtitle">Acompanhe vendas, estoque e movimentações em modo leitura.</p>
 
         {% if error %}
         <div class="admin-alert admin-alert--error" role="alert">
@@ -23,14 +23,15 @@
         {% endif %}
 
         <label class="admin-field">
-            <span class="admin-field__label">Usuário</span>
+            <span class="admin-field__label">E-mail</span>
             <span class="admin-field__wrap">
-                <i class="fa-solid fa-user admin-field__icon" aria-hidden="true"></i>
+                <i class="fa-solid fa-envelope admin-field__icon" aria-hidden="true"></i>
                 <input
                     class="admin-field__input"
-                    type="text"
-                    name="username"
-                    autocomplete="username"
+                    type="email"
+                    name="email"
+                    value="{{ email or '' }}"
+                    autocomplete="email"
                     required
                     autofocus
                 >
@@ -42,7 +43,7 @@
             <span class="admin-field__wrap admin-field__wrap--has-toggle">
                 <i class="fa-solid fa-lock admin-field__icon" aria-hidden="true"></i>
                 <input
-                    id="adminLoginPassword"
+                    id="sellerLoginPassword"
                     class="admin-field__input"
                     type="password"
                     name="password"
@@ -52,7 +53,7 @@
                 <button
                     type="button"
                     class="admin-field__toggle-pass"
-                    id="adminTogglePassword"
+                    id="sellerTogglePassword"
                     aria-label="Mostrar senha"
                     aria-pressed="false"
                     title="Mostrar senha"
@@ -78,8 +79,8 @@
 {% block scripts %}
 <script>
 (function () {
-    var input = document.getElementById('adminLoginPassword');
-    var btn = document.getElementById('adminTogglePassword');
+    var input = document.getElementById('sellerLoginPassword');
+    var btn = document.getElementById('sellerTogglePassword');
     if (!input || !btn) return;
     var icon = btn.querySelector('i');
     btn.addEventListener('click', function () {

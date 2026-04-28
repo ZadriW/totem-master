@@ -56,12 +56,23 @@
     <span class="catalog-toast__text">Produto adicionado ao carrinho!</span>
 </div>
 
-<nav class="categories" aria-label="Categorias">
-    <button class="category-chip is-active" type="button" data-category="todos">Todos</button>
-    {% for category in categories %}
-    <button class="category-chip" type="button" data-category="{{ category }}">{{ category }}</button>
-    {% endfor %}
-</nav>
+<div class="categories-bar">
+    <nav class="categories" aria-label="Categorias">
+        <button class="category-chip is-active" type="button" data-category="todos">Todos</button>
+        {% for category in categories %}
+        <button class="category-chip" type="button" data-category="{{ category }}">{{ category }}</button>
+        {% endfor %}
+    </nav>
+    <button
+        type="button"
+        class="categories-clear"
+        id="clearCatalogFilters"
+        aria-label="Limpar filtros de categoria e busca"
+    >
+        <i class="fa-solid fa-filter-circle-xmark" aria-hidden="true"></i>
+        Limpar filtros
+    </button>
+</div>
 
 <main class="catalog">
     <div class="catalog__header">
