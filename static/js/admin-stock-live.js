@@ -122,7 +122,7 @@
                     <span class="admin-table__col--num"><strong>${escapeHtml(movement.balance_after)}</strong></span>
                     <span class="admin-mov__reason">${reasonParts.join(' ')}</span>
                     <span class="admin-mov__user-cell">
-                        ${escapeHtml(movement.created_by || '-')}
+                        ${escapeHtml(movement.created_by_display || movement.created_by || '-')}
                         ${receipt}
                     </span>
                 </div>
@@ -185,10 +185,21 @@
         });
     }
 
-    function updateProductView(payload) {
+    function isEditingLiveStockForm(root) {
+        const el = document.activeElement;
+        if (!el || !root.contains(el)) return false;
+        const form = el.closest('[data-live-stock-form]');
+        if (!form || !root.contains(form)) return false;
+        return el.matches('input:not([type="hidden"]), textarea, select');
+    }
+
+    function updateProductView(payload, options = {}) {
         const product = payload.product;
         const root = document.querySelector('[data-admin-product]');
         if (!root || !product) return;
+
+        const forceInputSync = options.forceInputSync === true;
+        const skipInputSync = !forceInputSync && isEditingLiveStockForm(root);
 
         const status = root.querySelector('[data-product-status]');
         const stock = root.querySelector('[data-product-stock]');
@@ -205,10 +216,15 @@
         if (stock) stock.innerHTML = `<strong>${escapeHtml(product.estoque)}</strong> un.`;
         if (minStock) minStock.textContent = `${product.estoque_minimo} un.`;
         if (stockValue) stockValue.textContent = product.stock_value_display;
-        if (minInput && document.activeElement !== minInput) minInput.value = product.estoque_minimo;
+        if (!skipInputSync && minInput) {
+            minInput.value = product.estoque_minimo;
+        }
+        /* Inventário: não sobrescrever no poll (evita apagar rascunho); só alinhar ao servidor após POST com forceInputSync. */
+        if (forceInputSync && adjustInput) {
+            adjustInput.value = product.estoque;
+        }
         if (exitInput) exitInput.max = product.estoque;
         if (exitButton) exitButton.disabled = product.estoque <= 0;
-        if (adjustInput && document.activeElement !== adjustInput) adjustInput.value = product.estoque;
         if (activeForm) {
             const hidden = activeForm.querySelector('input[name="active"]');
             const button = activeForm.querySelector('button[type="submit"]');
@@ -261,7 +277,7 @@
                     });
                     const data = await response.json();
                     if (!response.ok) throw new Error(data.error || 'Não foi possível atualizar o estoque.');
-                    updateProductView(data);
+                    updateProductView(data, { forceInputSync: true });
                     succeeded = true;
                     if (form.closest('.admin-card--entrada') || form.closest('.admin-card--saida')) {
                         form.reset();

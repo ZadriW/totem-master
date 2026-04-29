@@ -100,7 +100,7 @@
                     <span class="admin-table__col--num"><strong>${escapeHtml(movement.balance_after)}</strong></span>
                     <span class="admin-mov__reason">${reason}</span>
                     <span class="admin-mov__user-cell">
-                        ${escapeHtml(movement.created_by || '-')}
+                        ${escapeHtml(movement.created_by_display || movement.created_by || '-')}
                         ${receipt}
                     </span>
                 </div>

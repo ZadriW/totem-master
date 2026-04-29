@@ -1,7 +1,7 @@
 /**
  * Painel administrativo — interações de front.
  *
- * - Toggle de detalhes por transação (aria-expanded + hidden).
+ * - Toggle do painel “Dados e acesso” no detalhe do vendedor (aria-expanded + hidden).
  * - Confirmação opcional antes de submeter formulários sensíveis
  *   (entrada/saída/ajuste/ativação de produto) via `data-confirm`.
  * - Confirmação em botões isolados via `data-confirm`.
@@ -12,6 +12,24 @@
     // --- 1. Expansão de linhas do histórico de transações --------------------
     // Delegação para linhas injetadas depois (ex.: atualização ao vivo no painel do vendedor).
     document.querySelector('.admin-main')?.addEventListener('click', event => {
+        const collapseBtn = event.target.closest('.admin-section__collapse-toggle');
+        if (collapseBtn) {
+            const panelId = collapseBtn.getAttribute('aria-controls');
+            const panel = panelId ? document.getElementById(panelId) : null;
+            if (!panel) return;
+            const expanded = collapseBtn.getAttribute('aria-expanded') === 'true';
+            const nextExpanded = !expanded;
+            collapseBtn.setAttribute('aria-expanded', String(nextExpanded));
+            panel.hidden = !nextExpanded;
+            const icon = collapseBtn.querySelector('i');
+            if (icon) {
+                icon.className = nextExpanded
+                    ? 'fa-solid fa-chevron-up'
+                    : 'fa-solid fa-chevron-down';
+            }
+            return;
+        }
+
         const btn = event.target.closest('.admin-tx__row');
         if (!btn) return;
         const expanded = btn.getAttribute('aria-expanded') === 'true';

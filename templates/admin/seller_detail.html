@@ -1,6 +1,6 @@
 {% extends "admin/_layout.html" %}
 
-{% block title %}{{ seller.name }} | Vendedores | Odonto Master{% endblock %}
+{% block title %}{{ seller.name }} - Vendedores - Admin | Dental Odonto Master{% endblock %}
 
 {% block admin_body %}
 <section class="admin-section">
@@ -58,50 +58,136 @@
 </section>
 
 <section class="admin-section">
-    <header class="admin-section__header">
-        <h2 class="admin-section__title">Dados e acesso</h2>
-        <p class="admin-section__subtitle">Atualize cadastro, status e senha de acesso do vendedor.</p>
+    <header class="admin-section__header admin-section__header--row admin-section__header--collapsible">
+        <div>
+            <h2 class="admin-section__title">Dados e acesso</h2>
+            <p class="admin-section__subtitle">Atualize cadastro, status e senha de acesso do vendedor.</p>
+        </div>
+        <button
+            type="button"
+            class="admin-section__collapse-toggle"
+            aria-expanded="true"
+            aria-controls="seller-access-panel"
+            aria-label="Ocultar ou exibir dados e acesso"
+        >
+            <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+        </button>
     </header>
 
+    <div id="seller-access-panel" class="admin-section__panel">
+    {% set fe = seller_form_errors or {} %}
+    {% if seller_form is not none %}
+        {% set v_name = seller_form.name %}
+        {% set v_email = seller_form.email %}
+        {% set v_active = seller_form.active %}
+        {% set v_password = seller_form.password %}
+        {% set v_pin = seller_form.pin %}
+    {% else %}
+        {% set v_name = seller.name %}
+        {% set v_email = seller.email %}
+        {% set v_active = seller.active %}
+        {% set v_password = '' %}
+        {% set v_pin = '' %}
+    {% endif %}
     <article class="admin-card">
         <form
             method="post"
             action="{{ url_for('admin_seller_update', seller_id=seller.id) }}"
             class="admin-card__form"
+            novalidate
         >
             <div class="admin-field">
                 <label class="admin-field__label" for="seller-name">Nome</label>
-                <input id="seller-name" class="admin-field__input" type="text" name="name" value="{{ seller.name }}" maxlength="120" required>
+                <input
+                    id="seller-name"
+                    class="admin-field__input{% if fe.name %} admin-field__input--invalid{% endif %}"
+                    type="text"
+                    name="name"
+                    value="{{ v_name }}"
+                    maxlength="120"
+                    required
+                    {% if fe.name %}aria-invalid="true" aria-describedby="detail-seller-name-err"{% endif %}
+                >
+                {% if fe.name %}<p class="admin-field__error" id="detail-seller-name-err">{{ fe.name }}</p>{% endif %}
             </div>
             <div class="admin-field">
                 <label class="admin-field__label" for="seller-email">E-mail</label>
-                <input id="seller-email" class="admin-field__input" type="email" name="email" value="{{ seller.email }}" maxlength="160" required>
+                <input
+                    id="seller-email"
+                    class="admin-field__input{% if fe.email %} admin-field__input--invalid{% endif %}"
+                    type="email"
+                    name="email"
+                    value="{{ v_email }}"
+                    maxlength="160"
+                    required
+                    {% if fe.email %}aria-invalid="true" aria-describedby="detail-seller-email-err"{% endif %}
+                >
+                {% if fe.email %}<p class="admin-field__error" id="detail-seller-email-err">{{ fe.email }}</p>{% endif %}
             </div>
             <div class="admin-field">
                 <label class="admin-field__label" for="seller-active">Status</label>
                 <select id="seller-active" name="active" class="admin-field__input">
-                    <option value="1" {% if seller.active %}selected{% endif %}>Ativo</option>
-                    <option value="0" {% if not seller.active %}selected{% endif %}>Inativo</option>
+                    <option value="1" {% if v_active %}selected{% endif %}>Ativo</option>
+                    <option value="0" {% if not v_active %}selected{% endif %}>Inativo</option>
                 </select>
             </div>
             <div class="admin-field">
-                <label class="admin-field__label" for="seller-password">Nova senha</label>
-                <input id="seller-password" class="admin-field__input" type="password" name="password" minlength="6" placeholder="Deixe em branco para manter">
+                <label class="admin-field__label" for="detail-seller-password">Nova senha</label>
+                <span class="admin-field__wrap admin-field__wrap--has-toggle">
+                    <input
+                        id="detail-seller-password"
+                        class="admin-field__input{% if fe.password %} admin-field__input--invalid{% endif %}"
+                        type="password"
+                        name="password"
+                        minlength="6"
+                        placeholder="Deixe em branco para manter"
+                        value="{{ v_password }}"
+                        autocomplete="new-password"
+                        {% if fe.password %}aria-invalid="true" aria-describedby="detail-seller-password-err"{% endif %}
+                    >
+                    <button
+                        type="button"
+                        class="admin-field__toggle-pass"
+                        id="adminSellerDetailTogglePassword"
+                        aria-label="Mostrar senha"
+                        aria-pressed="false"
+                        title="Mostrar senha"
+                    >
+                        <i class="fa-regular fa-eye" aria-hidden="true"></i>
+                    </button>
+                </span>
+                {% if fe.password %}<p class="admin-field__error" id="detail-seller-password-err">{{ fe.password }}</p>{% endif %}
             </div>
             <div class="admin-field">
-                <label class="admin-field__label" for="seller-pin">Novo PIN de venda</label>
-                <input
-                    id="seller-pin"
-                    class="admin-field__input"
-                    type="password"
-                    name="pin"
-                    inputmode="numeric"
-                    pattern="[0-9]{4}"
-                    maxlength="4"
-                    minlength="4"
-                    placeholder="Deixe em branco para manter"
-                    oninput="this.value = this.value.replace(/\D/g, '').slice(0, 4)"
-                >
+                <label class="admin-field__label" for="detail-seller-pin">Novo PIN de venda</label>
+                <span class="admin-field__wrap admin-field__wrap--has-toggle">
+                    <input
+                        id="detail-seller-pin"
+                        class="admin-field__input{% if fe.pin %} admin-field__input--invalid{% endif %}"
+                        type="password"
+                        name="pin"
+                        inputmode="numeric"
+                        pattern="[0-9]{4}"
+                        maxlength="4"
+                        minlength="4"
+                        placeholder="Deixe em branco para manter"
+                        value="{{ v_pin }}"
+                        oninput="this.value = this.value.replace(/\D/g, '').slice(0, 4)"
+                        autocomplete="off"
+                        {% if fe.pin %}aria-invalid="true" aria-describedby="detail-seller-pin-err"{% endif %}
+                    >
+                    <button
+                        type="button"
+                        class="admin-field__toggle-pass"
+                        id="adminSellerDetailTogglePin"
+                        aria-label="Mostrar PIN"
+                        aria-pressed="false"
+                        title="Mostrar PIN"
+                    >
+                        <i class="fa-regular fa-eye" aria-hidden="true"></i>
+                    </button>
+                </span>
+                {% if fe.pin %}<p class="admin-field__error" id="detail-seller-pin-err">{{ fe.pin }}</p>{% endif %}
             </div>
             <button type="submit" class="admin-btn admin-btn--primary admin-btn--block">
                 <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
@@ -109,6 +195,7 @@
             </button>
         </form>
     </article>
+    </div>
 </section>
 
 <section class="admin-section">
@@ -195,4 +282,29 @@
         {% endif %}
     </div>
 </section>
+{% endblock %}
+
+{% block admin_scripts %}
+<script>
+(function () {
+    function bindToggle(inputId, btnId, labelShow, labelHide) {
+        var input = document.getElementById(inputId);
+        var btn = document.getElementById(btnId);
+        if (!input || !btn) return;
+        var icon = btn.querySelector('i');
+        btn.addEventListener('click', function () {
+            var hidden = input.type === 'password';
+            input.type = hidden ? 'text' : 'password';
+            btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+            btn.setAttribute('aria-label', hidden ? labelHide : labelShow);
+            btn.setAttribute('title', hidden ? labelHide : labelShow);
+            if (icon) {
+                icon.className = hidden ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye';
+            }
+        });
+    }
+    bindToggle('detail-seller-password', 'adminSellerDetailTogglePassword', 'Mostrar senha', 'Ocultar senha');
+    bindToggle('detail-seller-pin', 'adminSellerDetailTogglePin', 'Mostrar PIN', 'Ocultar PIN');
+})();
+</script>
 {% endblock %}

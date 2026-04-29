@@ -1,6 +1,6 @@
 {% extends "admin/_layout.html" %}
 
-{% block title %}{{ product.nome }} | Estoque | Odonto Master{% endblock %}
+{% block title %}{{ product.nome }} - Estoque - Admin | Dental Odonto Master{% endblock %}
 
 {% block admin_body %}
 <section
@@ -236,7 +236,7 @@
                         {{ m.reason or '-' }}
                     </span>
                     <span class="admin-mov__user-cell">
-                        {{ m.created_by or '-' }}
+                        {{ m.created_by | display_created_by or '-' }}
                         {% if m.movement_type == 'venda' and m.reference %}
                             <a
                                 href="{{ url_for('receipt', order_number=m.reference) }}"

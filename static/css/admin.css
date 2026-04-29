@@ -143,6 +143,20 @@
     box-shadow: 0 0 0 4px rgba(14, 22, 122, 0.10);
 }
 
+.admin-field__input--invalid,
+.admin-field__input--invalid:focus {
+    border-color: #c62828;
+    background: #fff8f8;
+    box-shadow: 0 0 0 4px rgba(198, 40, 40, 0.12);
+}
+
+.admin-field__error {
+    margin: 4px 0 0;
+    font-size: 13px;
+    line-height: 1.35;
+    color: #b71c1c;
+}
+
 .admin-login__submit {
     margin-top: 8px;
     padding: 14px 18px;
@@ -236,6 +250,19 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.admin-sellers__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.admin-sellers__delete-form {
+    display: inline;
+    margin: 0;
 }
 
 /* ---------- Shell do dashboard ---------- */
@@ -369,6 +396,57 @@
     font-size: 14px;
 }
 
+.admin-section__header--collapsible {
+    align-items: center;
+}
+
+.admin-section__header--collapsible .admin-section__collapse-toggle {
+    flex-shrink: 0;
+}
+
+.admin-section__collapse-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1.5px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-primary);
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.1s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.admin-section__collapse-toggle:hover {
+    background: rgba(14, 22, 122, 0.06);
+    border-color: rgba(14, 22, 122, 0.2);
+}
+
+.admin-section__collapse-toggle:active {
+    transform: scale(0.96);
+}
+
+.admin-section__collapse-toggle:focus {
+    outline: none;
+}
+
+.admin-section__collapse-toggle:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.admin-section__collapse-toggle i {
+    transition: transform 0.2s ease;
+}
+
+.admin-section__panel[hidden] {
+    display: none;
+}
+
 /* ---------- KPIs ---------- */
 .admin-kpis {
     display: grid;
@@ -466,8 +544,18 @@
     color: var(--color-text-muted);
 }
 
+/* Vendedores: o seletor genérico .admin-table__head usa grid de 6 colunas (transações). Repete a grid de 7 colunas das linhas. */
+.admin-sellers .admin-table__head.admin-sellers__row {
+    grid-template-columns: minmax(220px, 1.4fr) 0.7fr 0.8fr 0.5fr 0.8fr 0.9fr 0.5fr;
+    padding: 12px 20px;
+}
+
+.admin-sellers .admin-sellers__row > .admin-table__col--num {
+    justify-self: center;
+}
+
 .admin-table__col--num {
-    text-align: right;
+    text-align: center;
     font-variant-numeric: tabular-nums;
 }
 
@@ -950,9 +1038,30 @@
 /* ==========================================================================
    Tabela de estoque
    ========================================================================== */
+.admin-stock {
+    font-size: 14px;
+}
+
+/* Desktop: ganha um pouco de largura usando o padding lateral do .admin-main */
+@media (min-width: 901px) {
+    .admin-stock.admin-table {
+        width: calc(100% + 32px);
+        margin-left: -16px;
+        margin-right: -16px;
+    }
+}
+
+.admin-stock .admin-badge {
+    font-size: 12px;
+}
+
+/* Cabeçalhos da tabela de estoque (sobrescreve .admin-table__head 12px) */
+.admin-stock .admin-table__head {
+    font-size: 14px;
+}
+
 .admin-stock__row {
     display: grid;
-    grid-template-columns: 1.5fr 0.7fr 1.1fr 0.8fr 0.5fr 0.5fr 0.85fr 0.7fr;
     gap: 12px;
     align-items: center;
     padding: 14px 20px;
@@ -960,6 +1069,85 @@
 }
 
 .admin-stock .admin-stock__row:last-child { border-bottom: none; }
+
+/* Desktop (≥901px): colunas proporcionais na largura da linha; produto com faixa estável para não invadir as demais colunas. */
+@media (min-width: 901px) {
+    .admin-stock .admin-stock__row {
+        column-gap: 24px;
+    }
+
+    .admin-stock:has(.admin-stock__actions-head) .admin-stock__row {
+        grid-template-columns:
+            minmax(200px, 3.2fr)
+            minmax(92px, 0.98fr)
+            minmax(84px, 0.75fr)
+            minmax(64px, 0.52fr)
+            minmax(56px, 0.52fr)
+            minmax(96px, 0.9fr)
+            minmax(50px, 0.58fr);
+    }
+
+    .admin-stock:not(:has(.admin-stock__actions-head)) .admin-stock__row {
+        grid-template-columns:
+            minmax(200px, 3.35fr)
+            minmax(92px, 1.02fr)
+            minmax(84px, 0.78fr)
+            minmax(64px, 0.54fr)
+            minmax(56px, 0.54fr)
+            minmax(104px, 0.95fr);
+    }
+
+    .admin-stock__row > :nth-child(1) {
+        min-width: 0;
+        padding-right: 28px;
+    }
+
+    /* Texto do produto (nome + meta) pode encolher dentro da célula para o ellipsis funcionar */
+    .admin-stock__row > :nth-child(1) .admin-stock__product > span:last-child {
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .admin-stock__row > :nth-child(2),
+    .admin-stock__row > :nth-child(3),
+    .admin-stock__row > :nth-child(4),
+    .admin-stock__row > :nth-child(5),
+    .admin-stock__row > :nth-child(6),
+    .admin-stock__row > :nth-child(7) {
+        padding-left: 16px;
+    }
+
+    /* Categoria: preenche a faixa, texto à esquerda */
+    .admin-stock__row > :nth-child(2) {
+        justify-self: stretch;
+        min-width: 0;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-align: left;
+    }
+
+    /* Preço, estoque, mínimo: números alinhados à direita dentro da célula */
+    .admin-stock__row > :nth-child(3),
+    .admin-stock__row > :nth-child(4),
+    .admin-stock__row > :nth-child(5) {
+        justify-self: stretch;
+        text-align: right;
+    }
+
+    /* Situação: badges no início da coluna (evita “colar” tudo à direita da row) */
+    .admin-stock__row > :nth-child(6) {
+        display: flex;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    .admin-stock__row > .admin-stock__actions-head,
+    .admin-stock__row > .admin-stock__actions {
+        justify-self: end;
+    }
+}
 
 .admin-stock__product {
     display: inline-flex;
@@ -972,18 +1160,24 @@
     display: block;
     color: var(--color-text);
     font-weight: 700;
+    font-size: 14px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.admin-stock__product small {
+.admin-stock__product .admin-stock__meta {
+    display: block;
+    margin-top: 2px;
     color: var(--color-text-muted);
-    font-size: 12px;
+    font-size: 14px;
+    line-height: 1.35;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .admin-stock__sku-code {
-    font-size: 12px;
+    font-size: 14px;
     font-family: ui-monospace, Menlo, Consolas, monospace;
     color: var(--color-primary);
     font-weight: 600;
@@ -999,7 +1193,7 @@
 }
 
 .admin-stock__qty strong {
-    font-size: 18px;
+    font-size: 14px;
     color: var(--color-primary);
     font-variant-numeric: tabular-nums;
 }
@@ -1358,10 +1552,9 @@
         grid-template-columns: minmax(0, 1fr) auto;
         grid-template-areas:
             "product qty"
-            "sku     sku"
             "category category"
             "price   min"
-            "status  actions";
+            "status  status";
         align-items: start;
         gap: 10px 12px;
         padding: 14px;
@@ -1371,52 +1564,53 @@
         box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
         margin-bottom: 12px;
     }
+    .admin-stock__row:has(.admin-stock__actions) {
+        grid-template-areas:
+            "product qty"
+            "category category"
+            "price   min"
+            "status  actions";
+    }
     .admin-stock__row > :nth-child(1) {
         grid-area: product;
         align-self: center;
     }
     .admin-stock__row > :nth-child(2),
     .admin-stock__row > :nth-child(3),
-    .admin-stock__row > :nth-child(4),
-    .admin-stock__row > :nth-child(6) {
+    .admin-stock__row > :nth-child(5) {
         display: inline-flex;
         align-items: center;
         min-width: 0;
-        font-size: 12px;
+        font-size: 14px;
         color: var(--color-text-muted);
     }
-    .admin-stock__row > :nth-child(2)::before { content: "SKU"; }
-    .admin-stock__row > :nth-child(3)::before { content: "Categoria"; }
-    .admin-stock__row > :nth-child(4)::before { content: "Preço"; }
-    .admin-stock__row > :nth-child(6)::before { content: "Mín."; }
+    .admin-stock__row > :nth-child(2)::before { content: "Categoria"; }
+    .admin-stock__row > :nth-child(3)::before { content: "Preço"; }
+    .admin-stock__row > :nth-child(5)::before { content: "Mín."; }
     .admin-stock__row > :nth-child(2)::before,
     .admin-stock__row > :nth-child(3)::before,
-    .admin-stock__row > :nth-child(4)::before,
-    .admin-stock__row > :nth-child(6)::before {
+    .admin-stock__row > :nth-child(5)::before {
         margin-right: 6px;
         color: var(--color-text-muted);
-        font-size: 10px;
+        font-size: 14px;
         font-weight: 800;
         letter-spacing: 0.06em;
         text-transform: uppercase;
     }
     .admin-stock__row > :nth-child(2) {
-        grid-area: sku;
-    }
-    .admin-stock__row > :nth-child(3) {
         grid-area: category;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-    .admin-stock__row > :nth-child(4) {
+    .admin-stock__row > :nth-child(3) {
         grid-area: price;
     }
-    .admin-stock__row > :nth-child(6) {
+    .admin-stock__row > :nth-child(5) {
         grid-area: min;
         justify-self: end;
     }
-    .admin-stock__row > :nth-child(5) {
+    .admin-stock__row > :nth-child(4) {
         grid-area: qty;
         align-self: center;
         justify-self: end;
@@ -1426,12 +1620,12 @@
         background: rgba(14, 22, 122, 0.08);
         text-align: center;
     }
-    .admin-stock__row > :nth-child(7) {
+    .admin-stock__row > :nth-child(6) {
         grid-area: status;
         align-self: center;
         min-width: 0;
     }
-    .admin-stock__row > :nth-child(8) {
+    .admin-stock__row > :nth-child(7) {
         grid-area: actions;
         justify-content: flex-end;
         align-self: center;
@@ -1451,16 +1645,16 @@
         -webkit-box-orient: vertical;
         white-space: normal;
         line-height: 1.25;
-        font-size: 13px;
+        font-size: 14px;
     }
-    .admin-stock__product small {
-        font-size: 11px;
+    .admin-stock__product .admin-stock__meta {
+        font-size: 14px;
     }
     .admin-stock__sku-code {
-        font-size: 11px;
+        font-size: 14px;
     }
     .admin-stock__qty strong {
-        font-size: 20px;
+        font-size: 14px;
     }
     .admin-stock__actions .admin-btn {
         width: 38px;
@@ -1470,7 +1664,7 @@
         border-radius: 12px;
     }
     .admin-stock__actions .admin-btn i {
-        font-size: 15px;
+        font-size: 14px;
     }
     .admin-stock {
         display: block;
@@ -1958,7 +2152,6 @@
 .admin-mov__user-cell {
     display: inline-flex;
     align-items: center;
-    flex-wrap: wrap;
     gap: 6px;
     min-width: 0;
 }

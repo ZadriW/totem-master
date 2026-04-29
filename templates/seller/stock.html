@@ -1,6 +1,6 @@
 {% extends "seller/_layout.html" %}
 
-{% block title %}Estoque do vendedor | Odonto Master{% endblock %}
+{% block title %}Estoque do vendedor - Vendedor | Dental Odonto Master{% endblock %}
 
 {% block seller_body %}
 <section class="admin-section">
@@ -73,7 +73,6 @@
     >
         <div class="admin-table__head admin-stock__row" role="row">
             <span role="columnheader">Produto</span>
-            <span role="columnheader">SKU</span>
             <span role="columnheader">Categoria</span>
             <span class="admin-table__col--num" role="columnheader">Preço</span>
             <span class="admin-table__col--num" role="columnheader">Estoque</span>
@@ -88,10 +87,9 @@
                     <img class="admin-stock__thumb" src="{{ p.imagem }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
                     <span>
                         <strong>{{ p.nome }}</strong>
-                        <small>#{{ p.id }}</small>
+                        <small class="admin-stock__meta">ID: {{ p.id }} | SKU: <code class="admin-stock__sku-code">{{ p.sku or '—' }}</code></small>
                     </span>
                 </span>
-                <span><code class="admin-stock__sku-code">{{ p.sku }}</code></span>
                 <span>{{ p.categoria }}</span>
                 <span class="admin-table__col--num">{{ p.preco | brl }}</span>
                 <span class="admin-table__col--num admin-stock__qty" data-stock-qty><strong>{{ p.estoque }}</strong></span>

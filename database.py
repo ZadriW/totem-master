@@ -592,6 +592,21 @@ def get_seller(seller_id: int) -> Optional[Dict]:
     return dict(row) if row else None
 
 
+def delete_seller(seller_id: int) -> Dict:
+    """Remove o cadastro do vendedor. Transações ligadas ficam com ``seller_id`` nulo (FK)."""
+    sid = int(seller_id)
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, name FROM sellers WHERE id = ?",
+            (sid,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("Vendedor não encontrado.")
+        name = str(row["name"] or "")
+        conn.execute("DELETE FROM sellers WHERE id = ?", (sid,))
+    return {"id": sid, "name": name}
+
+
 def update_seller_last_login(seller_id: int) -> None:
     with get_conn() as conn:
         conn.execute(

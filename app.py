@@ -34,6 +34,7 @@ from data.products import CATEGORIES
 from database import (
     create_seller_account,
     create_transaction,
+    delete_seller,
     ensure_seller_account,
     get_seller,
     get_seller_by_email,
@@ -89,6 +90,20 @@ AUTH_COOKIE_OPTIONS = {
     "httponly": True,
     "samesite": "Lax",
 }
+
+
+def _display_created_by(value) -> str:
+    """Texto exibível do campo created_by (remove prefixo interno ``vendedor:``)."""
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if s.lower().startswith("vendedor:"):
+        s = s[9:].strip()
+    return s
+
+
+# Registro imediato: garante o filtro Jinja mesmo com importações parciais / reload.
+app.add_template_filter(_display_created_by, "display_created_by")
 
 # Inicializa o schema e popula o catálogo inicial (se vazio).
 init_db()
@@ -601,35 +616,138 @@ def admin_dashboard():
 # Painel administrativo — vendedores
 # ---------------------------------------------------------------------------
 
+_SELLER_FORM_FIELD_ORDER = ("name", "email", "password", "pin")
+
+
+def _first_seller_form_error_message(errors: dict[str, str]) -> str:
+    for key in _SELLER_FORM_FIELD_ORDER:
+        if key in errors:
+            return errors[key]
+    return next(iter(errors.values()), "Verifique os campos destacados.")
+
+
+def _parse_new_seller_post(form) -> tuple[dict[str, str], dict[str, str]]:
+    """Validação do cadastro de vendedor. Retorna (erros_por_campo, valores_para_reexibir)."""
+    name = (form.get("name") or "").strip()
+    email = (form.get("email") or "").strip().lower()
+    password = form.get("password") or ""
+    pin_raw = form.get("pin") or ""
+
+    errors: dict[str, str] = {}
+    if not name:
+        errors["name"] = "Nome do vendedor é obrigatório."
+    if not email:
+        errors["email"] = "E-mail do vendedor é obrigatório."
+    elif "@" not in email:
+        errors["email"] = "Informe um e-mail válido."
+
+    if len(password) < 6:
+        errors["password"] = "A senha deve ter pelo menos 6 caracteres."
+
+    if not (pin_raw or "").strip():
+        errors["pin"] = "PIN do vendedor é obrigatório."
+    else:
+        try:
+            pin_norm = _normalize_seller_pin(pin_raw)
+        except ValueError as exc:
+            errors["pin"] = str(exc)
+            pin_norm = None
+        if "pin" not in errors and not _pin_is_available(pin_norm):
+            errors["pin"] = "Este PIN já está em uso por outro vendedor."
+
+    if "email" not in errors and email and get_seller_by_email(email):
+        errors["email"] = "Já existe um vendedor com este e-mail."
+
+    def keep(field: str, value: str) -> str:
+        return "" if field in errors else value
+
+    repop = {
+        "name": keep("name", name),
+        "email": keep("email", email),
+        "password": keep("password", password),
+        "pin": keep("pin", pin_raw),
+    }
+    return errors, repop
+
+
+def _parse_edit_seller_post(form, seller_id: int) -> tuple[dict[str, str], dict]:
+    """Validação da edição de vendedor. Retorna (erros_por_campo, valores_para_reexibir)."""
+    name = (form.get("name") or "").strip()
+    email = (form.get("email") or "").strip().lower()
+    active = form.get("active") == "1"
+    password = form.get("password") or ""
+    pin_raw = (form.get("pin") or "").strip()
+
+    errors: dict[str, str] = {}
+    if not name:
+        errors["name"] = "Nome do vendedor é obrigatório."
+    if not email:
+        errors["email"] = "E-mail do vendedor é obrigatório."
+    elif "@" not in email:
+        errors["email"] = "Informe um e-mail válido."
+
+    if password and len(password) < 6:
+        errors["password"] = "A nova senha deve ter pelo menos 6 caracteres."
+
+    if pin_raw:
+        try:
+            pin_norm = _normalize_seller_pin(pin_raw)
+        except ValueError as exc:
+            errors["pin"] = str(exc)
+            pin_norm = None
+        if "pin" not in errors and not _pin_is_available(
+            pin_norm, ignore_seller_id=seller_id
+        ):
+            errors["pin"] = "Este PIN já está em uso por outro vendedor."
+
+    repop = {
+        "name": "" if "name" in errors else name,
+        "email": "" if "email" in errors else email,
+        "active": active,
+        "password": "" if "password" in errors else password,
+        "pin": "" if "pin" in errors else pin_raw,
+    }
+    return errors, repop
+
+
 @app.route("/admin/vendedores", methods=["GET", "POST"])
 @admin_required
 def admin_sellers():
+    seller_form = None
+    seller_form_errors: dict[str, str] = {}
     if request.method == "POST":
-        name = (request.form.get("name") or "").strip()
-        email = (request.form.get("email") or "").strip().lower()
-        password = request.form.get("password") or ""
-        pin = request.form.get("pin") or ""
-        try:
-            if len(password) < 6:
-                raise ValueError("A senha deve ter pelo menos 6 caracteres.")
-            pin = _normalize_seller_pin(pin)
-            if not _pin_is_available(pin):
-                raise ValueError("Este PIN já está em uso por outro vendedor.")
-            seller = create_seller_account(
-                name,
-                email,
-                generate_password_hash(password),
-                generate_password_hash(pin),
-            )
-            flash(f"Vendedor {seller['name']} criado com sucesso.", "success")
-            return redirect(url_for("admin_seller_detail", seller_id=seller["id"]))
-        except ValueError as exc:
-            flash(str(exc), "error")
+        seller_form_errors, seller_form = _parse_new_seller_post(request.form)
+        if not seller_form_errors:
+            try:
+                seller = create_seller_account(
+                    (request.form.get("name") or "").strip(),
+                    (request.form.get("email") or "").strip().lower(),
+                    generate_password_hash(request.form.get("password") or ""),
+                    generate_password_hash(
+                        _normalize_seller_pin(request.form.get("pin") or "")
+                    ),
+                )
+                flash(f"Vendedor {seller['name']} criado com sucesso.", "success")
+                return redirect(url_for("admin_seller_detail", seller_id=seller["id"]))
+            except ValueError as exc:
+                msg = str(exc)
+                if "e-mail" in msg.lower() and ("já" in msg.lower() or "existente" in msg.lower()):
+                    seller_form_errors = {"email": msg}
+                    seller_form = _parse_new_seller_post(request.form)[1]
+                    seller_form["email"] = ""
+                else:
+                    flash(msg, "error")
+                    seller_form = _parse_new_seller_post(request.form)[1]
+                    seller_form_errors = {}
+        if seller_form_errors:
+            flash(_first_seller_form_error_message(seller_form_errors), "error")
 
     sellers = list_sellers()
     return render_template(
         "admin/sellers.html",
         sellers=sellers,
+        seller_form=seller_form,
+        seller_form_errors=seller_form_errors,
         **_admin_shell_context(active_section="vendedores"),
     )
 
@@ -648,6 +766,8 @@ def admin_seller_detail(seller_id: int):
         seller=seller,
         stats=stats,
         transactions=transactions,
+        seller_form=None,
+        seller_form_errors={},
         **_admin_shell_context(active_section="vendedores"),
     )
 
@@ -655,23 +775,38 @@ def admin_seller_detail(seller_id: int):
 @app.route("/admin/vendedores/<int:seller_id>/editar", methods=["POST"])
 @admin_required
 def admin_seller_update(seller_id: int):
+    seller = get_seller(seller_id)
+    if seller is None:
+        flash("Vendedor não encontrado.", "error")
+        return redirect(url_for("admin_sellers"))
+
+    seller_form_errors, seller_form = _parse_edit_seller_post(request.form, seller_id)
+    if seller_form_errors:
+        flash(_first_seller_form_error_message(seller_form_errors), "error")
+        stats = get_stats(seller_id=seller_id)
+        transactions = list_transactions(limit=200, seller_id=seller_id)
+        return render_template(
+            "admin/seller_detail.html",
+            seller=seller,
+            stats=stats,
+            transactions=transactions,
+            seller_form=seller_form,
+            seller_form_errors=seller_form_errors,
+            **_admin_shell_context(active_section="vendedores"),
+        )
+
     name = (request.form.get("name") or "").strip()
     email = (request.form.get("email") or "").strip().lower()
     active = request.form.get("active") == "1"
     password = request.form.get("password") or ""
     pin = (request.form.get("pin") or "").strip()
+    password_hash = None
+    if password:
+        password_hash = generate_password_hash(password)
+    pin_hash = None
+    if pin:
+        pin_hash = generate_password_hash(_normalize_seller_pin(pin))
     try:
-        password_hash = None
-        if password:
-            if len(password) < 6:
-                raise ValueError("A nova senha deve ter pelo menos 6 caracteres.")
-            password_hash = generate_password_hash(password)
-        pin_hash = None
-        if pin:
-            pin = _normalize_seller_pin(pin)
-            if not _pin_is_available(pin, ignore_seller_id=seller_id):
-                raise ValueError("Este PIN já está em uso por outro vendedor.")
-            pin_hash = generate_password_hash(pin)
         seller = update_seller_account(
             seller_id,
             name=name,
@@ -682,8 +817,47 @@ def admin_seller_update(seller_id: int):
         )
         flash(f"Dados de {seller['name']} atualizados.", "success")
     except ValueError as exc:
-        flash(str(exc), "error")
+        msg = str(exc)
+        seller_form_errors: dict[str, str] = {}
+        if "e-mail" in msg.lower() or "email" in msg.lower():
+            seller_form_errors["email"] = msg
+        else:
+            flash(msg, "error")
+            return redirect(url_for("admin_seller_detail", seller_id=seller_id))
+        seller_form = _parse_edit_seller_post(request.form, seller_id)[1]
+        seller_form["email"] = ""
+        flash(_first_seller_form_error_message(seller_form_errors), "error")
+        stats = get_stats(seller_id=seller_id)
+        transactions = list_transactions(limit=200, seller_id=seller_id)
+        return render_template(
+            "admin/seller_detail.html",
+            seller=seller,
+            stats=stats,
+            transactions=transactions,
+            seller_form=seller_form,
+            seller_form_errors=seller_form_errors,
+            **_admin_shell_context(active_section="vendedores"),
+        )
     return redirect(url_for("admin_seller_detail", seller_id=seller_id))
+
+
+@app.route(
+    "/admin/vendedores/<int:seller_id>/excluir",
+    methods=["POST"],
+    endpoint="admin_seller_delete",
+)
+@admin_required
+def admin_seller_delete(seller_id: int):
+    try:
+        deleted = delete_seller(seller_id)
+        flash(
+            f"Cadastro de {deleted['name']} excluído. "
+            "Vendas antigas permanecem no histórico, sem vínculo a este vendedor.",
+            "success",
+        )
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("admin_sellers"))
 
 
 @app.route("/admin/sincronizar-wake", methods=["POST"])
@@ -852,6 +1026,7 @@ def _movement_payload(movement: dict) -> dict:
     tx_id = movement.get("transaction_id")
     return {
         **movement,
+        "created_by_display": _display_created_by(movement.get("created_by")),
         "created_at_display": datahora_filter(movement.get("created_at")),
         "movement_label": mov_label_filter(movement_type),
         "delta_display": signed_filter(movement.get("delta")),
