@@ -1,13 +1,10 @@
-"""Totem Odonto Master - aplicação Flask (dashboard do cliente + painel admin).
+"""Totem Odonto Master - aplicação Flask (boas-vindas + painéis admin/vendedor).
 
-- ``/``                Tela de boas-vindas (reseta a sessão do cliente).
-- ``/catalogo``        Catálogo para o cliente.
-- ``/pagamento``       Resumo do pedido.
-- ``/pagamento/aguardando``  Aguardo da maquininha + confirmação da venda.
-- ``/api/...``         Endpoints JSON consumidos pelo front.
-- ``/admin/...``       Painel administrativo autenticado (dashboard, estoque,
-                       movimentações).
-- ``/vendedor/...``    Painel dos vendedores (somente leitura).
+- ``/``                Tela de boas-vindas; o catálogo público não é autoatendimento.
+- ``/catalogo`` etc. Rotas antigas redirecionam para ``/`` (venda só com vendedor logado).
+- ``/api/...``         Endpoints JSON (vendas exigem sessão do vendedor).
+- ``/admin/...``       Painel administrativo.
+- ``/vendedor/...``    Painel do vendedor (dashboard, venda/catálogo, estoque, movimentações).
 """
 
 from __future__ import annotations
@@ -19,6 +16,7 @@ from datetime import datetime
 
 from flask import (
     Flask,
+    current_app,
     flash,
     jsonify,
     redirect,
@@ -90,6 +88,17 @@ AUTH_COOKIE_OPTIONS = {
     "httponly": True,
     "samesite": "Lax",
 }
+
+
+def _url_if_registered(endpoint: str, *, fallback: str) -> str:
+    """Evita BuildError se o endpoint ainda não existir no mapa de rotas."""
+    try:
+        views = current_app.view_functions
+    except RuntimeError:
+        return fallback
+    if endpoint in views:
+        return url_for(endpoint)
+    return fallback
 
 
 def _display_created_by(value) -> str:
@@ -254,14 +263,6 @@ def _normalize_seller_pin(pin: str) -> str:
     return value
 
 
-def _seller_for_pin(pin: str) -> dict | None:
-    value = _normalize_seller_pin(pin)
-    for seller in list_seller_pin_hashes():
-        if seller.get("active") and check_password_hash(seller["pin_hash"], value):
-            return seller
-    return None
-
-
 def _pin_is_available(pin: str, *, ignore_seller_id: int | None = None) -> bool:
     value = _normalize_seller_pin(pin)
     for seller in list_seller_pin_hashes():
@@ -283,23 +284,17 @@ def welcome():
 
 @app.route("/catalogo")
 def catalog():
-    return render_template(
-        "catalog.html",
-        categories=CATEGORIES,
-        products=list_products_for_client(),
-    )
+    return redirect(url_for("welcome"))
 
 
 @app.route("/pagamento")
 def payment():
-    """Resumo do pedido antes de ir à maquininha."""
-    return render_template("payment.html")
+    return redirect(url_for("welcome"))
 
 
 @app.route("/pagamento/aguardando")
 def payment_waiting():
-    """Tela de aguardo enquanto o cliente usa a maquininha física."""
-    return render_template("payment_waiting.html")
+    return redirect(url_for("welcome"))
 
 
 # ---------------------------------------------------------------------------
@@ -321,10 +316,15 @@ def api_create_transaction():
     items = payload.get("items") or payload.get("itens") or []
     client = payload.get("client") or {}
     try:
-        seller_pin = _normalize_seller_pin(str(payload.get("seller_pin") or ""))
-        seller = _seller_for_pin(seller_pin)
-        if seller is None:
-            raise ValueError("PIN do vendedor inválido ou inativo.")
+        auth = _seller_auth()
+        if not auth:
+            raise ValueError(
+                "É necessário estar logado como vendedor para registrar a venda."
+            )
+        row = get_seller(int(auth["seller_id"]))
+        if row is None or not row.get("active"):
+            raise ValueError("Sessão de vendedor inválida ou inativa.")
+        seller = {"id": int(row["id"]), "name": row["name"]}
         result = create_transaction(
             items,
             created_by=f"vendedor:{seller['name']}",
@@ -444,11 +444,38 @@ def seller_logout():
 
 def _seller_shell_context(**extra):
     auth = _seller_auth() or {}
-    return {
+    ctx = {
         "seller_name": auth.get("seller_name", "Vendedor"),
         "seller_email": auth.get("seller_email", ""),
         "now": datetime.now(),
-        **extra,
+    }
+    ctx.update(extra)
+    venda_url = _url_if_registered("seller_sale", fallback="/vendedor/venda")
+    ctx["seller_venda_url"] = (venda_url or "").strip() or "/vendedor/venda"
+    return ctx
+
+
+def _seller_totem_flow() -> dict:
+    """URLs do fluxo de venda no painel (consumido pelo JS)."""
+    return {
+        "payment": _url_if_registered(
+            "seller_payment", fallback="/vendedor/pagamento"
+        ),
+        "paymentWaiting": _url_if_registered(
+            "seller_payment_waiting", fallback="/vendedor/pagamento/aguardando"
+        ),
+        "catalog": _url_if_registered("seller_sale", fallback="/vendedor/venda"),
+        "home": url_for("seller_dashboard"),
+    }
+
+
+def _seller_payment_page_context() -> dict:
+    flow = _seller_totem_flow()
+    return {
+        "totem_flow": flow,
+        "payment_catalog_url": _url_if_registered(
+            "seller_sale", fallback="/vendedor/venda"),
+        "payment_home_url": url_for("seller_dashboard"),
     }
 
 
@@ -479,6 +506,30 @@ def _filtered_admin_products():
         "categoria": category or "todos",
         "status": status or "todos",
     }
+
+
+@app.route("/vendedor/venda", endpoint="seller_sale")
+@seller_required
+def seller_sale():
+    return render_template(
+        "seller/catalog.html",
+        categories=CATEGORIES,
+        products=list_products_for_client(),
+        totem_flow=_seller_totem_flow(),
+        **_seller_shell_context(active_section="venda"),
+    )
+
+
+@app.route("/vendedor/pagamento", endpoint="seller_payment")
+@seller_required
+def seller_payment():
+    return render_template("payment.html", **_seller_payment_page_context())
+
+
+@app.route("/vendedor/pagamento/aguardando", endpoint="seller_payment_waiting")
+@seller_required
+def seller_payment_waiting():
+    return render_template("payment_waiting.html", **_seller_payment_page_context())
 
 
 @app.route("/vendedor/dashboard")

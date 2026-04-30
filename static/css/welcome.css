@@ -82,6 +82,14 @@
     transform: translateX(4px);
 }
 
+.welcome__secondary-links {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    margin-top: -8px;
+}
+
 .welcome__seller-link {
     display: inline-flex;
     align-items: center;

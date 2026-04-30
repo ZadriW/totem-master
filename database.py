@@ -140,7 +140,31 @@ def _table_columns(conn: sqlite3.Connection, table: str) -> set:
 
 def _default_sku_for_id(product_id: int) -> str:
     """SKU de fallback quando o cadastro não possui código (formato ``OM-`` + id)."""
-    return f"OM-{int(product_id):05d}"
+    pid = int(product_id)
+    if pid <= 0:
+        return f"OM-invalid-{abs(pid)}"
+    return f"OM-{pid:05d}"
+
+
+def _is_placeholder_product_name(name: str) -> bool:
+    n = (name or "").strip()
+    return not n or n == "Produto"
+
+
+def _is_generated_fallback_sku(sku: str, product_id: int) -> bool:
+    return (sku or "").strip() == _default_sku_for_id(int(product_id))
+
+
+def _ensure_distinct_sku(conn: sqlite3.Connection, pid: int, sku: str) -> str:
+    """Garante ``sku`` único na tabela (a Wake pode repetir SKU entre produtos)."""
+    base = (sku or "").strip() or _default_sku_for_id(pid)
+    clash = conn.execute(
+        "SELECT id FROM products WHERE sku = ? AND id != ?",
+        (base, pid),
+    ).fetchone()
+    if not clash:
+        return base
+    return _default_sku_for_id(pid)
 
 
 def _ensure_products_sku_column(conn: sqlite3.Connection) -> None:
@@ -245,7 +269,25 @@ def init_db() -> None:
         _ensure_transaction_items_product_sku_column(conn)
         _ensure_transactions_client_columns(conn)
         _ensure_sellers_columns(conn)
+        _purge_invalid_product_ids(conn)
         _purge_legacy_demo_products(conn)
+
+
+def _purge_invalid_product_ids(conn: sqlite3.Connection) -> None:
+    """Remove cadastros com ``id`` não positivo (resíduos de integrações Wake)."""
+    rows = conn.execute("SELECT id FROM products WHERE id < 1").fetchall()
+    if not rows:
+        return
+    ids = [int(r["id"]) for r in rows]
+    placeholders = ",".join("?" * len(ids))
+    conn.execute(
+        f"DELETE FROM stock_movements WHERE product_id IN ({placeholders})",
+        ids,
+    )
+    conn.execute(
+        f"DELETE FROM products WHERE id IN ({placeholders})",
+        ids,
+    )
 
 
 def _purge_legacy_demo_products(conn: sqlite3.Connection) -> None:
@@ -296,16 +338,40 @@ def sync_products_from_wake(products: Iterable[Dict]) -> Dict[str, int]:
     with get_conn() as conn:
         for p in products:
             pid = int(p["id"])
-            sku = (p.get("sku") or "").strip() or _default_sku_for_id(pid)
-            name = str(p.get("nome") or "Produto")
+            if pid <= 0:
+                skipped += 1
+                continue
+
+            raw_sku_wake = (p.get("sku") or "").strip()
+            nome_wake = str(p.get("nome") or "").strip()
+            name = nome_wake if nome_wake else "Produto"
             category = str(p.get("categoria") or "Geral")
-            description = str(p.get("descricao") or "")
             price = float(p.get("preco") or 0)
             image = p.get("imagem") or ""
 
             existing = conn.execute(
-                "SELECT id FROM products WHERE id = ?", (pid,)
+                "SELECT id, name, sku FROM products WHERE id = ?", (pid,)
             ).fetchone()
+
+            if existing is None:
+                sku = raw_sku_wake or _default_sku_for_id(pid)
+            else:
+                ex_name = (existing["name"] or "").strip()
+                ex_sku = (existing["sku"] or "").strip()
+                if _is_placeholder_product_name(name) and not _is_placeholder_product_name(
+                    ex_name
+                ):
+                    name = ex_name
+                if raw_sku_wake:
+                    sku = raw_sku_wake
+                elif ex_sku and not _is_generated_fallback_sku(ex_sku, pid):
+                    sku = ex_sku
+                else:
+                    sku = _default_sku_for_id(pid)
+
+            sku = _ensure_distinct_sku(conn, pid, sku)
+
+            description = f"{name} — {category}"
 
             if existing is None:
                 conn.execute(

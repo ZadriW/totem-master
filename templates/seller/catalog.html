@@ -1,0 +1,25 @@
+{% extends "seller/_layout.html" %}
+
+{% block title %}Venda — catálogo | Vendedor | Dental Odonto Master{% endblock %}
+
+{% block admin_main_class %}admin-main--catalog-embed{% endblock %}
+
+{% block seller_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/catalog.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cart.css') }}">
+{% endblock %}
+
+{% block seller_body %}
+    {% set catalog_brand_href = url_for('seller_dashboard') %}
+    {% set catalog_brand_aria = 'Voltar ao painel do vendedor' %}
+    {% include 'partials/catalog_content.html' %}
+{% endblock %}
+
+{% block seller_scripts %}
+<script>
+window.__TOTEM_FLOW__ = {{ totem_flow | tojson }};
+window.__PRODUCTS__ = {{ products|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/cart.js') }}"></script>
+<script src="{{ url_for('static', filename='js/catalog.js') }}"></script>
+{% endblock %}

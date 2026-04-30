@@ -41,14 +41,19 @@ query FetchProducts($first: Int!, $after: String) {
   products(
     first: $first
     after: $after
-    filters: {}
+    filters: { mainVariant: true }
     sortKey: NAME
     sortDirection: ASC
   ) {
     nodes {
       productId
+      productVariantId
+      mainVariant
       productName
+      variantName
+      alias
       sku
+      ean
       prices {
         price
         listPrice
@@ -170,14 +175,73 @@ def _primary_category(categories: list) -> str:
     return (best.get("name") or "Geral").strip()
 
 
-def fetch_products(page_size: int = 50, max_pages: int = 20) -> List[Dict]:
+def _display_product_name(node: Dict[str, Any]) -> str:
+    """Nome exibível: API às vezes preenche só ``variantName`` ou ``alias``."""
+    for key in ("productName", "variantName"):
+        v = (node.get(key) or "").strip()
+        if v:
+            return v
+    alias = (node.get("alias") or "").strip()
+    if alias:
+        return alias
+    return ""
+
+
+def _display_product_sku(node: Dict[str, Any]) -> str:
+    """SKU da linha Storefront; EAN como fallback quando ``sku`` vem vazio."""
+    s = (node.get("sku") or "").strip()
+    if s:
+        return s
+    ean = (node.get("ean") or "").strip()
+    if ean:
+        return ean
+    return ""
+
+
+def _wake_row_rank(node: Dict[str, Any]) -> tuple:
+    """Ordenação usada ao escolher uma variante canônica por ``productId``."""
+    name = _display_product_name(node)
+    sku = _display_product_sku(node)
+    main = 1 if node.get("mainVariant") else 0
+    pvid = int(node.get("productVariantId") or 0)
+    return (main, len(name), len(sku), pvid)
+
+
+def _dedupe_wake_nodes_by_product_id(nodes: List[dict]) -> List[dict]:
+    """Evita múltiplas variantes do mesmo ``productId`` sobrescreverem o SQLite.
+
+    Sem ``mainVariant: true`` (ou em cenários extremos), a Storefront pode
+    devolver várias linhas por produto; a última da página podia gravar nome
+    vazio e gerar placeholders ``Produto`` / ``OM-xxxxx`` / ``Geral``.
+    """
+    best: Dict[int, dict] = {}
+    for node in nodes:
+        raw = node.get("productId")
+        if raw is None:
+            continue
+        try:
+            pid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if pid <= 0:
+            continue
+        if pid not in best or _wake_row_rank(node) > _wake_row_rank(best[pid]):
+            best[pid] = node
+    return list(best.values())
+
+
+def fetch_products(page_size: int = 50, max_pages: int = 500) -> List[Dict]:
     """Busca todos os produtos da loja Wake com paginação automática.
 
     Retorna lista normalizada com campos compatíveis ao schema local.
+    Usa apenas a **variante principal** (filtro ``mainVariant``) e remove
+    duplicados por ``productId``. Registros com ``productId`` inválido
+    (``<= 0``), p.ex. listas especiais da loja, são ignorados.
+
     A Wake é usada como biblioteca de produtos; estoque, estoque mínimo e
     ativação comercial são controlados localmente pelo administrador.
     """
-    all_products: List[Dict] = []
+    raw_nodes: List[dict] = []
     cursor: Optional[str] = None
 
     for _ in range(max_pages):
@@ -187,25 +251,8 @@ def fetch_products(page_size: int = 50, max_pages: int = 20) -> List[Dict]:
 
         data = _graphql(_PRODUCTS_QUERY, variables)
         products_data = data.get("products") or {}
-        nodes = products_data.get("nodes") or []
-
-        for node in nodes:
-            prices = node.get("prices") or {}
-            price = prices.get("price") or prices.get("listPrice") or 0
-            images = node.get("images") or []
-            image_url = images[0].get("url", "") if images else ""
-            cats = node.get("productCategories") or []
-            category = _primary_category(cats)
-
-            all_products.append({
-                "id": int(node["productId"]),
-                "sku": (node.get("sku") or "").strip(),
-                "nome": (node.get("productName") or "Produto").strip(),
-                "categoria": category,
-                "descricao": f"{node.get('productName', '')} — {category}",
-                "preco": float(price),
-                "imagem": image_url,
-            })
+        batch = products_data.get("nodes") or []
+        raw_nodes.extend(batch)
 
         page_info = products_data.get("pageInfo") or {}
         if not page_info.get("hasNextPage"):
@@ -214,7 +261,34 @@ def fetch_products(page_size: int = 50, max_pages: int = 20) -> List[Dict]:
         if not cursor:
             break
 
-    log.info("Wake API: %d produtos obtidos.", len(all_products))
+    canonical = _dedupe_wake_nodes_by_product_id(raw_nodes)
+    all_products: List[Dict] = []
+
+    for node in canonical:
+        prices = node.get("prices") or {}
+        price = prices.get("price") or prices.get("listPrice") or 0
+        images = node.get("images") or []
+        image_url = images[0].get("url", "") if images else ""
+        cats = node.get("productCategories") or []
+        category = _primary_category(cats)
+        nome = _display_product_name(node) or "Produto"
+        sku_wake = _display_product_sku(node)
+
+        all_products.append({
+            "id": int(node["productId"]),
+            "sku": sku_wake,
+            "nome": nome,
+            "categoria": category,
+            "descricao": f"{nome} — {category}",
+            "preco": float(price),
+            "imagem": image_url,
+        })
+
+    log.info(
+        "Wake API: %d linhas recebidas, %d produtos canônicos.",
+        len(raw_nodes),
+        len(all_products),
+    )
     return all_products
 
 

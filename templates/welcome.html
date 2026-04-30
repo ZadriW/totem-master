@@ -15,14 +15,20 @@
             alt="Odonto Master"
         >
         <p class="welcome__tagline">Bem-vindo ao Totem Master!</p>
-        <a class="welcome__button" href="{{ url_for('catalog') }}">
-            Acesse a loja
+        <a class="welcome__button" href="{{ url_for('seller_login') }}">
+            Iniciar atendimento
             <span class="welcome__button-arrow" aria-hidden="true">&rarr;</span>
         </a>
-        <a class="welcome__seller-link" href="{{ url_for('seller_login') }}">
-            <i class="fa-solid fa-user-tie" aria-hidden="true"></i>
-            Sou vendedor
-        </a>
+        <div class="welcome__secondary-links">
+            <a class="welcome__seller-link" href="{{ url_for('seller_login') }}">
+                <i class="fa-solid fa-user-tie" aria-hidden="true"></i>
+                Sou vendedor
+            </a>
+            <a class="welcome__seller-link" href="{{ url_for('admin_login') }}">
+                <i class="fa-solid fa-user-shield" aria-hidden="true"></i>
+                Sou administrador
+            </a>
+        </div>
     </div>
     <footer class="welcome__footer">
         <span>&copy; Todos os direitos reservados - ODM COMERCIO E SERVICOS DE EQUIPAMENTOS E MATERIAIS ODONTOLOGICOS LTDA - CNPJ: 07.030.958/0001-74 <br> Alameda das Cajazeiras, 430 - Caminho das Árvores - Salvador/BA - CEP: 41.820-470</span>
@@ -34,5 +40,4 @@
 <script>
     try { sessionStorage.removeItem('totem_cart_v1'); } catch (_) {}
 </script>
-<script src="{{ url_for('static', filename='js/admin-entry.js') }}"></script>
 {% endblock %}

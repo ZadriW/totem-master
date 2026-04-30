@@ -8,8 +8,9 @@
     const Cart = window.Cart;
     if (!Cart) return;
 
-    const WAITING_URL = '/pagamento/aguardando';
-    const CATALOG_URL = '/catalogo';
+    const FLOW = window.__TOTEM_FLOW__ || {};
+    const WAITING_URL = FLOW.paymentWaiting || '/vendedor/pagamento/aguardando';
+    const CATALOG_URL = FLOW.catalog || '/vendedor/venda';
 
     const itemsEl = document.getElementById('paymentItems');
     const countEl = document.getElementById('paymentCount');

@@ -2,6 +2,7 @@
     'use strict';
 
     const grid = document.getElementById('productGrid');
+    if (!grid) return;
     const cards = Array.from(grid.querySelectorAll('.product-card'));
     const searchInput = document.getElementById('searchInput');
     const chips = document.querySelectorAll('.category-chip');
@@ -12,7 +13,8 @@
     const cartCountEl = document.getElementById('cartCount');
     const openCartBtn = document.getElementById('openCartBtn');
 
-    // Dicionário id -> produto (injetado via Jinja em catalog.html).
+    // Dicionário id -> produto (injetado via Jinja no painel do vendedor).
+    const FLOW = window.__TOTEM_FLOW__ || {};
     const productsById = new Map();
     (window.__PRODUCTS__ || []).forEach(p => {
         productsById.set(String(p.id), p);
@@ -311,7 +313,8 @@
     if (drawerCheckout) {
         drawerCheckout.addEventListener('click', () => {
             if (Cart.isEmpty()) return;
-            window.location.assign('/pagamento');
+            const payUrl = FLOW.payment || '/vendedor/pagamento';
+            window.location.assign(payUrl);
         });
     }
 

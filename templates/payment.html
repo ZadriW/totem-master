@@ -4,17 +4,16 @@
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/payment.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/idle-timeout.css') }}">
 {% endblock %}
 
 {% block body %}
 <div class="payment">
     <header class="payment__topbar">
-        <a class="payment__back" href="{{ url_for('catalog') }}" id="paymentBack">
+        <a class="payment__back" href="{{ payment_catalog_url }}" id="paymentBack">
             <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
             Voltar ao catálogo
         </a>
-        <a class="payment__brand" href="{{ url_for('welcome') }}" aria-label="Odonto Master">
+        <a class="payment__brand" href="{{ payment_home_url }}" aria-label="Odonto Master">
             <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
         </a>
     </header>
@@ -214,36 +213,13 @@
         </aside>
     </main>
 </div>
-
-<div
-    id="idle-timeout-overlay"
-    class="idle-modal-overlay"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="idle-timeout-title"
-    aria-describedby="idle-timeout-desc"
-    aria-hidden="true"
->
-    <div class="idle-modal-dialog" role="document">
-        <div class="idle-modal-dialog__icon" aria-hidden="true">
-            <i class="fa-regular fa-clock"></i>
-        </div>
-        <h2 id="idle-timeout-title" class="idle-modal-dialog__title">Ainda está aí?</h2>
-        <p id="idle-timeout-desc" class="idle-modal-dialog__text">
-            Toque no botão abaixo para continuar. Sem interação, o totem voltará à tela inicial em instantes.
-        </p>
-        <div class="idle-modal-dialog__actions">
-            <button type="button" class="idle-modal-dialog__btn" id="idle-timeout-continue">
-                Continuar
-            </button>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
+<script>
+window.__TOTEM_FLOW__ = {{ (totem_flow or {}) | tojson }};
+</script>
 <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
-<script src="{{ url_for('static', filename='js/idle-timeout.js') }}"></script>
 <script src="{{ url_for('static', filename='js/payment-form.js') }}"></script>
 <script src="{{ url_for('static', filename='js/payment.js') }}"></script>
 {% endblock %}

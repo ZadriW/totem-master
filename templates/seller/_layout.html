@@ -19,6 +19,11 @@
                 <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
                 Dashboard
             </a>
+            <a class="admin-nav__item {% if active_section == 'venda' %}is-active{% endif %}"
+               href="{{ seller_venda_url|default('/vendedor/venda', true) }}">
+                <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
+                Venda
+            </a>
             <a class="admin-nav__item {% if active_section == 'estoque' %}is-active{% endif %}"
                href="{{ url_for('seller_stock') }}">
                 <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
@@ -54,7 +59,7 @@
         </div>
     </header>
 
-    <main class="admin-main">
+    <main class="admin-main {% block admin_main_class %}{% endblock %}">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
             <div class="admin-flashes">
