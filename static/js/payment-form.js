@@ -171,6 +171,7 @@
             complement: (data.get('complement') || '').trim(),
             city: (data.get('city') || '').trim(),
             state: (data.get('state') || '').trim(),
+            payment_method: (data.get('payment_method') || 'cartao').trim().toLowerCase(),
         };
     };
 
@@ -193,5 +194,8 @@
         if (stored.complement) form.complement.value = stored.complement;
         if (stored.city) form.city.value = stored.city;
         if (stored.state) form.state.value = stored.state;
+        const pm = (stored.payment_method || 'cartao').toLowerCase();
+        const pmRadio = form.querySelector(`input[name="payment_method"][value="${pm === 'pix' ? 'pix' : 'cartao'}"]`);
+        if (pmRadio) pmRadio.checked = true;
     }
 })();

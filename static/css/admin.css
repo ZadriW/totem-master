@@ -380,7 +380,7 @@
 }
 
 .admin-main.admin-main--catalog-embed .topbar {
-    top: 72px;
+    top: 68px;
 }
 
 .admin-section {
@@ -553,6 +553,11 @@
     padding: 14px 20px;
 }
 
+.admin-table--with-payment > .admin-table__head,
+.admin-table--with-payment .admin-tx__row {
+    grid-template-columns: 40px 1.35fr 1.1fr 0.55fr 0.85fr 0.8fr 0.75fr;
+}
+
 .admin-table__head {
     background: var(--color-bg);
     border-bottom: 1px solid var(--color-border);
@@ -582,6 +587,22 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+}
+
+/* Histórico de transações (admin dashboard): coluna Vendedor ao lado do Status */
+.admin-table--tx-wide > .admin-table__head,
+.admin-table--tx-wide .admin-tx__row {
+    grid-template-columns: 40px 1.05fr 0.95fr 0.48fr 0.7fr 0.72fr 0.95fr 0.65fr;
+}
+
+.admin-table--tx-wide .admin-table__col--seller {
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .admin-tx {
@@ -623,7 +644,7 @@
     letter-spacing: 0.02em;
 }
 
-.admin-badge {
+.admin-badge { 
     display: inline-block;
     padding: 4px 10px;
     border-radius: var(--radius-pill);
@@ -713,17 +734,34 @@
 .admin-tx__summary {
     margin-top: 14px;
     display: flex;
-    justify-content: space-between;
-    align-items: baseline;
+    flex-direction: column;
+    gap: 10px;
     padding: 12px 16px;
     background: var(--color-surface);
     border-radius: var(--radius-sm);
-    font-size: 14px;
-    color: var(--color-text-muted);
     border: 1px solid var(--color-border);
 }
 
-.admin-tx__summary strong {
+.admin-tx__summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 14px;
+    color: var(--color-text-muted);
+}
+
+.admin-tx__summary-row strong {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.admin-tx__summary-row--total {
+    padding-top: 10px;
+    border-top: 1px dashed var(--color-border);
+}
+
+.admin-tx__summary-row--total strong {
     font-size: 18px;
     font-weight: 800;
     color: var(--color-primary);
@@ -1032,6 +1070,44 @@
     justify-content: flex-end;
 }
 
+/* Paginação (estoque admin e similares) */
+.admin-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 20px;
+    padding: 14px 16px;
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.admin-pagination__summary {
+    margin: 0;
+    font-size: 14px;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+}
+
+.admin-pagination__summary strong {
+    color: var(--color-text);
+    font-weight: 700;
+}
+
+.admin-pagination__nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.admin-pagination__disabled {
+    pointer-events: none;
+    opacity: 0.45;
+}
+
 /* ==========================================================================
    KPI variante warn
    ========================================================================== */
@@ -1127,15 +1203,6 @@
         flex: 1 1 auto;
     }
 
-    .admin-stock__row > :nth-child(2),
-    .admin-stock__row > :nth-child(3),
-    .admin-stock__row > :nth-child(4),
-    .admin-stock__row > :nth-child(5),
-    .admin-stock__row > :nth-child(6),
-    .admin-stock__row > :nth-child(7) {
-        padding-left: 16px;
-    }
-
     /* Categoria: preenche a faixa, texto à esquerda */
     .admin-stock__row > :nth-child(2) {
         justify-self: stretch;
@@ -1150,7 +1217,7 @@
     .admin-stock__row > :nth-child(4),
     .admin-stock__row > :nth-child(5) {
         justify-self: stretch;
-        text-align: right;
+        text-align: center;
     }
 
     /* Situação: badges no início da coluna (evita “colar” tudo à direita da row) */
@@ -2122,6 +2189,43 @@
     .admin-tx__row > :nth-child(4) { grid-area: items; font-size: 12px; color: var(--color-text-muted); text-align: right; }
     .admin-tx__row > :nth-child(5) { grid-area: total; text-align: right; }
     .admin-tx__row > :nth-child(6) { grid-area: status; }
+    .admin-table--with-payment .admin-tx__row {
+        grid-template-areas:
+            "toggle order total"
+            "toggle date items"
+            "toggle pay pay"
+            "toggle status status";
+    }
+    .admin-table--with-payment .admin-tx__row > :nth-child(6) {
+        grid-area: pay;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-text);
+    }
+    .admin-table--with-payment .admin-tx__row > :nth-child(7) { grid-area: status; }
+    /* Transações com coluna Vendedor (dashboard admin) — 8 células */
+    .admin-table--tx-wide .admin-tx__row {
+        grid-template-areas:
+            "toggle order total"
+            "toggle date items"
+            "toggle pay pay"
+            "toggle seller seller"
+            "toggle status status";
+    }
+    .admin-table--tx-wide .admin-tx__row > :nth-child(6) {
+        grid-area: pay;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-text);
+    }
+    .admin-table--tx-wide .admin-tx__row > :nth-child(7) {
+        grid-area: seller;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-text-muted);
+        white-space: normal;
+    }
+    .admin-table--tx-wide .admin-tx__row > :nth-child(8) { grid-area: status; }
     .admin-tx__details-inner { padding: 16px; }
     .admin-tx__items-head { display: none; }
     .admin-tx__items-row {
@@ -2299,10 +2403,6 @@
 /* ======================================================================
    Integração Wake Commerce
    ====================================================================== */
-
-.admin-section--wake {
-    border-left: 4px solid #6c47ff;
-}
 
 .admin-section--wake .admin-section__title {
     display: flex;

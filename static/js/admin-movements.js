@@ -20,6 +20,13 @@
         }[char]));
     }
 
+    function paymentMethodLabel(raw) {
+        const v = String(raw || '').toLowerCase();
+        if (v === 'pix') return 'PIX';
+        if (v === 'cartao') return 'Cartão';
+        return '—';
+    }
+
     function closeAllDetails() {
         scope.querySelectorAll('.admin-mov__details').forEach(panel => {
             panel.hidden = true;
@@ -52,6 +59,10 @@
                         <div class="admin-mov__details-item">
                             <dt>CPF</dt>
                             <dd>${escapeHtml(movement.client_cpf || '—')}</dd>
+                        </div>
+                        <div class="admin-mov__details-item">
+                            <dt>Forma de pagamento</dt>
+                            <dd>${escapeHtml(paymentMethodLabel(movement.payment_method))}</dd>
                         </div>
                         <div class="admin-mov__details-item">
                             <dt>CEP</dt>

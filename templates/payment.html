@@ -166,6 +166,31 @@
                         <option value="TO">Tocantins</option>
                     </select>
                 </label>
+
+                <h2 class="payment__section-title payment__section-title--sub payment__section-title--method">
+                    <i class="fa-solid fa-money-bill-wave" aria-hidden="true"></i>
+                    Forma de pagamento
+                </h2>
+                <p class="payment-method__hint">Selecione como o pagamento será processado na maquininha.</p>
+                <fieldset class="payment-method">
+                    <legend class="payment-method__legend">Opção <span class="payment-field__required">*</span></legend>
+                    <div class="payment-method__options">
+                        <label class="payment-method__choice">
+                            <input type="radio" name="payment_method" value="pix" required>
+                            <span class="payment-method__box">
+                                <i class="fa-brands fa-pix" aria-hidden="true"></i>
+                                <span class="payment-method__label">PIX</span>
+                            </span>
+                        </label>
+                        <label class="payment-method__choice">
+                            <input type="radio" name="payment_method" value="cartao" checked>
+                            <span class="payment-method__box">
+                                <i class="fa-solid fa-credit-card" aria-hidden="true"></i>
+                                <span class="payment-method__label">Cartão</span>
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
             </form>
         </section>
 
@@ -195,7 +220,7 @@
                 <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
                 <div>
                     <strong>Próximo passo</strong>
-                    Revise os itens e o total. Em seguida você será direcionado à tela
+                    Revise os itens, os dados e a forma de pagamento (PIX ou cartão). Em seguida você será direcionado à tela
                     <em>Aguardando pagamento</em>, onde poderá usar a maquininha e confirmar
                     quando o pagamento for concluído.
                 </div>

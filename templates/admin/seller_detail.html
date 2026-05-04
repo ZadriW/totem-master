@@ -208,13 +208,14 @@
         </div>
     </header>
 
-    <div class="admin-table" role="table" aria-label="Vendas do vendedor">
+    <div class="admin-table admin-table--with-payment" role="table" aria-label="Vendas do vendedor">
         <div class="admin-table__head" role="row">
             <span class="admin-table__col admin-table__col--toggle" aria-hidden="true"></span>
             <span class="admin-table__col" role="columnheader">Pedido</span>
             <span class="admin-table__col" role="columnheader">Data/Hora</span>
             <span class="admin-table__col admin-table__col--num" role="columnheader">Itens</span>
             <span class="admin-table__col admin-table__col--num" role="columnheader">Total</span>
+            <span class="admin-table__col" role="columnheader">Pagamento</span>
             <span class="admin-table__col" role="columnheader">Status</span>
         </div>
 
@@ -234,6 +235,7 @@
                     <span class="admin-table__col">{{ tx.created_at | datahora }}</span>
                     <span class="admin-table__col admin-table__col--num">{{ tx.items_count }}</span>
                     <span class="admin-table__col admin-table__col--num"><strong>{{ tx.total | brl }}</strong></span>
+                    <span class="admin-table__col">{{ tx.payment_method | paymethod }}</span>
                     <span class="admin-table__col">
                         <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else 'neutral' }}">
                             {{ tx.status }}
@@ -269,6 +271,16 @@
                                 <span class="admin-table__col--num"><strong>{{ it.subtotal | brl }}</strong></span>
                             </div>
                             {% endfor %}
+                        </div>
+                        <div class="admin-tx__summary">
+                            <div class="admin-tx__summary-row">
+                                <span>Forma de pagamento</span>
+                                <strong>{{ tx.payment_method | paymethod }}</strong>
+                            </div>
+                            <div class="admin-tx__summary-row admin-tx__summary-row--total">
+                                <span>Total da transação</span>
+                                <strong>{{ tx.total | brl }}</strong>
+                            </div>
                         </div>
                     </div>
                 </div>

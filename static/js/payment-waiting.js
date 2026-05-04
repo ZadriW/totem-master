@@ -22,7 +22,32 @@
     const backBtn = document.getElementById('waitingBack');
     const successOrder = document.getElementById('successOrder');
     const successCountdown = document.getElementById('successCountdown');
+    const successPrint = document.getElementById('successPrint');
     const successFinish = document.getElementById('successFinish');
+
+    /** Número do pedido retornado pela API (ex.: OMyymmdd-1234), definido após sucesso. */
+    let confirmedOrderNumber = null;
+
+    function paymentMethodLabel(raw) {
+        const v = String(raw || '').toLowerCase();
+        if (v === 'pix') return 'PIX';
+        return 'Cartão';
+    }
+
+    function syncWaitingPaymentMethodUi() {
+        const clientData = window.PaymentForm ? window.PaymentForm.load() : null;
+        const pm = clientData && clientData.payment_method;
+        const methodEl = document.getElementById('waitingPaymentMethod');
+        if (methodEl) methodEl.textContent = paymentMethodLabel(pm);
+        const heroIcon = document.querySelector('.payment-wait__pulse i');
+        if (heroIcon) {
+            if (String(pm || '').toLowerCase() === 'pix') {
+                heroIcon.className = 'fa-brands fa-pix';
+            } else {
+                heroIcon.className = 'fa-solid fa-credit-card';
+            }
+        }
+    }
 
     function renderItem(item) {
         const subtotal = Cart.formatBRL(item.preco * item.quantidade);
@@ -52,6 +77,7 @@
         itemsEl.innerHTML = items.map(renderItem).join('');
         countEl.textContent = Cart.count();
         totalEl.textContent = Cart.formatBRL(Cart.total());
+        syncWaitingPaymentMethodUi();
     }
 
     async function registerTransaction() {
@@ -59,6 +85,9 @@
         const payload = {
             items: Cart.getItems(),
             client: clientData || {},
+            payment_method: (clientData && clientData.payment_method)
+                ? clientData.payment_method
+                : 'cartao',
         };
         const response = await fetch('/api/transacoes', {
             method: 'POST',
@@ -79,9 +108,15 @@
     }
 
     function showSuccess(orderNumber) {
+        confirmedOrderNumber = orderNumber != null ? String(orderNumber) : null;
         successOrder.textContent = `Pedido #${orderNumber}`;
-        content.hidden = true;
+        document.querySelector('.payment')?.classList.add('payment--success-only');
+        if (content) {
+            content.hidden = true;
+            content.setAttribute('aria-hidden', 'true');
+        }
         success.hidden = false;
+        success.removeAttribute('aria-hidden');
         Cart.clear();
         if (window.PaymentForm) window.PaymentForm.clear();
 
@@ -127,6 +162,19 @@
         window.location.assign(SUMMARY_URL);
     });
 
+    function openReceiptPrint() {
+        if (!confirmedOrderNumber) return;
+        const path = `/nota/${encodeURIComponent(confirmedOrderNumber)}?print=1`;
+        const w = window.open(path, '_blank', 'noopener');
+        if (!w) {
+            window.location.assign(path);
+        }
+    }
+
+    successPrint?.addEventListener('click', () => {
+        openReceiptPrint();
+    });
+
     successFinish.addEventListener('click', () => {
         window.location.assign(HOME_URL);
     });
@@ -137,4 +185,5 @@
     });
 
     renderWaiting();
+    syncWaitingPaymentMethodUi();
 })();

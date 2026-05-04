@@ -33,7 +33,7 @@ import random
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Tuple
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -190,6 +190,12 @@ def _ensure_transaction_items_product_sku_column(conn: sqlite3.Connection) -> No
     conn.execute("ALTER TABLE transaction_items ADD COLUMN product_sku TEXT")
 
 
+def _ensure_transactions_payment_method(conn: sqlite3.Connection) -> None:
+    if "payment_method" in _table_columns(conn, "transactions"):
+        return
+    conn.execute("ALTER TABLE transactions ADD COLUMN payment_method TEXT")
+
+
 def _ensure_transactions_client_columns(conn: sqlite3.Connection) -> None:
     """Adiciona colunas de dados do cliente/vendedor em transactions."""
     cols = _table_columns(conn, "transactions")
@@ -268,6 +274,7 @@ def init_db() -> None:
         _ensure_products_sku_column(conn)
         _ensure_transaction_items_product_sku_column(conn)
         _ensure_transactions_client_columns(conn)
+        _ensure_transactions_payment_method(conn)
         _ensure_sellers_columns(conn)
         _purge_invalid_product_ids(conn)
         _purge_legacy_demo_products(conn)
@@ -459,6 +466,17 @@ def list_products_for_client(
     return [_product_row_to_client(r) for r in rows]
 
 
+def list_active_product_stocks() -> List[Dict[str, int]]:
+    """Id e estoque dos produtos ativos (mesmo conjunto base do catálogo ao cliente)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, stock FROM products WHERE active = 1 ORDER BY id"
+        ).fetchall()
+    return [
+        {"id": int(r["id"]), "estoque": int(r["stock"] or 0)} for r in rows
+    ]
+
+
 def list_products_admin() -> List[Dict]:
     """Todos os produtos para o painel administrativo (inclui inativos)."""
     with get_conn() as conn:
@@ -476,6 +494,78 @@ def list_products_admin() -> List[Dict]:
         )
         out.append(d)
     return out
+
+
+def _admin_stock_filter_clause(
+    q: Optional[str],
+    categoria: str,
+    status: str,
+) -> Tuple[str, List]:
+    """Monta ``WHERE`` para listagem paginada do estoque admin (mesma semântica do filtro em memória)."""
+    parts: List[str] = ["1=1"]
+    params: List = []
+    if q:
+        like = f"%{q.lower()}%"
+        parts.append(
+            "(LOWER(name) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ? "
+            "OR LOWER(COALESCE(sku, '')) LIKE ?)"
+        )
+        params.extend([like, like, like])
+    if categoria and categoria.lower() != "todos":
+        parts.append("LOWER(category) = LOWER(?)")
+        params.append(categoria)
+    st = (status or "todos").strip().lower()
+    if st == "baixo":
+        parts.append("stock > 0 AND stock < min_stock")
+    elif st == "sem_estoque":
+        parts.append("stock <= 0")
+    elif st == "inativo":
+        parts.append("active = 0")
+    return " AND ".join(parts), params
+
+
+def _row_to_admin_product(row) -> Dict:
+    d = _product_row_to_client(row)
+    d.update(
+        {
+            "abaixo_minimo": d["estoque"] < d["estoque_minimo"],
+            "sem_estoque": d["estoque"] <= 0,
+        }
+    )
+    return d
+
+
+def count_products_admin_filtered(
+    q: Optional[str],
+    categoria: str = "todos",
+    status: str = "todos",
+) -> int:
+    """Conta produtos que obedecem aos filtros da tela de estoque admin."""
+    where, params = _admin_stock_filter_clause(q, categoria, status)
+    sql = f"SELECT COUNT(*) AS c FROM products WHERE {where}"
+    with get_conn() as conn:
+        row = conn.execute(sql, params).fetchone()
+    return int(row["c"] if row else 0)
+
+
+def list_products_admin_slice(
+    q: Optional[str],
+    categoria: str = "todos",
+    status: str = "todos",
+    *,
+    limit: int,
+    offset: int,
+) -> List[Dict]:
+    """Página de produtos admin com filtros (SQL ``LIMIT`` / ``OFFSET``)."""
+    where, params = _admin_stock_filter_clause(q, categoria, status)
+    sql = (
+        f"SELECT * FROM products WHERE {where} "
+        "ORDER BY category, name LIMIT ? OFFSET ?"
+    )
+    qparams = list(params) + [int(limit), int(max(0, offset))]
+    with get_conn() as conn:
+        rows = conn.execute(sql, qparams).fetchall()
+    return [_row_to_admin_product(r) for r in rows]
 
 
 def get_product(product_id: int) -> Optional[Dict]:
@@ -924,7 +1014,8 @@ def list_stock_movements(
     sql = (
         "SELECT m.*, p.name AS product_name, p.category AS product_category, "
         "t.client_name, t.client_cpf, t.client_zipcode, t.client_address, "
-        "t.client_number, t.client_complement, t.client_city, t.client_state "
+        "t.client_number, t.client_complement, t.client_city, t.client_state, "
+        "t.payment_method "
         "FROM stock_movements m "
         "LEFT JOIN products p ON p.id = m.product_id "
         "LEFT JOIN transactions t ON t.id = m.transaction_id "
@@ -1022,6 +1113,7 @@ def create_transaction(
     client_complement: Optional[str] = None,
     client_city: Optional[str] = None,
     client_state: Optional[str] = None,
+    payment_method: Optional[str] = None,
 ) -> Dict:
     """Registra uma venda, seus itens e **decrementa o estoque atomicamente**.
 
@@ -1125,14 +1217,14 @@ def create_transaction(
                 (order_number, created_at, total, items_count, status,
                  client_name, client_cpf, client_zipcode, client_address,
                  client_number, client_complement, client_city, client_state,
-                 seller_id, seller_name)
-            VALUES (?, ?, ?, ?, 'confirmado', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 seller_id, seller_name, payment_method)
+            VALUES (?, ?, ?, ?, 'confirmado', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 order_number, created_at, total, items_count,
                 client_name, client_cpf, client_zipcode, client_address,
                 client_number, client_complement, client_city, client_state,
-                seller_id, seller_name,
+                seller_id, seller_name, payment_method,
             ),
         )
         tx_id = cur.lastrowid
@@ -1180,6 +1272,7 @@ def create_transaction(
         "created_at": created_at,
         "seller_id": seller_id,
         "seller_name": seller_name,
+        "payment_method": payment_method,
     }
 
 
@@ -1209,7 +1302,7 @@ def list_transactions(limit: int = 200, seller_id: Optional[int] = None) -> List
         tx_rows = conn.execute(
             f"""
             SELECT id, order_number, created_at, total, items_count, status,
-                   seller_id, seller_name
+                   seller_id, seller_name, payment_method
               FROM transactions
              {where}
              ORDER BY datetime(created_at) DESC, id DESC

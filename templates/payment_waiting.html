@@ -25,7 +25,8 @@
             </div>
             <h1 class="payment-wait__title">Aguardando pagamento</h1>
             <p class="payment-wait__lead">
-                Utilize a <strong>maquininha</strong> ao lado do totem para concluir o pagamento.
+                Utilize a <strong>maquininha</strong> ao lado do totem para concluir o pagamento
+                (<strong>PIX</strong> ou <strong>cartão</strong>, conforme selecionado no passo anterior).
                 Quando a operação for aprovada na maquininha, toque no botão abaixo para registrar
                 a venda e liberar a nota de retirada.
             </p>
@@ -37,6 +38,10 @@
                 Seu pedido
             </h2>
             <div class="payment__items payment-wait__items" id="waitingItems"></div>
+            <div class="payment-wait__total-row payment-wait__method-row">
+                <span>Forma de pagamento</span>
+                <strong id="waitingPaymentMethod">—</strong>
+            </div>
             <div class="payment-wait__total-row">
                 <span>Total a pagar</span>
                 <strong id="waitingTotal">R$ 0,00</strong>
@@ -54,7 +59,7 @@
         </div>
     </main>
 
-    <section class="payment__success" id="paymentSuccess" hidden>
+    <section class="payment__success" id="paymentSuccess" hidden aria-hidden="true">
         <div class="payment__success-card">
             <div class="payment__success-icon">
                 <i class="fa-solid fa-check" aria-hidden="true"></i>
@@ -66,9 +71,15 @@
                 O totem retornará ao painel do vendedor em <span id="successCountdown">30</span>s.
             </p>
             <div class="payment__success-order" id="successOrder">Pedido #—</div>
-            <button type="button" class="payment__btn payment__btn--primary" id="successFinish">
-                Finalizar agora
-            </button>
+            <div class="payment__success-actions">
+                <button type="button" class="payment__btn payment__btn--secondary" id="successPrint">
+                    <i class="fa-solid fa-print" aria-hidden="true"></i>
+                    Imprimir nota
+                </button>
+                <button type="button" class="payment__btn payment__btn--primary" id="successFinish">
+                    Finalizar agora
+                </button>
+            </div>
         </div>
     </section>
 </div>

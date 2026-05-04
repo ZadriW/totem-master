@@ -416,7 +416,6 @@
                 class="receipt__logo"
             >
             <div class="receipt__brand">Dental Odonto Master</div>
-            <div class="receipt__slogan">Produtos Odontológicos</div>
         </header>
 
         <!-- ──────────────────── TÍTULO DO DOC ──────────────────── -->
@@ -448,6 +447,10 @@
             <div class="receipt__meta-item">
                 <span class="receipt__meta-label">Status</span>
                 <span class="receipt__meta-value">{{ tx.status | capitalize }}</span>
+            </div>
+            <div class="receipt__meta-item">
+                <span class="receipt__meta-label">Pagamento</span>
+                <span class="receipt__meta-value">{{ tx.payment_method | paymethod }}</span>
             </div>
             <div class="receipt__meta-item">
                 <span class="receipt__meta-label">Qtd. de itens</span>
@@ -545,8 +548,8 @@
                 Guarde o comprovante até a entrega.
             </div>
             <div class="receipt__footer-note">
-                Este documento não tem valor fiscal.<br>
-                Odonto Master — Produtos Odontológicos<br>
+                © Todos os direitos reservados - ODM COMERCIO E SERVICOS DE EQUIPAMENTOS E MATERIAIS ODONTOLOGICOS LTDA - CNPJ: 07.030.958/0001-74<br>
+                Alameda das Cajazeiras, 430 - Caminho das Árvores - Salvador/BA - CEP: 41.820-470<br>
                 {{ tx.created_at[:10].split('-') | reverse | join('/') }}
                 às {{ tx.created_at[11:16] }}
             </div>
@@ -572,5 +575,12 @@
 
 </div><!-- /.receipt -->
 
+{% if autoprint and tx %}
+<script>
+window.addEventListener('load', function () {
+    window.setTimeout(function () { window.print(); }, 250);
+});
+</script>
+{% endif %}
 </body>
 </html>

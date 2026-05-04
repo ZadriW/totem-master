@@ -142,12 +142,16 @@
                                 <dt>Nome</dt>
                                 <dd>{{ m.client_name or '—' }}</dd>
                             </div>
-                            <div class="admin-mov__details-item">
-                                <dt>CPF</dt>
-                                <dd>{{ m.client_cpf or '—' }}</dd>
-                            </div>
-                            <div class="admin-mov__details-item">
-                                <dt>CEP</dt>
+                        <div class="admin-mov__details-item">
+                            <dt>CPF</dt>
+                            <dd>{{ m.client_cpf or '—' }}</dd>
+                        </div>
+                        <div class="admin-mov__details-item">
+                            <dt>Forma de pagamento</dt>
+                            <dd>{{ m.payment_method | paymethod }}</dd>
+                        </div>
+                        <div class="admin-mov__details-item">
+                            <dt>CEP</dt>
                                 <dd>{{ m.client_zipcode or '—' }}</dd>
                             </div>
                             <div class="admin-mov__details-item admin-mov__details-item--wide">

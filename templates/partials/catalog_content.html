@@ -1,4 +1,4 @@
-{# Conteúdo do catálogo (topbar + grid + carrinho). Requer: categories, products, catalog_brand_href, catalog_brand_aria #}
+{# Conteúdo do catálogo (topbar + grid + carrinho). Requer: categories, categories_by_letter, products, catalog_brand_href, catalog_brand_aria #}
 <header class="topbar">
     <a class="topbar__brand" href="{{ catalog_brand_href }}" aria-label="{{ catalog_brand_aria }}">
         <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
@@ -47,11 +47,40 @@
 </div>
 
 <div class="categories-bar">
+    {% set _letters = categories_by_letter if categories_by_letter is defined else [] %}
     <nav class="categories" aria-label="Categorias">
-        <button class="category-chip is-active" type="button" data-category="todos">Todos</button>
-        {% for category in categories %}
-        <button class="category-chip" type="button" data-category="{{ category }}">{{ category }}</button>
+        <div class="categories__scroll">
+        <button class="category-chip category-chip--all is-active" type="button" data-category="todos">Todos</button>
+        {% for letter, names in _letters %}
+        <div class="category-dropdown" data-letter="{{ letter }}">
+            <button
+                type="button"
+                class="category-letter-trigger"
+                aria-expanded="false"
+                aria-haspopup="true"
+                aria-controls="categoryDropdownPanel{{ loop.index0 }}"
+            >
+                {% if letter == '#' %}0-9{% else %}{{ letter }}{% endif %}
+            </button>
+            <div
+                id="categoryDropdownPanel{{ loop.index0 }}"
+                class="category-dropdown__panel"
+                role="menu"
+                hidden
+                aria-label="Categorias — {% if letter == '#' %}0-9 e outros{% else %}{{ letter }}{% endif %}"
+            >
+                {% for category in names %}
+                <button
+                    type="button"
+                    class="category-chip category-dropdown__item"
+                    role="menuitem"
+                    data-category="{{ category }}"
+                >{{ category }}</button>
+                {% endfor %}
+            </div>
+        </div>
         {% endfor %}
+        </div>
     </nav>
     <button
         type="button"
@@ -72,6 +101,15 @@
 
     <div class="product-grid" id="productGrid">
         {% for product in products %}
+        {% set sm = (product.estoque_minimo | default(0)) | int %}
+        {% set q = product.estoque | int %}
+        {% if q <= 0 %}
+            {% set stock_tone = 'empty' %}
+        {% elif sm > 0 and q < sm %}
+            {% set stock_tone = 'low' %}
+        {% else %}
+            {% set stock_tone = 'ok' %}
+        {% endif %}
         <article
             class="product-card"
             data-id="{{ product.id }}"
@@ -79,6 +117,7 @@
             data-name="{{ product.nome|lower }}"
             data-sku="{{ (product.sku or '')|lower }}"
             data-estoque="{{ product.estoque }}"
+            data-estoque-min="{{ sm }}"
         >
             <div class="product-card__image">
                 <img src="{{ product.imagem }}" alt="{{ product.nome }}" loading="lazy">
@@ -87,7 +126,12 @@
                 <span class="product-card__category">{{ product.categoria }}</span>
                 <h2 class="product-card__name">{{ product.nome }}</h2>
                 {% if product.sku %}
-                <span class="product-card__sku">SKU {{ product.sku }}</span>
+                <div class="product-card__meta-line">
+                    <span class="product-card__sku">SKU {{ product.sku }}</span>
+                    <span class="product-card__stock product-card__stock--{{ stock_tone }}" data-stock-display>{{ product.estoque }} no estoque.</span>
+                </div>
+                {% else %}
+                <span class="product-card__stock product-card__stock--{{ stock_tone }} product-card__stock--alone" data-stock-display>{{ product.estoque }} no estoque.</span>
                 {% endif %}
                 <p class="product-card__price">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
             </div>

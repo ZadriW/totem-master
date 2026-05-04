@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import os
 import secrets
+import unicodedata
+from collections import defaultdict
 from functools import wraps
 from datetime import datetime
 
@@ -44,7 +46,10 @@ from database import (
     list_seller_pin_hashes,
     list_sellers,
     list_products_admin,
+    list_products_admin_slice,
+    count_products_admin_filtered,
     list_products_for_client,
+    list_active_product_stocks,
     list_stock_movements,
     list_transactions,
     register_stock_adjustment,
@@ -90,6 +95,39 @@ AUTH_COOKIE_OPTIONS = {
 }
 
 
+def _category_sort_key(name: str) -> str:
+    """Ordenação sem acentos (alinha ao normalize() do catálogo no JS)."""
+    if not name:
+        return ""
+    nfd = unicodedata.normalize("NFD", str(name))
+    stripped = "".join(c for c in nfd if unicodedata.category(c) != "Mn")
+    return stripped.lower()
+
+
+def _category_initial_letter(name: str) -> str:
+    """Inicial A-Z ou '#' para dígitos / símbolos / vazio."""
+    key = _category_sort_key(name)
+    if not key:
+        return "#"
+    ch = key[0]
+    if ch.isdigit():
+        return "#"
+    if "a" <= ch <= "z":
+        return ch.upper()
+    return "#"
+
+
+def _categories_by_initial(names: list[str]) -> list[tuple[str, list[str]]]:
+    """Agrupa nomes de categoria por letra inicial; '#' (último) = 0-9 e outros."""
+    buckets: dict[str, list[str]] = defaultdict(list)
+    for raw in sorted(names, key=_category_sort_key):
+        buckets[_category_initial_letter(raw)].append(raw)
+    letters = sorted(k for k in buckets if k != "#")
+    if "#" in buckets:
+        letters.append("#")
+    return [(letter, buckets[letter]) for letter in letters]
+
+
 def _url_if_registered(endpoint: str, *, fallback: str) -> str:
     """Evita BuildError se o endpoint ainda não existir no mapa de rotas."""
     try:
@@ -99,6 +137,22 @@ def _url_if_registered(endpoint: str, *, fallback: str) -> str:
     if endpoint in views:
         return url_for(endpoint)
     return fallback
+
+
+def _normalize_payment_method_for_db(value) -> str:
+    v = (value or "").strip().lower()
+    if v in ("pix", "cartao"):
+        return v
+    return "cartao"
+
+
+def _payment_method_label(value) -> str:
+    v = (value or "").strip().lower()
+    if v == "pix":
+        return "PIX"
+    if v == "cartao":
+        return "Cartão"
+    return "—"
 
 
 def _display_created_by(value) -> str:
@@ -315,6 +369,9 @@ def api_create_transaction():
     payload = request.get_json(silent=True) or {}
     items = payload.get("items") or payload.get("itens") or []
     client = payload.get("client") or {}
+    payment_method = _normalize_payment_method_for_db(
+        payload.get("payment_method") or client.get("payment_method"),
+    )
     try:
         auth = _seller_auth()
         if not auth:
@@ -338,6 +395,7 @@ def api_create_transaction():
             client_complement=client.get("complement"),
             client_city=client.get("city"),
             client_state=client.get("state"),
+            payment_method=payment_method,
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -511,11 +569,26 @@ def _filtered_admin_products():
 @app.route("/vendedor/venda", endpoint="seller_sale")
 @seller_required
 def seller_sale():
+    products = list_products_for_client()
+    category_names_set = {
+        str(p["categoria"]).strip()
+        for p in products
+        if (p.get("categoria") or "").strip()
+    }
+    category_names_set.update(
+        str(c).strip() for c in CATEGORIES if c and str(c).strip()
+    )
+    categories_by_letter = _categories_by_initial(sorted(category_names_set))
     return render_template(
         "seller/catalog.html",
         categories=CATEGORIES,
-        products=list_products_for_client(),
+        categories_by_letter=categories_by_letter,
+        products=products,
         totem_flow=_seller_totem_flow(),
+        catalog_stock_api_url=_url_if_registered(
+            "seller_api_catalog_stock",
+            fallback="/vendedor/api/catalogo/estoque",
+        ),
         **_seller_shell_context(active_section="venda"),
     )
 
@@ -592,7 +665,7 @@ def seller_movements():
 
 
 def _seller_transaction_api(tx: dict) -> dict:
-    """Serializa uma transação para `/vendedor/api/dashboard` (somente leitura)."""
+    """Serializa transação para o endpoint JSON do vendedor (somente leitura)."""
     items = tx.get("items") or []
     return {
         "id": int(tx["id"]),
@@ -601,6 +674,8 @@ def _seller_transaction_api(tx: dict) -> dict:
         "items_count": int(tx["items_count"] or 0),
         "total_display": brl_filter(tx["total"]),
         "status": tx["status"],
+        "payment_method": tx.get("payment_method"),
+        "payment_method_label": _payment_method_label(tx.get("payment_method")),
         "items": [
             {
                 "product_name": it.get("product_name") or "",
@@ -628,9 +703,20 @@ def seller_api_stock():
     })
 
 
+@app.route(
+    "/vendedor/api/catalogo/estoque",
+    endpoint="seller_api_catalog_stock",
+)
+@seller_required
+def seller_api_catalog_stock():
+    """Payload mínimo para atualizar estoque nos cards do catálogo (polling)."""
+    return jsonify({"products": list_active_product_stocks()})
+
+
 @app.route("/vendedor/api/dashboard")
 @seller_required
 def seller_api_dashboard():
+    """JSON com os mesmos dados do dashboard (útil para integrações; o painel web não faz polling)."""
     seller_id = _current_seller_id()
     transactions = list_transactions(limit=100, seller_id=seller_id)
     latest_tx_id = max((int(t["id"]) for t in transactions), default=0)
@@ -985,37 +1071,75 @@ def _admin_shell_context(**extra):
     }
 
 
+ALLOWED_ADMIN_STOCK_PER_PAGE = (10, 25, 50, 100)
+DEFAULT_ADMIN_STOCK_PER_PAGE = 25
+
+
+def _admin_stock_list_query_params():
+    """Parâmetros GET compartilhados entre ``/admin/estoque`` e ``/admin/api/estoque``."""
+    q = (request.args.get("q") or "").strip()
+    category = (request.args.get("categoria") or "").strip()
+    status = (request.args.get("status") or "").strip()
+    per_page = _parse_int(request.args.get("per_page"), DEFAULT_ADMIN_STOCK_PER_PAGE)
+    if per_page not in ALLOWED_ADMIN_STOCK_PER_PAGE:
+        per_page = DEFAULT_ADMIN_STOCK_PER_PAGE
+    page = max(1, _parse_int(request.args.get("page"), 1))
+    return q, category, status, per_page, page
+
+
+def _admin_stock_page_view():
+    q_display, category, status, per_page, page = _admin_stock_list_query_params()
+    q_lower = q_display.lower() if q_display else ""
+    q_filter = q_lower or None
+    cat_norm = category or "todos"
+    stat_norm = status or "todos"
+
+    total = count_products_admin_filtered(q_filter, cat_norm, stat_norm)
+    total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
+    page = min(page, total_pages)
+    offset = (page - 1) * per_page
+    products = list_products_admin_slice(
+        q_filter,
+        cat_norm,
+        stat_norm,
+        limit=per_page,
+        offset=offset,
+    )
+
+    showing_from = offset + 1 if total > 0 else 0
+    showing_to = min(offset + len(products), total) if total > 0 else 0
+
+    filters = {
+        "q": q_display,
+        "categoria": cat_norm,
+        "status": stat_norm,
+        "per_page": per_page,
+    }
+    pagination = {
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "showing_from": showing_from,
+        "showing_to": showing_to,
+    }
+    return products, filters, pagination
+
+
 @app.route("/admin/estoque")
 @admin_required
 def admin_stock():
-    q = (request.args.get("q") or "").strip().lower()
-    category = (request.args.get("categoria") or "").strip()
-    status = (request.args.get("status") or "").strip()  # todos|baixo|sem_estoque|inativo
-
-    products = list_products_admin()
-
-    if q:
-        products = [
-            p for p in products
-            if q in p["nome"].lower()
-            or q in (p["descricao"] or "").lower()
-            or q in (p.get("sku") or "").lower()
-        ]
-    if category and category.lower() != "todos":
-        products = [p for p in products if p["categoria"].lower() == category.lower()]
-    if status == "baixo":
-        products = [p for p in products if p["abaixo_minimo"] and not p["sem_estoque"]]
-    elif status == "sem_estoque":
-        products = [p for p in products if p["sem_estoque"]]
-    elif status == "inativo":
-        products = [p for p in products if not p["ativo"]]
-
+    products, filters, pagination = _admin_stock_page_view()
     return render_template(
         "admin/stock.html",
         products=products,
         stock=get_stock_stats(),
         categories=CATEGORIES,
-        filters={"q": q, "categoria": category or "todos", "status": status or "todos"},
+        filters=filters,
+        pagination=pagination,
+        allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
         **_admin_shell_context(active_section="estoque"),
     )
 
@@ -1231,14 +1355,17 @@ def admin_api_stock_product(product_id: int):
 @app.route("/admin/api/estoque")
 @admin_required
 def admin_api_stock():
-    products = list_products_admin()
+    products, _filters, pagination = _admin_stock_page_view()
     return jsonify({
         "stock": get_stock_stats(),
+        "pagination": {
+            "page": pagination["page"],
+            "per_page": pagination["per_page"],
+            "total": pagination["total"],
+            "total_pages": pagination["total_pages"],
+        },
         "products": [
-            {
-                **p,
-                "status": _product_status(p),
-            }
+            {**p, "status": _product_status(p)}
             for p in products
         ],
     })
@@ -1301,9 +1428,20 @@ def admin_movements():
 def receipt(order_number: str):
     """Exibe a nota não fiscal de uma transação (identificada pelo número do pedido)."""
     tx = get_transaction_by_order_number(order_number)
+    autoprint = request.args.get("print", "").lower() in ("1", "true", "yes")
     if tx is None:
-        return render_template("nota.html", tx=None, order_number=order_number), 404
-    return render_template("nota.html", tx=tx, order_number=order_number)
+        return render_template(
+            "nota.html",
+            tx=None,
+            order_number=order_number,
+            autoprint=False,
+        ), 404
+    return render_template(
+        "nota.html",
+        tx=tx,
+        order_number=order_number,
+        autoprint=autoprint,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1330,6 +1468,11 @@ def datahora_filter(value):
     except (TypeError, ValueError):
         return value
     return dt.strftime("%d/%m/%Y %H:%M")
+
+
+@app.template_filter("paymethod")
+def paymethod_filter(value):
+    return _payment_method_label(value)
 
 
 @app.template_filter("signed")

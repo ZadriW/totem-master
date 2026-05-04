@@ -2,11 +2,6 @@
     'use strict';
 
     const POLL_MS = 2000;
-    /** Polling do dashboard do vendedor (`/vendedor/api/dashboard`) — menos frequente que estoque/produto admin. */
-    const SELLER_DASHBOARD_POLL_MS = 10000;
-
-    /** Última “assinatura” da lista de transações — só atualiza o DOM quando mudar (fetch não recarrega a página; substituir HTML inteiro fechava os accordions). */
-    let lastSellerDashboardTxFingerprint = null;
 
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -16,17 +11,6 @@
             '"': '&quot;',
             "'": '&#39;',
         }[char]));
-    }
-
-    function formatBrl(value) {
-        try {
-            return Number(value ?? 0).toLocaleString('pt-BR', {
-                style: 'currency',
-                currency: 'BRL',
-            });
-        } catch {
-            return String(value ?? '');
-        }
     }
 
     const fetchJsonOpts = {
@@ -59,6 +43,13 @@
             ? `${escapeHtml(movement.client_address || '—')}${movement.client_number ? `, ${escapeHtml(movement.client_number)}` : ''}${movement.client_complement ? ` — ${escapeHtml(movement.client_complement)}` : ''}<br>${escapeHtml(movement.client_city || '—')}${movement.client_state ? ` — ${escapeHtml(movement.client_state)}` : ''}`
             : '—';
 
+        const payLabel = (() => {
+            const v = String(movement.payment_method || '').toLowerCase();
+            if (v === 'pix') return 'PIX';
+            if (v === 'cartao') return 'Cartão';
+            return '—';
+        })();
+
         return `
             <div class="admin-mov__details" id="details-${escapeHtml(movement.id)}" hidden>
                 <div class="admin-mov__details-content">
@@ -74,6 +65,10 @@
                         <div class="admin-mov__details-item">
                             <dt>CPF</dt>
                             <dd>${escapeHtml(movement.client_cpf || '—')}</dd>
+                        </div>
+                        <div class="admin-mov__details-item">
+                            <dt>Forma de pagamento</dt>
+                            <dd>${escapeHtml(payLabel)}</dd>
                         </div>
                         <div class="admin-mov__details-item">
                             <dt>CEP</dt>
@@ -326,180 +321,12 @@
         }
     }
 
-    function setDashText(key, text) {
-        document.querySelectorAll(`[data-dash-kpi="${key}"]`).forEach(el => {
-            el.textContent = text;
-        });
-    }
-
-    function renderSellerTransaction(tx) {
-        const badgeKind = tx.status === 'confirmado' ? 'success' : 'neutral';
-        const items = tx.items || [];
-        const n = items.length;
-        const prodWord = n === 1 ? 'produto' : 'produtos';
-        const rowsHtml = items.map(it => `
-            <div class="admin-tx__items-row">
-                <span class="admin-tx__product">${escapeHtml(it.product_name)}</span>
-                <span>${it.product_sku ? `<code>${escapeHtml(it.product_sku)}</code>` : '—'}</span>
-                <span>${escapeHtml(it.category || '-')}</span>
-                <span class="admin-table__col--num">${escapeHtml(it.quantity)}</span>
-                <span class="admin-table__col--num">${escapeHtml(it.unit_price_display)}</span>
-                <span class="admin-table__col--num"><strong>${escapeHtml(it.subtotal_display)}</strong></span>
-            </div>
-        `).join('');
-        return `
-            <div class="admin-tx" data-tx-id="${escapeHtml(tx.id)}">
-                <button
-                    type="button"
-                    class="admin-tx__row"
-                    aria-expanded="false"
-                    aria-controls="seller-tx-details-${escapeHtml(tx.id)}"
-                >
-                    <span class="admin-table__col admin-table__col--toggle">
-                        <i class="fa-solid fa-chevron-right admin-tx__chevron" aria-hidden="true"></i>
-                    </span>
-                    <span class="admin-table__col admin-tx__order"><strong>#${escapeHtml(tx.order_number)}</strong></span>
-                    <span class="admin-table__col">${escapeHtml(tx.created_at_display)}</span>
-                    <span class="admin-table__col admin-table__col--num">${escapeHtml(tx.items_count)}</span>
-                    <span class="admin-table__col admin-table__col--num"><strong>${escapeHtml(tx.total_display)}</strong></span>
-                    <span class="admin-table__col">
-                        <span class="admin-badge admin-badge--${badgeKind}">
-                            ${escapeHtml(tx.status)}
-                        </span>
-                    </span>
-                </button>
-                <div class="admin-tx__details" id="seller-tx-details-${escapeHtml(tx.id)}" hidden>
-                    <div class="admin-tx__details-inner">
-                        <h3 class="admin-tx__details-title">
-                            Itens do pedido
-                            <span class="admin-tx__details-count">
-                                ${escapeHtml(n)} ${prodWord}
-                            </span>
-                        </h3>
-                        <div class="admin-tx__items">
-                            <div class="admin-tx__items-head">
-                                <span>Produto</span>
-                                <span>SKU</span>
-                                <span>Categoria</span>
-                                <span class="admin-table__col--num">Qtd.</span>
-                                <span class="admin-table__col--num">Unit.</span>
-                                <span class="admin-table__col--num">Subtotal</span>
-                            </div>
-                            ${rowsHtml}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    function renderSellerTransactionsRoot(transactions) {
-        if (!transactions.length) {
-            return `
-                <div class="admin-empty">
-                    <i class="fa-regular fa-folder-open" aria-hidden="true"></i>
-                    <p>Nenhuma transação registrada até o momento.</p>
-                </div>
-            `;
-        }
-        return transactions.map(renderSellerTransaction).join('');
-    }
-
-    function sellerTransactionsFingerprint(data) {
-        const txs = data.transactions || [];
-        const lid = data.latest_tx_id ?? 0;
-        if (!txs.length) {
-            return `empty:${lid}`;
-        }
-        return `${lid}:${txs.map(t => String(t.id)).join(',')}`;
-    }
-
-    function collectExpandedSellerTxIds(txRoot) {
-        if (!txRoot) return [];
-        const ids = [];
-        txRoot.querySelectorAll('.admin-tx .admin-tx__row').forEach(btn => {
-            if (btn.getAttribute('aria-expanded') !== 'true') return;
-            const wrap = btn.closest('.admin-tx');
-            const id = wrap && wrap.getAttribute('data-tx-id');
-            if (id != null && id !== '') ids.push(String(id));
-        });
-        return ids;
-    }
-
-    function restoreSellerExpandedTransactions(txRoot, ids) {
-        if (!txRoot || !ids.length) return;
-        const open = new Set(ids);
-        txRoot.querySelectorAll('.admin-tx').forEach(wrap => {
-            const id = wrap.getAttribute('data-tx-id');
-            if (id == null || !open.has(String(id))) return;
-            const btn = wrap.querySelector('.admin-tx__row');
-            const details = wrap.querySelector('.admin-tx__details');
-            if (!btn || !details) return;
-            btn.setAttribute('aria-expanded', 'true');
-            btn.classList.add('is-open');
-            details.hidden = false;
-        });
-    }
-
-    async function refreshSellerDashboard() {
-        const mount = document.getElementById('seller-dashboard-live');
-        if (!mount || !mount.dataset.apiUrl) return;
-        const response = await fetch(mount.dataset.apiUrl, fetchJsonOpts);
-        if (!response.ok) return;
-        const data = await response.json();
-        const stats = data.stats || {};
-        const stock = data.stock || {};
-        const transactions = data.transactions || [];
-
-        setDashText('transactions_count', String(stats.transactions_count ?? ''));
-        setDashText('transactions_today', `${stats.transactions_today ?? 0} hoje`);
-        setDashText('total_revenue', formatBrl(stats.total_revenue));
-        setDashText('revenue_today', `${formatBrl(stats.revenue_today)} hoje`);
-        setDashText('items_sold', String(stats.items_sold ?? ''));
-        setDashText('below_min', String(stock.below_min ?? ''));
-        setDashText('out_of_stock', `${stock.out_of_stock ?? 0} sem estoque`);
-        setDashText('products_count', String(stock.products_count ?? ''));
-        setDashText('products_active', `${stock.products_active ?? 0} ativos`);
-        setDashText('units_in_stock', String(stock.units_in_stock ?? ''));
-        setDashText('stock_value', formatBrl(stock.stock_value));
-
-        const warnCard = document.querySelector('[data-dash-kpi-card="below_min"]');
-        if (warnCard) {
-            warnCard.classList.toggle('kpi--warn', Number(stock.below_min) > 0);
-        }
-
-        const subtitle = document.querySelector('[data-seller-tx-subtitle]');
-        if (subtitle) {
-            const n = transactions.length;
-            subtitle.textContent = `Exibindo ${n} ${n === 1 ? 'transação' : 'transações'}.`;
-        }
-
-        const fp = sellerTransactionsFingerprint(data);
-        const txRoot = document.querySelector('[data-seller-transactions-root]');
-        if (!txRoot) return;
-
-        if (fp === lastSellerDashboardTxFingerprint) {
-            return;
-        }
-
-        const expandedIds = collectExpandedSellerTxIds(txRoot);
-        lastSellerDashboardTxFingerprint = fp;
-        txRoot.innerHTML = renderSellerTransactionsRoot(transactions);
-        restoreSellerExpandedTransactions(txRoot, expandedIds);
-    }
-
     function setupStockList() {
         if (!document.querySelector('[data-admin-stock-list], [data-seller-stock-list]')) return;
         setInterval(refreshStockList, POLL_MS);
     }
 
-    function setupSellerDashboard() {
-        if (!document.getElementById('seller-dashboard-live')) return;
-        setInterval(refreshSellerDashboard, SELLER_DASHBOARD_POLL_MS);
-    }
-
     setupProductMovementToggles();
     setupProductForms();
     setupStockList();
-    setupSellerDashboard();
 })();

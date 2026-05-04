@@ -292,6 +292,21 @@ button.payment__back {
     gap: 28px;
 }
 
+/* [hidden] só com atributo não basta: este bloco usa display:flex, que ganha na cascata. */
+.payment-wait[hidden] {
+    display: none !important;
+}
+
+/* Após confirmar pagamento: só o cartão de sucesso (sem topbar nem área de espera). */
+.payment.payment--success-only .payment__topbar {
+    display: none;
+}
+
+.payment.payment--success-only {
+    min-height: 100vh;
+    justify-content: center;
+}
+
 .payment-wait__hero {
     text-align: center;
 }
@@ -566,7 +581,25 @@ button.payment__back {
     font-weight: 700;
     font-size: 15px;
     letter-spacing: 0.04em;
-    margin-bottom: 26px;
+    margin-bottom: 22px;
+}
+
+.payment__success-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+}
+
+.payment__success-actions .payment__btn {
+    flex: 1 1 200px;
+    min-width: 0;
+    justify-content: center;
+    gap: 10px;
 }
 
 @keyframes paymentPop {
@@ -587,6 +620,101 @@ button.payment__back {
 .payment__section-title--sub {
     font-size: 20px;
     margin-bottom: 20px;
+}
+
+.payment__section-title--method {
+    margin-top: 8px;
+    grid-column: 1 / -1;
+}
+
+.payment-method__hint {
+    grid-column: 1 / -1;
+    font-size: 14px;
+    color: var(--color-text-muted);
+    margin: -12px 0 4px;
+}
+
+.payment-method {
+    grid-column: 1 / -1;
+    border: none;
+    padding: 0;
+    margin: 0 0 12px;
+}
+
+.payment-method__legend {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 12px;
+    padding: 0;
+}
+
+.payment-method__options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.payment-method__choice {
+    position: relative;
+    cursor: pointer;
+    flex: 1 1 140px;
+    min-width: 0;
+}
+
+.payment-method__choice input {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.payment-method__box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 18px 16px;
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+    transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+.payment-method__choice input:focus-visible + .payment-method__box {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.payment-method__choice:hover .payment-method__box {
+    border-color: rgba(14, 22, 122, 0.35);
+}
+
+.payment-method__choice input:checked + .payment-method__box {
+    border-color: var(--color-primary);
+    background: rgba(14, 22, 122, 0.06);
+    box-shadow: 0 4px 16px rgba(14, 22, 122, 0.12);
+}
+
+.payment-method__box i {
+    font-size: 28px;
+    color: var(--color-primary);
+}
+
+.payment-method__label {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.payment-wait__method-row strong {
+    color: var(--color-primary);
+    font-weight: 700;
 }
 
 .payment-form {

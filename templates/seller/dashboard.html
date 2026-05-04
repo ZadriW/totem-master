@@ -3,8 +3,6 @@
 {% block title %}Dashboard do vendedor - Vendedor | Dental Odonto Master{% endblock %}
 
 {% block seller_body %}
-<div id="seller-dashboard-live" hidden data-api-url="{{ url_for('seller_api_dashboard') }}"></div>
-
 <section class="admin-section">
     <header class="admin-section__header">
         <h1 class="admin-section__title">Dashboard do vendedor</h1>
@@ -90,13 +88,14 @@
         </div>
     </header>
 
-    <div class="admin-table" role="table" aria-label="Histórico de transações do vendedor">
+    <div class="admin-table admin-table--with-payment" role="table" aria-label="Histórico de transações do vendedor">
         <div class="admin-table__head" role="row">
             <span class="admin-table__col admin-table__col--toggle" aria-hidden="true"></span>
             <span class="admin-table__col" role="columnheader">Pedido</span>
             <span class="admin-table__col" role="columnheader">Data/Hora</span>
             <span class="admin-table__col admin-table__col--num" role="columnheader">Itens</span>
             <span class="admin-table__col admin-table__col--num" role="columnheader">Total</span>
+            <span class="admin-table__col" role="columnheader">Pagamento</span>
             <span class="admin-table__col" role="columnheader">Status</span>
         </div>
 
@@ -117,6 +116,7 @@
                     <span class="admin-table__col">{{ tx.created_at | datahora }}</span>
                     <span class="admin-table__col admin-table__col--num">{{ tx.items_count }}</span>
                     <span class="admin-table__col admin-table__col--num"><strong>{{ tx.total | brl }}</strong></span>
+                    <span class="admin-table__col">{{ tx.payment_method | paymethod }}</span>
                     <span class="admin-table__col">
                         <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else 'neutral' }}">
                             {{ tx.status }}
@@ -153,6 +153,12 @@
                             </div>
                             {% endfor %}
                         </div>
+                        <div class="admin-tx__summary">
+                            <div class="admin-tx__summary-row">
+                                <span>Forma de pagamento</span>
+                                <strong>{{ tx.payment_method | paymethod }}</strong>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -166,8 +172,4 @@
         </div>
     </div>
 </section>
-{% endblock %}
-
-{% block seller_scripts %}
-<script src="{{ url_for('static', filename='js/admin-stock-live.js') }}"></script>
 {% endblock %}
