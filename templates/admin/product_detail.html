@@ -1,89 +1,102 @@
 {% extends "admin/_layout.html" %}
 
-{% block title %}Movimentações - Admin | Dental Odonto Master{% endblock %}
+{% block title %}{{ product.nome }} - Produtos - Admin | Dental Odonto Master{% endblock %}
 
 {% block admin_body %}
-<section class="admin-section">
+<section
+    class="admin-section"
+    data-admin-product
+    data-api-url="{{ url_for('admin_api_products_detail', product_id=product.id) }}"
+>
     <header class="admin-section__header admin-section__header--row">
         <div>
-            <h1 class="admin-section__title">Movimentações de estoque</h1>
+            <a class="admin-breadcrumb" href="{{ url_for('admin_products') }}">
+                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                Voltar aos produtos
+            </a>
+            <h1 class="admin-section__title">{{ product.nome }}</h1>
             <p class="admin-section__subtitle">
-                Histórico completo de entradas, saídas, vendas, ajustes e estoque inicial.
-                Nas <strong>vendas do totem</strong>, o código do pedido fica em <em>Ref.</em> (ex.: <code>OM260422-1234</code>).
+                <span class="admin-product__sku">SKU <strong>{{ product.sku }}</strong></span>
+                &middot; #{{ product.id }} &middot; {{ product.categoria }} &middot; {{ product.preco | brl }}
             </p>
+            <p class="admin-section__subtitle">
+                Quantidades exibidas são a <strong>soma em todos os eventos</strong>.
+                Para entrada, saída ou ajuste, use a seção <strong>Eventos</strong>.
+            </p>
+        </div>
+
+        <div class="admin-product__status" data-product-status>
+            {% if not product.ativo %}
+                <span class="admin-badge admin-badge--neutral">Inativo</span>
+            {% elif product.sem_estoque %}
+                <span class="admin-badge admin-badge--danger">Sem estoque</span>
+            {% elif product.abaixo_minimo %}
+                <span class="admin-badge admin-badge--warn">Abaixo do mínimo</span>
+            {% else %}
+                <span class="admin-badge admin-badge--success">OK</span>
+            {% endif %}
         </div>
     </header>
 
-    <form class="admin-filters" method="get" action="{{ url_for('admin_movements') }}">
-        <label class="admin-filter">
-            <span class="admin-filter__label">Tipo</span>
-            <select name="tipo" class="admin-filter__input">
-                <option value="todos" {% if filters.tipo == 'todos' %}selected{% endif %}>Todos</option>
-                <option value="entrada" {% if filters.tipo == 'entrada' %}selected{% endif %}>Entradas</option>
-                <option value="saida" {% if filters.tipo == 'saida' %}selected{% endif %}>Saídas manuais</option>
-                <option value="venda" {% if filters.tipo == 'venda' %}selected{% endif %}>Vendas</option>
-                <option value="ajuste" {% if filters.tipo == 'ajuste' %}selected{% endif %}>Ajustes</option>
-                <option value="inicial" {% if filters.tipo == 'inicial' %}selected{% endif %}>Estoque inicial</option>
-            </select>
-        </label>
+    <div class="admin-product">
+        <aside class="admin-product__card">
+            <div class="admin-product__image">
+                <img src="{{ product.imagem }}" alt="{{ product.nome }}" onerror="this.style.visibility='hidden'">
+            </div>
+            <dl class="admin-product__meta">
+                <div>
+                    <dt>SKU</dt>
+                    <dd><code>{{ product.sku }}</code></dd>
+                </div>
+                <div>
+                    <dt>Estoque nos eventos</dt>
+                    <dd data-product-stock><strong>{{ product.estoque }}</strong> un.</dd>
+                </div>
+                <div>
+                    <dt>Estoque mínimo (referência)</dt>
+                    <dd data-product-min-stock>{{ product.estoque_minimo }} un.</dd>
+                </div>
+                <div>
+                    <dt>Valor (eventos × preço)</dt>
+                    <dd data-product-stock-value>{{ (product.estoque * product.preco) | brl }}</dd>
+                </div>
+            </dl>
 
-        <label class="admin-filter admin-filter--search">
-            <span class="admin-filter__label">Buscar</span>
-            <span class="admin-filter__wrap">
-                <i class="fa-solid fa-magnifying-glass admin-filter__icon" aria-hidden="true"></i>
-                <input
-                    type="search"
-                    name="q"
-                    value="{{ filters.q }}"
-                    placeholder="Nome, descrição, SKU ou ID do produto..."
-                    class="admin-filter__input"
-                    autocomplete="off"
-                    inputmode="search"
-                >
-            </span>
-        </label>
+            <form method="post"
+                  action="{{ url_for('admin_product_toggle_active', product_id=product.id) }}"
+                  class="admin-product__toggle"
+                  data-live-stock-form>
+                {% if product.ativo %}
+                    <input type="hidden" name="active" value="0">
+                    <button type="submit" class="admin-btn admin-btn--ghost admin-btn--danger"
+                            data-confirm="Desativar este produto? Ele deixará de aparecer no totem.">
+                        <i class="fa-solid fa-eye-slash" aria-hidden="true"></i>
+                        Desativar produto
+                    </button>
+                {% else %}
+                    <input type="hidden" name="active" value="1">
+                    <button type="submit" class="admin-btn admin-btn--ghost">
+                        <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                        Ativar produto
+                    </button>
+                {% endif %}
+            </form>
+        </aside>
+    </div>
+</section>
 
-        <label class="admin-filter admin-filter--wide">
-            <span class="admin-filter__label">Código do pedido (venda totem)</span>
-            <span class="admin-filter__wrap">
-                <i class="fa-solid fa-receipt admin-filter__icon" aria-hidden="true"></i>
-                <input
-                    type="search"
-                    name="pedido"
-                    value="{{ filters.pedido }}"
-                    class="admin-filter__input"
-                    placeholder="Ex.: OM260422-1234 ou parte do número"
-                    autocomplete="off"
-                    inputmode="search"
-                    aria-describedby="hint-filtro-pedido"
-                >
-            </span>
-            <span id="hint-filtro-pedido" class="admin-filter__hint">
-                Filtra linhas com referência de venda; combine com <em>Tipo → Vendas</em> para só movimentações daquele pedido.
-            </span>
-        </label>
+<section class="admin-section">
+    <header class="admin-section__header">
+        <h2 class="admin-section__title">Histórico de movimentações</h2>
+        <p class="admin-section__subtitle">
+            Últimas {{ movements|length }} {% if movements|length == 1 %}movimentação{% else %}movimentações{% endif %} globais deste produto (referência; o saldo operacional é por evento).
+        </p>
+    </header>
 
-        <div class="admin-filters__actions">
-            <button type="submit" class="admin-btn admin-btn--primary">
-                <i class="fa-solid fa-filter" aria-hidden="true"></i>
-                Aplicar
-            </button>
-            <a href="{{ url_for('admin_movements') }}" class="admin-btn admin-btn--ghost">Limpar</a>
-        </div>
-    </form>
-
-    <div
-        class="admin-table"
-        role="table"
-        aria-label="Movimentações"
-        data-admin-movements
-        data-api-url="{{ url_for('admin_api_movements', tipo=filters.tipo, q=filters.q, pedido=filters.pedido) }}"
-    >
-        <div class="admin-table__head admin-mov__row admin-mov__row--wide admin-mov__row--wide-events" role="row">
+    <div class="admin-table" role="table" aria-label="Movimentações do produto" data-product-movements>
+        <div class="admin-table__head admin-mov__row" role="row">
             <span role="columnheader">Data/Hora</span>
-            <span role="columnheader">Produto</span>
             <span role="columnheader">Tipo</span>
-            <span role="columnheader" class="admin-table__col--num">Evento</span>
             <span role="columnheader" class="admin-table__col--num">Delta</span>
             <span role="columnheader" class="admin-table__col--num">Saldo após</span>
             <span role="columnheader">Motivo / Ref.</span>
@@ -93,14 +106,8 @@
         {% if movements %}
             {% for m in movements %}
             <div class="admin-mov__wrapper" data-movement-id="{{ m.id }}">
-                <div class="admin-mov__row admin-mov__row--wide admin-mov__row--wide-events" role="row">
+                <div class="admin-mov__row" role="row">
                     <span>{{ m.created_at | datahora }}</span>
-                    <span class="admin-mov__product">
-                        <a href="{{ url_for('admin_product_detail', product_id=m.product_id) }}">
-                            {{ m.product_name or '—' }}
-                        </a>
-                        <small>#{{ m.product_id }} &middot; {{ m.product_category or '-' }}</small>
-                    </span>
                     <span class="admin-mov__type-cell">
                         <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
                             {{ m.movement_type | movlabel }}
@@ -109,19 +116,6 @@
                             <button type="button" class="admin-mov__toggle" data-toggle="{{ m.id }}" aria-expanded="false" aria-controls="details-{{ m.id }}" aria-label="Exibir ou ocultar dados do cliente">
                                 <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
                             </button>
-                        {% endif %}
-                    </span>
-                    <span class="admin-mov__event-cell">
-                        {% if m.event_id and m.event_name %}
-                            {% set row_ev_style = m.event_badge_color | event_badge_style %}
-                            <span class="admin-nav__event-badge admin-mov__event-badge" title="Evento #{{ m.event_id }}"{% if row_ev_style %} style="{{ row_ev_style }}"{% endif %}>
-                                <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
-                                {{ m.event_name }}
-                            </span>
-                        {% elif m.event_id %}
-                            <span class="admin-mov__event-unknown" title="Evento #{{ m.event_id }} (cadastro indisponível)">#{{ m.event_id }}</span>
-                        {% else %}
-                            <span class="admin-mov__event-none" title="Movimentação no estoque global do catálogo (sem evento)">—</span>
                         {% endif %}
                     </span>
                     <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% else %}negative{% endif %}">
@@ -192,7 +186,7 @@
         {% else %}
             <div class="admin-empty">
                 <i class="fa-regular fa-folder-open" aria-hidden="true"></i>
-                <p>Nenhuma movimentação encontrada para os filtros aplicados.</p>
+                <p>Nenhuma movimentação registrada.</p>
             </div>
         {% endif %}
     </div>
@@ -200,5 +194,5 @@
 {% endblock %}
 
 {% block admin_scripts %}
-<script src="{{ url_for('static', filename='js/admin-movements.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin-stock-live.js') }}"></script>
 {% endblock %}

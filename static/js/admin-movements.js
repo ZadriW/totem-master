@@ -2,6 +2,8 @@
     'use strict';
 
     const POLL_MS = 2000;
+    /** Alinhado ao ``limit`` da API de movimentações (evita crescer sem limite ao ir inserindo linhas). */
+    const MAX_MOVEMENT_ROWS = 500;
     const table =
         document.querySelector('[data-admin-movements]') ||
         document.querySelector('.admin-table');
@@ -78,6 +80,32 @@
         `;
     }
 
+    function eventBadgeInline(movement) {
+        const bg = movement.event_badge_bg;
+        const fg = movement.event_badge_fg;
+        if (!bg || !fg) return '';
+        const safeBg = escapeHtml(bg);
+        const safeFg = escapeHtml(fg);
+        return ` style="background-color:${safeBg};color:${safeFg};"`;
+    }
+
+    function eventCell(movement) {
+        const eid = movement.event_id;
+        const ename = String(movement.event_name ?? '').trim();
+        const hasId = eid !== undefined && eid !== null && eid !== '';
+        const attrStyle = eventBadgeInline(movement);
+        if (hasId && ename) {
+            return `<span class="admin-mov__event-cell"><span class="admin-nav__event-badge admin-mov__event-badge"${attrStyle} title="Evento #${escapeHtml(eid)}">
+                <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
+                ${escapeHtml(ename)}
+            </span></span>`;
+        }
+        if (hasId) {
+            return `<span class="admin-mov__event-cell"><span class="admin-mov__event-unknown" title="Evento #${escapeHtml(eid)} (cadastro indisponível)">#${escapeHtml(eid)}</span></span>`;
+        }
+        return '<span class="admin-mov__event-cell"><span class="admin-mov__event-none" title="Movimentação no estoque global do catálogo (sem evento)">—</span></span>';
+    }
+
     function renderMovement(movement) {
         const toggle = movement.has_customer_details
             ? `<button type="button" class="admin-mov__toggle" data-toggle="${escapeHtml(movement.id)}" aria-expanded="false" aria-controls="details-${escapeHtml(movement.id)}" aria-label="Exibir ou ocultar dados do cliente">
@@ -93,7 +121,7 @@
 
         return `
             <div class="admin-mov__wrapper" data-movement-id="${escapeHtml(movement.id)}">
-                <div class="admin-mov__row admin-mov__row--wide" role="row">
+                <div class="admin-mov__row admin-mov__row--wide admin-mov__row--wide-events" role="row">
                     <span>${escapeHtml(movement.created_at_display)}</span>
                     <span class="admin-mov__product">
                         <a href="${escapeHtml(movement.product_url)}">${escapeHtml(movement.product_name || '—')}</a>
@@ -105,6 +133,7 @@
                         </span>
                         ${toggle}
                     </span>
+                    ${eventCell(movement)}
                     <span class="admin-table__col--num admin-mov__delta admin-mov__delta--${escapeHtml(movement.delta_kind)}">
                         ${escapeHtml(movement.delta_display)}
                     </span>
@@ -120,32 +149,72 @@
         `;
     }
 
-    function renderMovements(movements) {
+    function trimExcessMovementRows() {
         if (!table) return;
-        Array.from(table.children).forEach(child => {
-            if (!child.classList.contains('admin-table__head')) child.remove();
-        });
-        if (!movements.length) {
-            table.insertAdjacentHTML('beforeend', `
-                <div class="admin-empty">
-                    <i class="fa-regular fa-folder-open" aria-hidden="true"></i>
-                    <p>Nenhuma movimentação encontrada para os filtros aplicados.</p>
-                </div>
-            `);
+        while (table.querySelectorAll('.admin-mov__wrapper').length > MAX_MOVEMENT_ROWS) {
+            const wrappers = table.querySelectorAll('.admin-mov__wrapper');
+            wrappers[wrappers.length - 1].remove();
+        }
+    }
+
+    /**
+     * Incorpora só movimentações novas (id maior que o último conhecido), sem recriar a tabela.
+     * Preserva linhas atuais, painéis abertos e scroll.
+     */
+    function mergeNewMovements(movements, nextLatest) {
+        if (!table) {
+            latestId = nextLatest;
             return;
         }
-        table.insertAdjacentHTML('beforeend', movements.map(renderMovement).join(''));
+        const head = table.querySelector('.admin-table__head');
+        const prevLatest = latestId;
+
+        if (!movements || !movements.length) {
+            latestId = nextLatest;
+            return;
+        }
+
+        if (!head) {
+            latestId = nextLatest;
+            return;
+        }
+
+        const newItems = [];
+        for (let i = 0; i < movements.length; i += 1) {
+            const m = movements[i];
+            const mid = Number(m.id);
+            if (mid <= prevLatest) break;
+            if (table.querySelector(`.admin-mov__wrapper[data-movement-id="${mid}"]`)) {
+                continue;
+            }
+            newItems.push(m);
+        }
+
+        latestId = nextLatest;
+
+        if (!newItems.length) {
+            return;
+        }
+
+        const emptyEl = table.querySelector('.admin-empty');
+        if (emptyEl && emptyEl.parentElement === table) emptyEl.remove();
+
+        const html = newItems.map(renderMovement).join('');
+        head.insertAdjacentHTML('afterend', html);
+        trimExcessMovementRows();
     }
 
     async function refreshMovements() {
         if (!table || !table.dataset.apiUrl) return;
-        const response = await fetch(table.dataset.apiUrl, { headers: { Accept: 'application/json' } });
+        const response = await fetch(table.dataset.apiUrl, {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+        });
         if (!response.ok) return;
         const data = await response.json();
         const nextLatest = Number(data.latest_id || 0);
         if (nextLatest === latestId) return;
-        latestId = nextLatest;
-        renderMovements(data.movements || []);
+        mergeNewMovements(data.movements || [], nextLatest);
     }
 
     scope.addEventListener('click', event => {

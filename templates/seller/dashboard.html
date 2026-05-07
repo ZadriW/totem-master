@@ -3,39 +3,50 @@
 {% block title %}Dashboard do vendedor - Vendedor | Dental Odonto Master{% endblock %}
 
 {% block seller_body %}
+{% if seller_event %}
+<div class="seller-event-banner">
+    <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
+    <span>Você está operando no evento <strong>{{ seller_event.name }}</strong>. Os dados exibidos são exclusivos deste evento.</span>
+</div>
+{% endif %}
+
 <section class="admin-section">
     <header class="admin-section__header">
         <h1 class="admin-section__title">Dashboard do vendedor</h1>
         <p class="admin-section__subtitle">
-            Visão somente leitura das vendas confirmadas, estoque atual e movimentações dos totens.
+            {% if seller_event %}
+                Vendas confirmadas, estoque e movimentações do evento <strong>{{ seller_event.name }}</strong>.
+            {% else %}
+                Visão somente leitura das vendas confirmadas, estoque atual e movimentações dos totens.
+            {% endif %}
         </p>
     </header>
 
     <div class="admin-kpis">
         <article class="kpi kpi--primary">
             <span class="kpi__icon"><i class="fa-solid fa-receipt" aria-hidden="true"></i></span>
-            <span class="kpi__label">Transações totais</span>
+            <span class="kpi__label">Minhas vendas{% if seller_event %} (evento){% endif %}</span>
             <span class="kpi__value" data-dash-kpi="transactions_count">{{ stats.transactions_count }}</span>
             <span class="kpi__hint" data-dash-kpi="transactions_today">{{ stats.transactions_today }} hoje</span>
         </article>
 
         <article class="kpi kpi--success">
             <span class="kpi__icon"><i class="fa-solid fa-sack-dollar" aria-hidden="true"></i></span>
-            <span class="kpi__label">Montante arrecadado</span>
+            <span class="kpi__label">Montante arrecadado{% if seller_event %} (evento){% endif %}</span>
             <span class="kpi__value" data-dash-kpi="total_revenue">{{ stats.total_revenue | brl }}</span>
             <span class="kpi__hint" data-dash-kpi="revenue_today">{{ stats.revenue_today | brl }} hoje</span>
         </article>
 
         <article class="kpi">
             <span class="kpi__icon"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i></span>
-            <span class="kpi__label">Itens vendidos</span>
+            <span class="kpi__label">Itens vendidos{% if seller_event %} (evento){% endif %}</span>
             <span class="kpi__value" data-dash-kpi="items_sold">{{ stats.items_sold }}</span>
             <span class="kpi__hint">Unidades totais</span>
         </article>
 
         <article class="kpi {% if stock.below_min > 0 %}kpi--warn{% endif %}" data-dash-kpi-card="below_min">
             <span class="kpi__icon"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></span>
-            <span class="kpi__label">Abaixo do mínimo</span>
+            <span class="kpi__label">Abaixo do mínimo{% if seller_event %} no evento{% endif %}</span>
             <span class="kpi__value" data-dash-kpi="below_min">{{ stock.below_min }}</span>
             <span class="kpi__hint" data-dash-kpi="out_of_stock">{{ stock.out_of_stock }} sem estoque</span>
         </article>
@@ -45,8 +56,14 @@
 <section class="admin-section">
     <header class="admin-section__header admin-section__header--row">
         <div>
-            <h2 class="admin-section__title">Estoque</h2>
-            <p class="admin-section__subtitle">Situação atual do catálogo físico, sem ações de alteração.</p>
+            <h2 class="admin-section__title">Estoque{% if seller_event %} do evento{% endif %}</h2>
+            <p class="admin-section__subtitle">
+                {% if seller_event %}
+                    Situação atual dos produtos no evento <strong>{{ seller_event.name }}</strong>. Somente leitura.
+                {% else %}
+                    Situação atual do catálogo físico, sem ações de alteração.
+                {% endif %}
+            </p>
         </div>
         <a class="admin-btn admin-btn--ghost" href="{{ url_for('seller_stock') }}">
             <i class="fa-solid fa-arrow-right-long" aria-hidden="true"></i>
@@ -57,7 +74,7 @@
     <div class="admin-kpis">
         <article class="kpi">
             <span class="kpi__icon"><i class="fa-solid fa-tags" aria-hidden="true"></i></span>
-            <span class="kpi__label">Produtos cadastrados</span>
+            <span class="kpi__label">Produtos{% if seller_event %} no evento{% else %} cadastrados{% endif %}</span>
             <span class="kpi__value" data-dash-kpi="products_count">{{ stock.products_count }}</span>
             <span class="kpi__hint" data-dash-kpi="products_active">{{ stock.products_active }} ativos</span>
         </article>
@@ -117,7 +134,7 @@
                     <span class="admin-table__col admin-table__col--num">{{ tx.items_count }}</span>
                     <span class="admin-table__col admin-table__col--num"><strong>{{ tx.total | brl }}</strong></span>
                     <span class="admin-table__col">{{ tx.payment_method | paymethod }}</span>
-                    <span class="admin-table__col">
+                    <span class="admin-table__col admin-table__col--num admin-tx__status">
                         <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else 'neutral' }}">
                             {{ tx.status }}
                         </span>

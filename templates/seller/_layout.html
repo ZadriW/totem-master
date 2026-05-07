@@ -14,6 +14,13 @@
         </a>
 
         <nav class="admin-nav" aria-label="Seções do painel do vendedor">
+            {% if seller_event %}
+            {% set seller_ev_badge = seller_event.badge_color | event_badge_style %}
+            <span class="admin-nav__event-badge" title="Você está operando no contexto deste evento"{% if seller_ev_badge %} style="{{ seller_ev_badge }}"{% endif %}>
+                <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
+                {{ seller_event.name }}
+            </span>
+            {% endif %}
             <a class="admin-nav__item {% if active_section == 'dashboard' %}is-active{% endif %}"
                href="{{ url_for('seller_dashboard') }}">
                 <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>

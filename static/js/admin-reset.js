@@ -1,8 +1,21 @@
 /**
- * Painel admin — reinício do sistema: habilita botão e confirma envio.
+ * Painel admin — reinício do sistema: collapse da danger zone, habilita botão e confirma envio.
  */
 (() => {
     'use strict';
+
+    const zone = document.querySelector('.admin-section--danger-zone');
+    const toggle = document.getElementById('adminDangerZoneToggle');
+    const panel = document.getElementById('adminDangerZonePanel');
+
+    if (toggle && panel && zone) {
+        toggle.addEventListener('click', () => {
+            const willOpen = panel.hidden;
+            panel.hidden = !willOpen;
+            toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            zone.classList.toggle('is-expanded', willOpen);
+        });
+    }
 
     const form = document.getElementById('adminResetForm');
     const checkbox = document.getElementById('adminResetConfirm');

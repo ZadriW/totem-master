@@ -130,6 +130,7 @@
     <div class="admin-table admin-sellers" role="table" aria-label="Vendedores cadastrados">
         <div class="admin-table__head admin-sellers__row" role="row">
             <span role="columnheader">Vendedor</span>
+            <span role="columnheader">Evento</span>
             <span role="columnheader">Status</span>
             <span role="columnheader">PIN</span>
             <span class="admin-table__col--num" role="columnheader">Vendas</span>
@@ -144,6 +145,24 @@
                 <span class="admin-sellers__person">
                     <strong>{{ seller.name }}</strong>
                     <small>{{ seller.email }}</small>
+                </span>
+                <span class="admin-sellers__events-cell">
+                    {% if seller.assigned_events %}
+                        {% for ev in seller.assigned_events %}
+                            {% set ev_style = ev.badge_color | event_badge_style %}
+                            <a
+                                href="{{ url_for('admin_event_detail', event_id=ev.event_id) }}"
+                                class="admin-nav__event-badge admin-sellers__event-badge{% if not ev.active %} admin-sellers__event-badge--archived{% endif %}"
+                                {% if ev_style %}style="{{ ev_style }}"{% endif %}
+                                title="{% if not ev.active %}[Arquivado] {% endif %}{{ ev.name }}"
+                            >
+                                <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
+                                {{ ev.name }}
+                            </a>
+                        {% endfor %}
+                    {% else %}
+                        <span class="admin-sellers__event-none" title="Sem vínculo a evento de estoque">—</span>
+                    {% endif %}
                 </span>
                 <span>
                     {% if seller.active %}

@@ -1,15 +1,27 @@
 {% extends "seller/_layout.html" %}
 
-{% block title %}Movimentações do vendedor - Vendedor | Dental Odonto Master{% endblock %}
+{% block title %}Movimentações{% if seller_event %} — {{ seller_event.name }}{% endif %} - Vendedor | Dental Odonto Master{% endblock %}
 
 {% block seller_body %}
+{% if seller_event %}
+<div class="seller-event-banner">
+    <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
+    <span>Movimentações do evento <strong>{{ seller_event.name }}</strong>. Visualização somente leitura.</span>
+</div>
+{% endif %}
+
 <section class="admin-section">
     <header class="admin-section__header admin-section__header--row">
         <div>
-            <h1 class="admin-section__title">Movimentações de estoque</h1>
+            <h1 class="admin-section__title">Movimentações de estoque{% if seller_event %} do evento{% endif %}</h1>
             <p class="admin-section__subtitle">
-                Histórico de entradas, saídas, vendas, ajustes e estoque inicial.
-                Visualização somente leitura para apoio aos vendedores.
+                {% if seller_event %}
+                    Entradas, saídas, ajustes e vendas registradas no evento <strong>{{ seller_event.name }}</strong>.
+                    Visualização somente leitura.
+                {% else %}
+                    Histórico de entradas, saídas, vendas, ajustes e estoque inicial.
+                    Visualização somente leitura para apoio aos vendedores.
+                {% endif %}
             </p>
         </div>
     </header>
@@ -23,7 +35,9 @@
                 <option value="saida" {% if filters.tipo == 'saida' %}selected{% endif %}>Saídas manuais</option>
                 <option value="venda" {% if filters.tipo == 'venda' %}selected{% endif %}>Vendas</option>
                 <option value="ajuste" {% if filters.tipo == 'ajuste' %}selected{% endif %}>Ajustes</option>
+                {% if not seller_event %}
                 <option value="inicial" {% if filters.tipo == 'inicial' %}selected{% endif %}>Estoque inicial</option>
+                {% endif %}
             </select>
         </label>
 
@@ -39,6 +53,7 @@
             </select>
         </label>
 
+        {% if not seller_event %}
         <label class="admin-filter admin-filter--wide">
             <span class="admin-filter__label">Código do pedido</span>
             <span class="admin-filter__wrap">
@@ -54,6 +69,7 @@
                 >
             </span>
         </label>
+        {% endif %}
 
         <div class="admin-filters__actions">
             <button type="submit" class="admin-btn admin-btn--primary">
@@ -65,10 +81,13 @@
     </form>
 
     <div class="admin-table" role="table" aria-label="Movimentações do vendedor">
-        <div class="admin-table__head admin-mov__row admin-mov__row--wide" role="row">
+        <div class="admin-table__head admin-mov__row admin-mov__row--wide {% if not seller_event %}admin-mov__row--wide-events{% endif %}" role="row">
             <span role="columnheader">Data/Hora</span>
             <span role="columnheader">Produto</span>
             <span role="columnheader">Tipo</span>
+            {% if not seller_event %}
+            <span role="columnheader" class="admin-table__col--num">Evento</span>
+            {% endif %}
             <span role="columnheader" class="admin-table__col--num">Delta</span>
             <span role="columnheader" class="admin-table__col--num">Saldo após</span>
             <span role="columnheader">Motivo / Ref.</span>
@@ -78,7 +97,7 @@
         {% if movements %}
             {% for m in movements %}
             <div class="admin-mov__wrapper" data-movement-id="{{ m.id }}">
-                <div class="admin-mov__row admin-mov__row--wide" role="row">
+                <div class="admin-mov__row admin-mov__row--wide {% if not seller_event %}admin-mov__row--wide-events{% endif %}" role="row">
                     <span>{{ m.created_at | datahora }}</span>
                     <span class="admin-mov__product">
                         <span>{{ m.product_name or '—' }}</span>
@@ -94,6 +113,21 @@
                             </button>
                         {% endif %}
                     </span>
+                    {% if not seller_event %}
+                    <span class="admin-mov__event-cell">
+                        {% if m.event_id and m.event_name %}
+                            {% set row_ev_style = m.event_badge_color | event_badge_style %}
+                            <span class="admin-nav__event-badge admin-mov__event-badge" title="Evento #{{ m.event_id }}"{% if row_ev_style %} style="{{ row_ev_style }}"{% endif %}>
+                                <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
+                                {{ m.event_name }}
+                            </span>
+                        {% elif m.event_id %}
+                            <span class="admin-mov__event-unknown" title="Evento #{{ m.event_id }} (cadastro indisponível)">#{{ m.event_id }}</span>
+                        {% else %}
+                            <span class="admin-mov__event-none" title="Movimentação no estoque global do catálogo (sem evento)">—</span>
+                        {% endif %}
+                    </span>
+                    {% endif %}
                     <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% else %}negative{% endif %}">
                         {{ m.delta | signed }}
                     </span>

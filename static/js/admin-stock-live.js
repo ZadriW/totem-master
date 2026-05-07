@@ -292,7 +292,9 @@
     }
 
     async function refreshStockList() {
-        const tables = document.querySelectorAll('[data-admin-stock-list], [data-seller-stock-list]');
+        const tables = document.querySelectorAll(
+            '[data-admin-stock-list], [data-seller-stock-list], [data-admin-event-stock]',
+        );
         if (!tables.length) return;
         for (const table of tables) {
             const url = table.dataset.apiUrl;
@@ -322,7 +324,7 @@
     }
 
     function setupStockList() {
-        if (!document.querySelector('[data-admin-stock-list], [data-seller-stock-list]')) return;
+        if (!document.querySelector('[data-admin-stock-list], [data-seller-stock-list], [data-admin-event-stock]')) return;
         setInterval(refreshStockList, POLL_MS);
     }
 

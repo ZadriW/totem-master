@@ -594,6 +594,7 @@
     }
     .product-card__button {
         padding: 8px 10px;
+        max-width: 35%;
         font-size: 16px;
     }
 }

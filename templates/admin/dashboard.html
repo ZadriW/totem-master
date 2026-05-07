@@ -6,7 +6,7 @@
 <section class="admin-section">
     <header class="admin-section__header">
         <h1 class="admin-section__title">Visão geral</h1>
-        <p class="admin-section__subtitle">Métricas agregadas de vendas confirmadas e do catálogo/estoque.</p>
+        <p class="admin-section__subtitle">Métricas agregadas de vendas confirmadas, catálogo e inventário nos eventos.</p>
     </header>
 
     <div class="admin-kpis">
@@ -49,12 +49,12 @@
 <section class="admin-section">
     <header class="admin-section__header admin-section__header--row">
         <div>
-            <h2 class="admin-section__title">Estoque</h2>
-            <p class="admin-section__subtitle">Situação atual do catálogo e do estoque físico.</p>
+            <h2 class="admin-section__title">Produtos e inventário nos eventos</h2>
+            <p class="admin-section__subtitle">Catálogo e quantidades somadas em todos os eventos ativos.</p>
         </div>
-        <a class="admin-btn admin-btn--primary" href="{{ url_for('admin_stock') }}">
+        <a class="admin-btn admin-btn--primary" href="{{ url_for('admin_products') }}">
             <i class="fa-solid fa-arrow-right-long" aria-hidden="true"></i>
-            Gerenciar estoque
+            Ver biblioteca de produtos
         </a>
     </header>
 
@@ -68,16 +68,16 @@
 
         <article class="kpi">
             <span class="kpi__icon"><i class="fa-solid fa-warehouse" aria-hidden="true"></i></span>
-            <span class="kpi__label">Unidades em estoque</span>
+            <span class="kpi__label">Unidades nos eventos</span>
             <span class="kpi__value">{{ stock.units_in_stock }}</span>
-            <span class="kpi__hint">Somatório de todos os produtos</span>
+            <span class="kpi__hint">Soma das quantidades por produto em todos os eventos</span>
         </article>
 
         <article class="kpi kpi--success">
             <span class="kpi__icon"><i class="fa-solid fa-coins" aria-hidden="true"></i></span>
             <span class="kpi__label">Valor em estoque</span>
             <span class="kpi__value">{{ stock.stock_value | brl }}</span>
-            <span class="kpi__hint">A preço de venda</span>
+            <span class="kpi__hint">Preço de venda × quantidades nos eventos</span>
         </article>
 
         <article class="kpi {% if stock.below_min > 0 %}kpi--warn{% endif %}">
@@ -111,10 +111,27 @@
     </header>
 </section>
 
-<section class="admin-section admin-section--danger-zone">
-    <header class="admin-section__header">
-        <h2 class="admin-section__title">Reinício do sistema</h2>
-        <p class="admin-section__subtitle">
+<section class="admin-section admin-section--danger-zone" aria-labelledby="adminDangerZoneHeading">
+    <div class="admin-danger-zone__toolbar">
+        <button
+            type="button"
+            id="adminDangerZoneToggle"
+            class="admin-danger-zone__toggle"
+            aria-expanded="false"
+            aria-controls="adminDangerZonePanel"
+        >
+            <span class="admin-danger-zone__chevron-wrap" aria-hidden="true">
+                <i class="fa-solid fa-chevron-down admin-danger-zone__chevron"></i>
+            </span>
+            <span class="admin-danger-zone__toggle-label">
+                <h2 id="adminDangerZoneHeading" class="admin-section__title admin-danger-zone__heading-line">Reinício do sistema</h2>
+                <span class="admin-danger-zone__collapsed-hint">Use a seta para mostrar ou ocultar o aviso e as opções.</span>
+            </span>
+        </button>
+    </div>
+
+    <div id="adminDangerZonePanel" class="admin-danger-zone__panel" hidden>
+        <p class="admin-section__subtitle admin-danger-zone__subtitle">
             Use apenas em ambiente de demonstração ou quando precisar zerar o histórico.
             Esta ação <strong>apaga todas as vendas</strong> (e dados de clientes),
             <strong>apaga todo o histórico de movimentações de estoque</strong>
@@ -122,24 +139,24 @@
             <em>estoque inicial</em> com saldo zero para o administrador reabastecer manualmente.
             Não é possível desfazer.
         </p>
-    </header>
 
-    <div class="admin-reset-panel">
-        <form
-            method="post"
-            action="{{ url_for('admin_reset_system') }}"
-            class="admin-reset-form"
-            id="adminResetForm"
-        >
-            <label class="admin-reset-confirm">
-                <input type="checkbox" name="confirm_reset" value="1" id="adminResetConfirm">
-                <span>Entendo que esta operação é irreversível e desejo reiniciar o sistema.</span>
-            </label>
-            <button type="submit" class="admin-btn admin-btn--danger-solid" id="adminResetSubmit" disabled>
-                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
-                Reiniciar sistema ao estado padrão
-            </button>
-        </form>
+        <div class="admin-reset-panel">
+            <form
+                method="post"
+                action="{{ url_for('admin_reset_system') }}"
+                class="admin-reset-form"
+                id="adminResetForm"
+            >
+                <label class="admin-reset-confirm">
+                    <input type="checkbox" name="confirm_reset" value="1" id="adminResetConfirm">
+                    <span>Entendo que esta operação é irreversível e desejo reiniciar o sistema.</span>
+                </label>
+                <button type="submit" class="admin-btn admin-btn--danger-solid" id="adminResetSubmit" disabled>
+                    <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                    Reiniciar sistema ao estado padrão
+                </button>
+            </form>
+        </div>
     </div>
 </section>
 
@@ -192,7 +209,7 @@
                     <span class="admin-table__col admin-table__col--seller">
                         {{ tx.seller_name or '—' }}
                     </span>
-                    <span class="admin-table__col">
+                    <span class="admin-table__col admin-table__col--num admin-tx__status">
                         <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else 'neutral' }}">
                             {{ tx.status }}
                         </span>

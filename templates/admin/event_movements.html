@@ -1,20 +1,33 @@
 {% extends "admin/_layout.html" %}
 
-{% block title %}Movimentações - Admin | Dental Odonto Master{% endblock %}
+{% block title %}Movimentações — {{ event.name }} | Dental Odonto Master{% endblock %}
 
 {% block admin_body %}
+
+{% include "admin/_event_subnav.html" %}
+
 <section class="admin-section">
     <header class="admin-section__header admin-section__header--row">
         <div>
+            <a class="admin-breadcrumb" href="{{ url_for('admin_event_detail', event_id=event.id) }}">
+                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                {{ event.name }}
+            </a>
             <h1 class="admin-section__title">Movimentações de estoque</h1>
             <p class="admin-section__subtitle">
-                Histórico completo de entradas, saídas, vendas, ajustes e estoque inicial.
-                Nas <strong>vendas do totem</strong>, o código do pedido fica em <em>Ref.</em> (ex.: <code>OM260422-1234</code>).
+                Histórico de entradas, saídas, vendas, ajustes e estoque inicial neste evento.
+                Nas <strong>vendas do totem</strong>, o código do pedido aparece em <em>Motivo / Ref.</em>
             </p>
         </div>
+        <a class="admin-btn admin-btn--ghost"
+           href="{{ url_for('admin_event_stock', event_id=event.id) }}">
+            <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
+            Gerenciar estoque
+        </a>
     </header>
 
-    <form class="admin-filters" method="get" action="{{ url_for('admin_movements') }}">
+    <form class="admin-filters" method="get"
+          action="{{ url_for('admin_event_movements', event_id=event.id) }}">
         <label class="admin-filter">
             <span class="admin-filter__label">Tipo</span>
             <select name="tipo" class="admin-filter__input">
@@ -43,24 +56,17 @@
             </span>
         </label>
 
-        <label class="admin-filter admin-filter--wide">
-            <span class="admin-filter__label">Código do pedido (venda totem)</span>
-            <span class="admin-filter__wrap">
-                <i class="fa-solid fa-receipt admin-filter__icon" aria-hidden="true"></i>
-                <input
-                    type="search"
-                    name="pedido"
-                    value="{{ filters.pedido }}"
-                    class="admin-filter__input"
-                    placeholder="Ex.: OM260422-1234 ou parte do número"
-                    autocomplete="off"
-                    inputmode="search"
-                    aria-describedby="hint-filtro-pedido"
-                >
-            </span>
-            <span id="hint-filtro-pedido" class="admin-filter__hint">
-                Filtra linhas com referência de venda; combine com <em>Tipo → Vendas</em> para só movimentações daquele pedido.
-            </span>
+        <label class="admin-filter">
+            <span class="admin-filter__label">Produto</span>
+            <select name="produto" class="admin-filter__input">
+                <option value="0" {% if filters.produto == 0 %}selected{% endif %}>Todos</option>
+                {% for p in products %}
+                <option value="{{ p.product_id }}"
+                    {% if filters.produto == p.product_id %}selected{% endif %}>
+                    {{ p.name }}
+                </option>
+                {% endfor %}
+            </select>
         </label>
 
         <div class="admin-filters__actions">
@@ -68,16 +74,17 @@
                 <i class="fa-solid fa-filter" aria-hidden="true"></i>
                 Aplicar
             </button>
-            <a href="{{ url_for('admin_movements') }}" class="admin-btn admin-btn--ghost">Limpar</a>
+            <a href="{{ url_for('admin_event_movements', event_id=event.id) }}"
+               class="admin-btn admin-btn--ghost">Limpar</a>
         </div>
     </form>
 
     <div
         class="admin-table"
         role="table"
-        aria-label="Movimentações"
+        aria-label="Movimentações do evento {{ event.name }}"
         data-admin-movements
-        data-api-url="{{ url_for('admin_api_movements', tipo=filters.tipo, q=filters.q, pedido=filters.pedido) }}"
+        data-api-url="{{ url_for('admin_api_event_movements', event_id=event.id, tipo=filters.tipo, produto=filters.produto, q=filters.q) }}"
     >
         <div class="admin-table__head admin-mov__row admin-mov__row--wide admin-mov__row--wide-events" role="row">
             <span role="columnheader">Data/Hora</span>
@@ -112,11 +119,11 @@
                         {% endif %}
                     </span>
                     <span class="admin-mov__event-cell">
-                        {% if m.event_id and m.event_name %}
-                            {% set row_ev_style = m.event_badge_color | event_badge_style %}
+                        {% if m.event_id and (m.event_name or event.name) %}
+                            {% set row_ev_style = (m.event_badge_color or event.badge_color) | event_badge_style %}
                             <span class="admin-nav__event-badge admin-mov__event-badge" title="Evento #{{ m.event_id }}"{% if row_ev_style %} style="{{ row_ev_style }}"{% endif %}>
                                 <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
-                                {{ m.event_name }}
+                                {{ m.event_name or event.name }}
                             </span>
                         {% elif m.event_id %}
                             <span class="admin-mov__event-unknown" title="Evento #{{ m.event_id }} (cadastro indisponível)">#{{ m.event_id }}</span>
@@ -197,6 +204,7 @@
         {% endif %}
     </div>
 </section>
+
 {% endblock %}
 
 {% block admin_scripts %}

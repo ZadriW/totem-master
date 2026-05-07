@@ -1,15 +1,22 @@
 {% extends "seller/_layout.html" %}
 
-{% block title %}Estoque do vendedor - Vendedor | Dental Odonto Master{% endblock %}
+{% block title %}Estoque{% if seller_event %} — {{ seller_event.name }}{% endif %} - Vendedor | Dental Odonto Master{% endblock %}
 
 {% block seller_body %}
+{% if seller_event %}
+<div class="seller-event-banner">
+    <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
+    <span>Estoque do evento <strong>{{ seller_event.name }}</strong>. Visualização somente leitura.</span>
+</div>
+{% endif %}
+
 <section class="admin-section">
     <header class="admin-section__header admin-section__header--row">
         <div>
-            <h1 class="admin-section__title">Estoque</h1>
+            <h1 class="admin-section__title">Estoque{% if seller_event %} do evento{% endif %}</h1>
             <p class="admin-section__subtitle" data-seller-stock-subtitle>
-                {{ stock.products_count }} produtos cadastrados &middot;
-                {{ stock.units_in_stock }} unidades &middot;
+                {{ stock.products_count }} produto(s) &middot;
+                {{ stock.units_in_stock }} unidade(s) &middot;
                 <strong>{{ stock.below_min }}</strong> abaixo do mínimo.
                 Visualização somente leitura.
             </p>
@@ -20,8 +27,9 @@
         </a>
     </header>
 
+    {% if not seller_event %}
     <form class="admin-filters" method="get" action="{{ url_for('seller_stock') }}">
-        <label class="admin-filter">
+        <label class="admin-filter admin-filter--search">
             <span class="admin-filter__label">Buscar</span>
             <span class="admin-filter__wrap">
                 <i class="fa-solid fa-magnifying-glass admin-filter__icon" aria-hidden="true"></i>
@@ -55,6 +63,17 @@
             </select>
         </label>
 
+        <label class="admin-filter">
+            <span class="admin-filter__label">Por página</span>
+            <select name="per_page" class="admin-filter__input" title="Quantidade de produtos listados por requisição">
+                {% for n in allowed_per_page %}
+                <option value="{{ n }}" {% if filters.per_page == n %}selected{% endif %}>{{ n }} produtos</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <input type="hidden" name="page" value="1" aria-hidden="true">
+
         <div class="admin-filters__actions">
             <button type="submit" class="admin-btn admin-btn--primary">
                 <i class="fa-solid fa-filter" aria-hidden="true"></i>
@@ -63,13 +82,14 @@
             <a href="{{ url_for('seller_stock') }}" class="admin-btn admin-btn--ghost">Limpar</a>
         </div>
     </form>
+    {% endif %}
 
     <div
         class="admin-table admin-stock"
         role="table"
         aria-label="Produtos em estoque para vendedor"
         data-seller-stock-list
-        data-api-url="{{ url_for('seller_api_stock') }}"
+        data-api-url="{{ stock_api_url }}"
     >
         <div class="admin-table__head admin-stock__row" role="row">
             <span role="columnheader">Produto</span>
@@ -114,6 +134,45 @@
             </div>
         {% endif %}
     </div>
+
+    {% if not seller_event and pagination.total > 0 %}
+    <nav class="admin-pagination" aria-label="Paginação do estoque (vendedor)">
+        <p class="admin-pagination__summary">
+            Mostrando
+            <strong>{{ pagination.showing_from }}–{{ pagination.showing_to }}</strong>
+            de <strong>{{ pagination.total }}</strong> produto(s)
+            · página {{ pagination.page }} de {{ pagination.total_pages }}
+        </p>
+        <div class="admin-pagination__nav">
+            {% if pagination.has_prev %}
+            <a class="admin-btn admin-btn--ghost admin-btn--sm"
+               href="{{ url_for('seller_stock', q=filters.q, categoria=filters.categoria, status=filters.status, per_page=filters.per_page, page=pagination.page - 1) }}"
+               rel="prev">
+                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                Anterior
+            </a>
+            {% else %}
+            <span class="admin-pagination__disabled admin-btn admin-btn--ghost admin-btn--sm" aria-disabled="true">
+                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                Anterior
+            </span>
+            {% endif %}
+            {% if pagination.has_next %}
+            <a class="admin-btn admin-btn--ghost admin-btn--sm"
+               href="{{ url_for('seller_stock', q=filters.q, categoria=filters.categoria, status=filters.status, per_page=filters.per_page, page=pagination.page + 1) }}"
+               rel="next">
+                Próxima
+                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            </a>
+            {% else %}
+            <span class="admin-pagination__disabled admin-btn admin-btn--ghost admin-btn--sm" aria-disabled="true">
+                Próxima
+                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            </span>
+            {% endif %}
+        </div>
+    </nav>
+    {% endif %}
 </section>
 {% endblock %}
 

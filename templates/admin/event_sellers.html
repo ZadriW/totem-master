@@ -1,0 +1,137 @@
+{% extends "admin/_layout.html" %}
+
+{% block title %}Vendedores — {{ event.name }} | Dental Odonto Master{% endblock %}
+
+{% block admin_body %}
+
+{% include "admin/_event_subnav.html" %}
+
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <a class="admin-breadcrumb" href="{{ url_for('admin_event_detail', event_id=event.id) }}">
+                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                {{ event.name }}
+            </a>
+            <h1 class="admin-section__title">Vendedores do evento</h1>
+            <p class="admin-section__subtitle">
+                Exibindo {{ sellers | length }} {% if sellers | length == 1 %}vendedor{% else %}vendedores{% endif %} associado(s).
+            </p>
+        </div>
+    </header>
+
+    {# ---- Adicionar vendedor ---- #}
+    {% if event.active and available_sellers %}
+    <div class="admin-card admin-card--form" style="margin-bottom:24px;">
+        <h2 class="admin-card__title">
+            <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
+            Adicionar vendedor ao evento
+        </h2>
+        <form method="post"
+              action="{{ url_for('admin_event_add_seller', event_id=event.id) }}"
+              class="admin-card__form">
+            <div class="admin-field">
+                <label class="admin-field__label" for="seller-select">Vendedor</label>
+                <select id="seller-select" name="seller_id" class="admin-field__input" required>
+                    <option value="">Selecione...</option>
+                    {% for s in available_sellers %}
+                    <option value="{{ s.id }}">{{ s.name }} ({{ s.email }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="admin-card__actions">
+                <button type="submit" class="admin-btn admin-btn--primary">
+                    <i class="fa-solid fa-user-plus" aria-hidden="true"></i>
+                    Adicionar
+                </button>
+            </div>
+        </form>
+    </div>
+    {% elif event.active and not available_sellers %}
+    <div class="admin-card admin-card--form" style="margin-bottom:24px;">
+        <p class="admin-section__subtitle">
+            <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+            Todos os vendedores ativos já estão associados a este evento.
+            <a href="{{ url_for('admin_sellers') }}">Gerenciar vendedores</a>.
+        </p>
+    </div>
+    {% endif %}
+
+    <div class="admin-table admin-sellers" role="table" aria-label="Vendedores do evento">
+        <div class="admin-table__head admin-sellers__row" role="row">
+            <span role="columnheader">Vendedor</span>
+            <span role="columnheader">Status</span>
+            <span role="columnheader">PIN</span>
+            <span class="admin-table__col--num" role="columnheader">Vendas</span>
+            <span class="admin-table__col--num" role="columnheader">Faturamento</span>
+            <span role="columnheader">Último login</span>
+            <span role="columnheader">Ações</span>
+        </div>
+
+        {% if sellers %}
+            {% for seller in sellers %}
+            <div class="admin-sellers__row" role="row">
+                <span class="admin-sellers__person">
+                    <strong>{{ seller.name }}</strong>
+                    <small>{{ seller.email }}</small>
+                </span>
+                <span>
+                    {% if seller.active %}
+                        <span class="admin-badge admin-badge--success">Ativo</span>
+                    {% else %}
+                        <span class="admin-badge admin-badge--neutral">Inativo</span>
+                    {% endif %}
+                </span>
+                <span>
+                    {% if seller.pin_hash %}
+                        <span class="admin-badge admin-badge--success">Configurado</span>
+                    {% else %}
+                        <span class="admin-badge admin-badge--warn">Pendente</span>
+                    {% endif %}
+                </span>
+                <span class="admin-table__col--num">{{ seller.transactions_count }}</span>
+                <span class="admin-table__col--num"><strong>{{ seller.total_revenue | brl }}</strong></span>
+                <span>{{ seller.last_login_at | datahora }}</span>
+                <span class="admin-stock__actions admin-sellers__actions">
+                    <a
+                        class="admin-btn admin-btn--ghost admin-btn--sm"
+                        href="{{ url_for('admin_seller_detail', seller_id=seller.id) }}"
+                        aria-label="Ver dashboard de {{ seller.name }}"
+                        title="Ver dashboard"
+                    >
+                        <i class="fa-solid fa-chart-line" aria-hidden="true"></i>
+                    </a>
+                    {% if event.active %}
+                    <form
+                        method="post"
+                        action="{{ url_for('admin_event_remove_seller', event_id=event.id, seller_id=seller.id) }}"
+                        class="admin-sellers__delete-form"
+                        data-confirm="{{ ('Remover ' ~ seller.name ~ ' deste evento? O cadastro do vendedor permanece ativo.') | e }}"
+                    >
+                        <button
+                            type="submit"
+                            class="admin-btn admin-btn--ghost admin-btn--sm admin-btn--danger"
+                            title="Remover do evento"
+                            aria-label="Remover {{ seller.name }} deste evento"
+                        >
+                            <i class="fa-solid fa-user-minus" aria-hidden="true"></i>
+                        </button>
+                    </form>
+                    {% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="admin-empty">
+                <i class="fa-regular fa-folder-open" aria-hidden="true"></i>
+                <p>Nenhum vendedor associado a este evento.
+                    {% if event.active and available_sellers %}
+                    Use o formulário acima para adicionar.
+                    {% endif %}
+                </p>
+            </div>
+        {% endif %}
+    </div>
+</section>
+
+{% endblock %}

@@ -1,29 +1,32 @@
 {% extends "admin/_layout.html" %}
 
-{% block title %}{{ product.nome }} - Estoque - Admin | Dental Odonto Master{% endblock %}
+{% block title %}{{ product.nome }} — Estoque — {{ event.name }} | Dental Odonto Master{% endblock %}
 
 {% block admin_body %}
+{% include "admin/_event_subnav.html" %}
+
 <section
     class="admin-section"
     data-admin-product
-    data-api-url="{{ url_for('admin_api_stock_product', product_id=product.id) }}"
+    data-api-url="{{ url_for('admin_api_event_stock_product', event_id=event.id, product_id=product.id) }}"
 >
     <header class="admin-section__header admin-section__header--row">
         <div>
-            <a class="admin-breadcrumb" href="{{ url_for('admin_stock') }}">
+            <a class="admin-breadcrumb" href="{{ url_for('admin_event_stock', event_id=event.id) }}">
                 <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
-                Voltar ao estoque
+                Voltar ao estoque do evento
             </a>
             <h1 class="admin-section__title">{{ product.nome }}</h1>
             <p class="admin-section__subtitle">
                 <span class="admin-product__sku">SKU <strong>{{ product.sku }}</strong></span>
                 &middot; #{{ product.id }} &middot; {{ product.categoria }} &middot; {{ product.preco | brl }}
+                &middot; {{ event.name }}
             </p>
         </div>
 
         <div class="admin-product__status" data-product-status>
             {% if not product.ativo %}
-                <span class="admin-badge admin-badge--neutral">Inativo</span>
+                <span class="admin-badge admin-badge--neutral">Inativo no catálogo</span>
             {% elif product.sem_estoque %}
                 <span class="admin-badge admin-badge--danger">Sem estoque</span>
             {% elif product.abaixo_minimo %}
@@ -45,11 +48,11 @@
                     <dd><code>{{ product.sku }}</code></dd>
                 </div>
                 <div>
-                    <dt>Estoque atual</dt>
+                    <dt>Estoque atual (evento)</dt>
                     <dd data-product-stock><strong>{{ product.estoque }}</strong> un.</dd>
                 </div>
                 <div>
-                    <dt>Estoque mínimo</dt>
+                    <dt>Estoque mínimo (evento)</dt>
                     <dd data-product-min-stock>{{ product.estoque_minimo }} un.</dd>
                 </div>
                 <div>
@@ -59,7 +62,7 @@
             </dl>
 
             <form method="post"
-                  action="{{ url_for('admin_stock_min', product_id=product.id) }}"
+                  action="{{ url_for('admin_event_stock_min', event_id=event.id, product_id=product.id) }}"
                   class="admin-product__inline-form"
                   data-live-stock-form>
                 <label class="admin-field__label" for="min_stock">Novo estoque mínimo</label>
@@ -71,9 +74,8 @@
             </form>
 
             <form method="post"
-                  action="{{ url_for('admin_stock_toggle_active', product_id=product.id) }}"
-                  class="admin-product__toggle"
-                  data-live-stock-form>
+                  action="{{ url_for('admin_product_toggle_active', product_id=product.id) }}"
+                  class="admin-product__toggle">
                 {% if product.ativo %}
                     <input type="hidden" name="active" value="0">
                     <button type="submit" class="admin-btn admin-btn--ghost admin-btn--danger"
@@ -97,11 +99,11 @@
                     <i class="fa-solid fa-down-long admin-card__icon admin-card__icon--positive" aria-hidden="true"></i>
                     <div>
                         <h2 class="admin-card__title">Entrada de estoque</h2>
-                        <p class="admin-card__subtitle">Compra, reposição ou recebimento do fornecedor.</p>
+                        <p class="admin-card__subtitle">Compra, reposição ou recebimento do fornecedor (somente neste evento).</p>
                     </div>
                 </header>
                 <form method="post"
-                      action="{{ url_for('admin_stock_entry', product_id=product.id) }}"
+                      action="{{ url_for('admin_event_stock_entry', event_id=event.id, product_id=product.id) }}"
                       class="admin-card__form"
                       data-live-stock-form>
                     <div class="admin-field">
@@ -135,7 +137,7 @@
                     </div>
                 </header>
                 <form method="post"
-                      action="{{ url_for('admin_stock_exit', product_id=product.id) }}"
+                      action="{{ url_for('admin_event_stock_exit', event_id=event.id, product_id=product.id) }}"
                       class="admin-card__form"
                       data-confirm="Confirmar saída manual de estoque?"
                       data-live-stock-form>
@@ -164,11 +166,11 @@
                     <i class="fa-solid fa-scale-balanced admin-card__icon" aria-hidden="true"></i>
                     <div>
                         <h2 class="admin-card__title">Ajuste de inventário</h2>
-                        <p class="admin-card__subtitle">Conferência física: informe o saldo correto.</p>
+                        <p class="admin-card__subtitle">Conferência física: informe o saldo correto no evento.</p>
                     </div>
                 </header>
                 <form method="post"
-                      action="{{ url_for('admin_stock_adjust', product_id=product.id) }}"
+                      action="{{ url_for('admin_event_stock_adjust', event_id=event.id, product_id=product.id) }}"
                       class="admin-card__form"
                       data-confirm="Ajustar o estoque para o valor informado?"
                       data-live-stock-form>
@@ -198,11 +200,11 @@
     <header class="admin-section__header">
         <h2 class="admin-section__title">Histórico de movimentações</h2>
         <p class="admin-section__subtitle">
-            Últimas {{ movements|length }} {% if movements|length == 1 %}movimentação{% else %}movimentações{% endif %} deste produto.
+            Últimas {{ movements|length }} {% if movements|length == 1 %}movimentação{% else %}movimentações{% endif %} deste produto neste evento.
         </p>
     </header>
 
-    <div class="admin-table" role="table" aria-label="Movimentações do produto" data-product-movements>
+    <div class="admin-table" role="table" aria-label="Movimentações do produto no evento" data-product-movements>
         <div class="admin-table__head admin-mov__row" role="row">
             <span role="columnheader">Data/Hora</span>
             <span role="columnheader">Tipo</span>

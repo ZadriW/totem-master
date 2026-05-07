@@ -1,0 +1,274 @@
+{% extends "admin/_layout.html" %}
+
+{% block title %}{{ event.name }} - Evento | Dental Odonto Master{% endblock %}
+
+{% block admin_body %}
+
+{# ============================================================ Sub-nav do evento #}
+{% include "admin/_event_subnav.html" %}
+
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <a class="admin-breadcrumb" href="{{ url_for('admin_events') }}">
+                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                Todos os eventos
+            </a>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:4px;">
+                <h1 class="admin-section__title">{{ event.name }}</h1>
+                {% if event.active %}
+                <span class="admin-badge admin-badge--success">Ativo</span>
+                {% else %}
+                <span class="admin-badge admin-badge--neutral">Arquivado</span>
+                {% endif %}
+            </div>
+            {% if event.description %}
+            <p class="admin-section__subtitle admin-event-header__desc">{{ event.description }}</p>
+            {% else %}
+            <p class="admin-section__subtitle admin-event-header__desc admin-event-header__desc--muted">Sem descrição</p>
+            {% endif %}
+        </div>
+        <div class="admin-event-header__actions">
+            <button type="button" class="admin-event-edit-trigger"
+                    id="event-edit-open"
+                    aria-haspopup="dialog"
+                    aria-controls="event-edit-modal"
+                    aria-expanded="false">
+                <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                <span>Editar evento</span>
+            </button>
+            {% if event.active %}
+            <form method="post" action="{{ url_for('admin_event_archive', event_id=event.id) }}" style="display:contents;">
+                <button type="submit" class="admin-btn admin-btn--ghost"
+                    onclick="return confirm('Arquivar o evento {{ event.name|e }}?');">
+                    <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
+                    Arquivar
+                </button>
+            </form>
+            {% else %}
+            <form method="post" action="{{ url_for('admin_event_restore', event_id=event.id) }}" style="display:contents;">
+                <button type="submit" class="admin-btn admin-btn--ghost">
+                    <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                    Reativar
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </header>
+
+    {# KPIs #}
+    <div class="admin-kpis">
+        <article class="kpi">
+            <span class="kpi__icon"><i class="fa-solid fa-tags" aria-hidden="true"></i></span>
+            <span class="kpi__label">Produtos no evento</span>
+            <span class="kpi__value">{{ stats.products_count }}</span>
+            <span class="kpi__hint">Adicionados manualmente</span>
+        </article>
+
+        <article class="kpi">
+            <span class="kpi__icon"><i class="fa-solid fa-warehouse" aria-hidden="true"></i></span>
+            <span class="kpi__label">Unidades em estoque</span>
+            <span class="kpi__value">{{ stats.units_in_stock }}</span>
+            <span class="kpi__hint">Somatório do evento</span>
+        </article>
+
+        <article class="kpi kpi--success">
+            <span class="kpi__icon"><i class="fa-solid fa-coins" aria-hidden="true"></i></span>
+            <span class="kpi__label">Valor em estoque</span>
+            <span class="kpi__value">{{ stats.stock_value | brl }}</span>
+            <span class="kpi__hint">A preço de catálogo</span>
+        </article>
+
+        <article class="kpi {% if stats.below_min > 0 %}kpi--warn{% endif %}">
+            <span class="kpi__icon"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></span>
+            <span class="kpi__label">Abaixo do mínimo</span>
+            <span class="kpi__value">{{ stats.below_min }}</span>
+            <span class="kpi__hint">{{ stats.sem_estoque }} sem estoque</span>
+        </article>
+    </div>
+</section>
+
+<dialog class="admin-modal" id="event-edit-modal" aria-labelledby="event-edit-modal-title">
+    <div class="admin-modal__panel">
+        <header class="admin-modal__header">
+            <h2 class="admin-modal__title" id="event-edit-modal-title">Editar evento</h2>
+            <button type="button" class="admin-modal__close" id="event-edit-close" aria-label="Fechar">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+        </header>
+        <form method="post" action="{{ url_for('admin_event_edit', event_id=event.id) }}" class="admin-modal__body">
+            <div class="admin-field">
+                <label class="admin-field__label" for="event-modal-name">Nome do evento <span aria-hidden="true">*</span></label>
+                <input id="event-modal-name" type="text" name="name" class="admin-field__input"
+                    value="{{ event.name }}" required maxlength="200" autocomplete="off">
+            </div>
+            <div class="admin-field">
+                <label class="admin-field__label" for="event-modal-desc">Descrição (opcional)</label>
+                <input id="event-modal-desc" type="text" name="description" class="admin-field__input"
+                    value="{{ event.description or '' }}" maxlength="500" autocomplete="off"
+                    placeholder="Data, local ou observações">
+            </div>
+            <div class="admin-field">
+                <label class="admin-field__label" for="modal-event-badge-default">Cor do badge (menu e movimentações)</label>
+                <label class="admin-field__hint-row">
+                    <input
+                        id="modal-event-badge-default"
+                        type="checkbox"
+                        name="badge_use_default"
+                        value="1"
+                        {% if not event.badge_color %}checked{% endif %}
+                    >
+                    Usar cor padrão do tema
+                </label>
+                <div id="modal-event-badge-color-wrap" class="admin-event-badge-color-wrap" {% if not event.badge_color %}hidden{% endif %}>
+                    <input
+                        id="modal-event-badge-color"
+                        type="color"
+                        name="badge_color"
+                        value="{{ event.badge_color or '#0e167a' }}"
+                        class="admin-event-badge-color-input"
+                        aria-label="Escolher cor do badge"
+                    >
+                </div>
+            </div>
+            <footer class="admin-modal__footer">
+                <button type="button" class="admin-btn admin-btn--ghost" id="event-edit-cancel">Cancelar</button>
+                <button type="submit" class="admin-btn admin-btn--primary">
+                    <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
+                    Salvar alterações
+                </button>
+            </footer>
+        </form>
+    </div>
+</dialog>
+
+{# Movimentações recentes #}
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <h2 class="admin-section__title">Movimentações recentes</h2>
+            <p class="admin-section__subtitle">Últimas 5 movimentações registradas neste evento.</p>
+        </div>
+        <a class="admin-btn admin-btn--ghost" href="{{ url_for('admin_event_movements', event_id=event.id) }}">
+            <i class="fa-solid fa-right-left" aria-hidden="true"></i>
+            Ver todas
+        </a>
+    </header>
+
+    {% if recent_movements %}
+    <div class="admin-table" role="table" aria-label="Movimentações recentes do evento">
+        <div class="admin-table__head admin-mov__row" role="row">
+            <span role="columnheader">Data/Hora</span>
+            <span role="columnheader">Produto</span>
+            <span role="columnheader">Tipo</span>
+            <span class="admin-table__col--num" role="columnheader">Delta</span>
+            <span class="admin-table__col--num" role="columnheader">Saldo após</span>
+            <span role="columnheader">Motivo</span>
+        </div>
+        {% for m in recent_movements %}
+        <div class="admin-mov__row" role="row">
+            <span>{{ m.created_at | datahora }}</span>
+            <span class="admin-mov__product">
+                <strong>{{ m.product_name or '—' }}</strong>
+            </span>
+            <span>
+                <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
+                    {{ m.movement_type | movlabel }}
+                </span>
+            </span>
+            <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% else %}negative{% endif %}">
+                {{ m.delta | signed }}
+            </span>
+            <span class="admin-table__col--num"><strong>{{ m.balance_after }}</strong></span>
+            <span>{{ m.reason or '—' }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="admin-empty">
+        <i class="fa-solid fa-right-left" aria-hidden="true"></i>
+        <p>Nenhuma movimentação registrada ainda.
+            <a href="{{ url_for('admin_event_stock', event_id=event.id) }}">Gerencie o estoque</a> para começar.
+        </p>
+    </div>
+    {% endif %}
+</section>
+
+{# Vendedores associados #}
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <h2 class="admin-section__title">Vendedores no evento</h2>
+            <p class="admin-section__subtitle">{{ sellers | length }} vendedor(es) associado(s).</p>
+        </div>
+        <a class="admin-btn admin-btn--ghost" href="{{ url_for('admin_event_sellers', event_id=event.id) }}">
+            <i class="fa-solid fa-users" aria-hidden="true"></i>
+            Gerenciar vendedores
+        </a>
+    </header>
+    {% if sellers %}
+    <div style="display:flex;flex-wrap:wrap;gap:10px;padding:0 0 8px;">
+        {% for s in sellers %}
+        <span class="admin-badge admin-badge--{% if s.active %}success{% else %}neutral{% endif %}" style="font-size:13px;padding:6px 14px;">
+            <i class="fa-solid fa-user-tie" aria-hidden="true"></i>
+            {{ s.name }}
+        </span>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="admin-section__subtitle" style="padding:8px 0;">
+        Nenhum vendedor associado.
+        <a href="{{ url_for('admin_event_sellers', event_id=event.id) }}">Adicionar vendedores</a>.
+    </p>
+    {% endif %}
+</section>
+
+{% endblock %}
+
+{% block admin_scripts %}
+<script>
+(() => {
+    const dialog = document.getElementById('event-edit-modal');
+    const openBtn = document.getElementById('event-edit-open');
+    const closeBtn = document.getElementById('event-edit-close');
+    const cancelBtn = document.getElementById('event-edit-cancel');
+    const badgeDefaultCb = document.getElementById('modal-event-badge-default');
+    const badgeColorWrap = document.getElementById('modal-event-badge-color-wrap');
+    if (!dialog || !openBtn) return;
+
+    function syncBadgeColorVisibility() {
+        if (!badgeDefaultCb || !badgeColorWrap) return;
+        badgeColorWrap.hidden = badgeDefaultCb.checked;
+    }
+    badgeDefaultCb?.addEventListener('change', syncBadgeColorVisibility);
+
+    function setOpen(expanded) {
+        openBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    }
+
+    openBtn.addEventListener('click', () => {
+        dialog.showModal();
+        setOpen(true);
+        const first = dialog.querySelector('input[name="name"]');
+        if (first) {
+            requestAnimationFrame(() => { first.focus(); first.select(); });
+        }
+    });
+
+    function closeModal() {
+        dialog.close();
+        setOpen(false);
+        openBtn.focus();
+    }
+
+    closeBtn?.addEventListener('click', closeModal);
+    cancelBtn?.addEventListener('click', closeModal);
+
+    dialog.addEventListener('click', (e) => {
+        if (e.target === dialog) closeModal();
+    });
+
+    dialog.addEventListener('close', () => setOpen(false));
+})();
+</script>
+{% endblock %}
