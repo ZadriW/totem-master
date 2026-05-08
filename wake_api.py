@@ -4,11 +4,12 @@ Endpoint: https://storefront-api.fbits.net/graphql
 Header:   TCS-Access-Token  (identifica a loja)
 Param:    partnerAccessToken (filtro de parceiro, opcional)
 
-O token é lido da variável de ambiente ``WAKE_TOKEN`` ou do fallback
-hard-coded (token de integração gerado na plataforma Wake Commerce).
+O token **Storefront** (header ``TCS-Access-Token``) deve estar apenas na
+variável de ambiente ``WAKE_TOKEN`` — não versionar o valor no repositório.
 
-Se a API estiver indisponível ou o token for inválido, todas as funções
-levantam exceção — o chamador decide se usa fallback local.
+Se ``WAKE_TOKEN`` não estiver definida, as chamadas à API falham com erro
+explícito. Se a API estiver indisponível ou o token for inválido, o chamador
+recebe exceção e pode usar fallback local (ex.: catálogo já no SQLite).
 """
 
 from __future__ import annotations
@@ -23,13 +24,19 @@ log = logging.getLogger(__name__)
 
 ENDPOINT = "https://storefront-api.fbits.net/graphql"
 
-# Token Storefront (header TCS-Access-Token): criado no painel Wake para a
-# Storefront API — formato típico ``tcs_<conta>_<hex>``. Sobrescreva em
-# produção com a variável de ambiente ``WAKE_TOKEN``.
-WAKE_TOKEN = os.environ.get(
-    "WAKE_TOKEN",
-    "tcs_odont_b84ce06ac1bf4e40b7ade378d7ffa53b",
-)
+
+def _require_wake_token() -> str:
+    """Retorna o TCS-Access-Token da Storefront API (Wake Commerce).
+
+    O valor vem **somente** de ``WAKE_TOKEN`` no ambiente — sem fallback no código.
+    """
+    raw = (os.environ.get("WAKE_TOKEN") or "").strip()
+    if not raw:
+        raise PermissionError(
+            "Configure a variável de ambiente WAKE_TOKEN com o TCS-Access-Token "
+            "da Storefront API (painel Wake Commerce). O token não deve ficar no código-fonte."
+        )
+    return raw
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +109,7 @@ query {
 def _headers() -> Dict[str, str]:
     return {
         "Content-Type": "application/json",
-        "TCS-Access-Token": WAKE_TOKEN,
+        "TCS-Access-Token": _require_wake_token(),
     }
 
 
