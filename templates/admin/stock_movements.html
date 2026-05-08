@@ -27,6 +27,17 @@
             </select>
         </label>
 
+        <label class="admin-filter">
+            <span class="admin-filter__label">Venda por vendedor</span>
+            <select name="vendedor" class="admin-filter__input" aria-describedby="hint-filtro-vendedor-mov">
+                <option value="0" {% if filters.vendedor == 0 %}selected{% endif %}>Todos</option>
+                {% for s in movement_filter_sellers %}
+                <option value="{{ s.id }}" {% if filters.vendedor == s.id %}selected{% endif %}>
+                    {{ s.name }}{% if not s.active %} (inativo){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
         <label class="admin-filter admin-filter--search">
             <span class="admin-filter__label">Buscar</span>
             <span class="admin-filter__wrap">
@@ -77,7 +88,7 @@
         role="table"
         aria-label="Movimentações"
         data-admin-movements
-        data-api-url="{{ url_for('admin_api_movements', tipo=filters.tipo, q=filters.q, pedido=filters.pedido) }}"
+        data-api-url="{{ url_for('admin_api_movements', tipo=filters.tipo, q=filters.q, pedido=filters.pedido, vendedor=filters.vendedor) }}"
     >
         <div class="admin-table__head admin-mov__row admin-mov__row--wide admin-mov__row--wide-events" role="row">
             <span role="columnheader">Data/Hora</span>

@@ -1240,12 +1240,17 @@ def list_stock_movements(
     product_search: Optional[str] = None,
     movement_type: Optional[str] = None,
     reference: Optional[str] = None,
+    seller_id: Optional[int] = None,
     limit: int = 200,
 ) -> List[Dict]:
     """Lista movimentações. ``reference`` filtra pelo código do pedido (vendas no totem).
 
     ``product_search`` restringe por nome, descrição, SKU ou ID numérico do produto
     (subtexto em texto; para trechos só com dígitos também casa ``product_id``).
+
+    ``seller_id`` (quando > 0): mantém entradas/saídas/ajustes/inicial visíveis e restringe
+    apenas **vendas** (`movement_type = 'venda'`) à transação cujo ``seller_id`` coincide
+    (via JOIN ``transactions``).
     """
     sql = (
         "SELECT m.*, p.name AS product_name, p.category AS product_category, "
@@ -1279,6 +1284,12 @@ def list_stock_movements(
             "AND INSTR(LOWER(m.reference), LOWER(?)) > 0"
         )
         params.append(ref_norm)
+    if seller_id is not None and int(seller_id) > 0:
+        sql += (
+            " AND (m.movement_type != 'venda' OR "
+            "(m.movement_type = 'venda' AND COALESCE(t.seller_id, -1) = ?))"
+        )
+        params.append(int(seller_id))
     sql += " ORDER BY datetime(m.created_at) DESC, m.id DESC LIMIT ?"
     params.append(int(limit))
 
@@ -1665,10 +1676,10 @@ def reset_totem_to_default_state() -> Dict[str, int]:
     - Apaga **todas** as transações (itens inclusos por ``ON DELETE CASCADE``),
       removendo vendas e dados de cliente.
     - Apaga **todas** as movimentações de estoque.
-    - Zera ``stock`` de **todos** os produtos e registra uma nova linha
-      ``inicial`` com saldo **0** por produto (baseline para o administrador
-      reabastecer manualmente). Não reutiliza saldos antigos da Wake nem de
-      sincronizações passadas.
+    - Zera ``products.stock`` (cadastro) e ``event_products.stock`` (saldo por evento).
+    - Registra linhas ``inicial`` com saldo **0**: uma por produto no catálogo global
+      (``event_id`` nulo) e uma por par ``(evento, produto)`` em ``event_products``,
+      para o histórico do painel permanecer coerente com a biblioteca e com cada evento.
     """
     with get_conn() as conn:
         n_tx_row = conn.execute("SELECT COUNT(*) AS c FROM transactions").fetchone()
@@ -1698,10 +1709,31 @@ def reset_totem_to_default_state() -> Dict[str, int]:
                 (pid, reason, "system", now),
             )
 
+        conn.execute(
+            "UPDATE event_products SET stock = 0, updated_at = ?",
+            (now,),
+        )
+        ep_rows = conn.execute(
+            "SELECT event_id, product_id FROM event_products"
+        ).fetchall()
+        for er in ep_rows:
+            eid = int(er["event_id"])
+            pid = int(er["product_id"])
+            conn.execute(
+                """
+                INSERT INTO stock_movements
+                    (product_id, event_id, movement_type, quantity, delta,
+                     balance_after, reason, created_by, created_at)
+                VALUES (?, ?, 'inicial', 0, 0, 0, ?, ?, ?)
+                """,
+                (pid, eid, reason, "system", now),
+            )
+
         return {
             "transactions_deleted": n_tx_before,
             "movements_deleted": n_mov_deleted,
             "products_restored": len(prod_rows),
+            "event_product_pairs_reset": len(ep_rows),
         }
 
 
@@ -2124,12 +2156,15 @@ def list_event_stock_movements(
     product_id: Optional[int] = None,
     product_search: Optional[str] = None,
     movement_type: Optional[str] = None,
+    seller_id: Optional[int] = None,
     limit: int = 300,
 ) -> List[Dict]:
     """Lista movimentações de estoque de um evento específico.
 
     ``product_search`` filtra por nome, descrição, SKU ou ID do produto (mesma
     semântica que em ``list_stock_movements``).
+
+    ``seller_id`` (quando > 0): mesmo critério de ``list_stock_movements`` para vendas.
     """
     sql = (
         "SELECT m.*, p.name AS product_name, p.category AS product_category, "
@@ -2154,6 +2189,12 @@ def list_event_stock_movements(
     frag, extra = _stock_movements_product_search_sql(product_search)
     sql += frag
     params.extend(extra)
+    if seller_id is not None and int(seller_id) > 0:
+        sql += (
+            " AND (m.movement_type != 'venda' OR "
+            "(m.movement_type = 'venda' AND COALESCE(t.seller_id, -1) = ?))"
+        )
+        params.append(int(seller_id))
     sql += " ORDER BY datetime(m.created_at) DESC, m.id DESC LIMIT ?"
     params.append(int(limit))
     with get_conn() as conn:

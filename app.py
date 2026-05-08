@@ -1224,8 +1224,9 @@ def admin_reset_system():
             "Sistema reiniciado com sucesso. "
             f"{result['transactions_deleted']} venda(s) e dados de cliente removidos; "
             f"{result['movements_deleted']} movimentação(ões) apagadas; "
-            f"estoque de {result['products_restored']} produto(s) zerado "
-            "(novo registro de estoque inicial com saldo 0).",
+            f"estoque de {result['products_restored']} produto(s) zerado no cadastro; "
+            f"{result['event_product_pairs_reset']} vínculo(s) produto×evento com saldo zerado "
+            "(novos registros de estoque inicial com saldo 0).",
             "success",
         )
     except Exception:
@@ -1541,11 +1542,18 @@ def admin_api_movements():
     movement_type = (request.args.get("tipo") or "").strip()
     q = (request.args.get("q") or "").strip()
     pedido = (request.args.get("pedido") or "").strip()
+    seller_raw = _parse_int(request.args.get("vendedor"), 0)
+    seller_filter = seller_raw if seller_raw > 0 else None
+    if seller_filter is not None:
+        known = {int(s["id"]) for s in list_sellers()}
+        if seller_filter not in known:
+            seller_filter = None
 
     movements = list_stock_movements(
         product_search=q or None,
         movement_type=movement_type or None,
         reference=pedido or None,
+        seller_id=seller_filter,
         limit=500,
     )
     return jsonify({
@@ -1561,20 +1569,31 @@ def admin_movements():
     q = (request.args.get("q") or "").strip()
     # Código do pedido (``reference`` nas movimentações de venda do totem, ex.: OM260422-1234)
     pedido = (request.args.get("pedido") or "").strip()
+    seller_raw = _parse_int(request.args.get("vendedor"), 0)
+    seller_filter = seller_raw if seller_raw > 0 else None
+    if seller_filter is not None:
+        known = {int(s["id"]) for s in list_sellers()}
+        if seller_filter not in known:
+            seller_filter = None
+            seller_raw = 0
 
     movements = list_stock_movements(
         product_search=q or None,
         movement_type=movement_type or None,
         reference=pedido or None,
+        seller_id=seller_filter,
         limit=500,
     )
+    movement_filter_sellers = list_sellers()
     return render_template(
         "admin/stock_movements.html",
         movements=movements,
+        movement_filter_sellers=movement_filter_sellers,
         filters={
             "tipo": movement_type or "todos",
             "q": q,
             "pedido": pedido,
+            "vendedor": seller_raw,
         },
         **_admin_shell_context(active_section="movimentacoes"),
     )
@@ -1936,27 +1955,33 @@ def admin_event_movements(event_id: int):
     if event is None:
         return redirect(url_for("admin_events"))
     movement_type = (request.args.get("tipo") or "").strip()
-    product_id_raw = _parse_int(request.args.get("produto"), 0) or None
     q = (request.args.get("q") or "").strip()
+    event_sellers_rows = list_event_sellers(event_id)
+    event_seller_ids = {int(s["id"]) for s in event_sellers_rows}
+    seller_raw = _parse_int(request.args.get("vendedor"), 0)
+    seller_filter = seller_raw if seller_raw > 0 and seller_raw in event_seller_ids else None
+    if seller_raw > 0 and seller_filter is None:
+        seller_raw = 0
+
     movements = list_event_stock_movements(
         event_id,
-        product_id=product_id_raw,
+        product_id=None,
         product_search=q or None,
         movement_type=movement_type or None,
+        seller_id=seller_filter,
         limit=300,
     )
-    products = list_event_products(event_id)
     stats = get_event_stock_stats(event_id)
     return render_template(
         "admin/event_movements.html",
         event=event,
         movements=movements,
-        products=products,
         stats=stats,
+        movement_filter_sellers=event_sellers_rows,
         filters={
             "tipo": movement_type or "todos",
-            "produto": product_id_raw or 0,
             "q": q,
+            "vendedor": seller_raw,
         },
         active_event_tab="movimentacoes",
         **_admin_shell_context(active_section="eventos"),
@@ -1967,13 +1992,17 @@ def admin_event_movements(event_id: int):
 @admin_required
 def admin_api_event_movements(event_id: int):
     movement_type = (request.args.get("tipo") or "").strip()
-    product_id_raw = _parse_int(request.args.get("produto"), 0) or None
     q = (request.args.get("q") or "").strip()
+    event_seller_ids = {int(s["id"]) for s in list_event_sellers(event_id)}
+    seller_raw = _parse_int(request.args.get("vendedor"), 0)
+    seller_filter = seller_raw if seller_raw > 0 and seller_raw in event_seller_ids else None
+
     movements = list_event_stock_movements(
         event_id,
-        product_id=product_id_raw,
+        product_id=None,
         product_search=q or None,
         movement_type=movement_type or None,
+        seller_id=seller_filter,
         limit=300,
     )
     return jsonify({

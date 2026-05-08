@@ -57,13 +57,12 @@
         </label>
 
         <label class="admin-filter">
-            <span class="admin-filter__label">Produto</span>
-            <select name="produto" class="admin-filter__input">
-                <option value="0" {% if filters.produto == 0 %}selected{% endif %}>Todos</option>
-                {% for p in products %}
-                <option value="{{ p.product_id }}"
-                    {% if filters.produto == p.product_id %}selected{% endif %}>
-                    {{ p.name }}
+            <span class="admin-filter__label">Venda por vendedor</span>
+            <select name="vendedor" class="admin-filter__input" aria-describedby="hint-filtro-vendedor-event-mov">
+                <option value="0" {% if filters.vendedor == 0 %}selected{% endif %}>Todos</option>
+                {% for s in movement_filter_sellers %}
+                <option value="{{ s.id }}" {% if filters.vendedor == s.id %}selected{% endif %}>
+                    {{ s.name }}{% if not s.active %} (inativo){% endif %}
                 </option>
                 {% endfor %}
             </select>
@@ -84,7 +83,7 @@
         role="table"
         aria-label="Movimentações do evento {{ event.name }}"
         data-admin-movements
-        data-api-url="{{ url_for('admin_api_event_movements', event_id=event.id, tipo=filters.tipo, produto=filters.produto, q=filters.q) }}"
+        data-api-url="{{ url_for('admin_api_event_movements', event_id=event.id, tipo=filters.tipo, q=filters.q, vendedor=filters.vendedor) }}"
     >
         <div class="admin-table__head admin-mov__row admin-mov__row--wide admin-mov__row--wide-events" role="row">
             <span role="columnheader">Data/Hora</span>

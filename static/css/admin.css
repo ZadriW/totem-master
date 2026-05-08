@@ -406,6 +406,11 @@
     gap: 28px;
 }
 
+/* Detalhe do produto (biblioteca): mais largura para card + histórico lado a lado. */
+.admin-main--product-detail {
+    max-width: min(1680px, 100%);
+}
+
 /* Catálogo no painel do vendedor: mesma largura lógica que a tela pública (sem coluna estreita). */
 .admin-main.admin-main--catalog-embed {
     max-width: none;
@@ -1346,7 +1351,6 @@
         justify-self: stretch;
         min-width: 0;
         text-overflow: ellipsis;
-        white-space: nowrap;
         text-align: left;
     }
 
@@ -1528,6 +1532,38 @@
     display: grid;
     grid-template-columns: 1fr;
     gap: 16px;
+}
+
+/* Biblioteca: card à esquerda + histórico de movimentações à direita */
+.admin-product--detail-split {
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+    gap: 28px;
+    width: 100%;
+}
+
+.admin-product__history {
+    gap: 12px;
+    min-width: 0;
+    margin: 0;
+    padding: 18px 20px;
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.admin-product__history .admin-section__header {
+    gap: 6px;
+}
+
+.admin-product__movements-table {
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    border-radius: var(--radius-sm);
+}
+
+.admin-product__movements-table .admin-mov__row {
+    min-width: 640px;
 }
 
 .admin-card {
@@ -1734,6 +1770,14 @@
 @media (max-width: 1100px) {
     .admin-product {
         grid-template-columns: 1fr;
+    }
+
+    .admin-product--detail-split .admin-product__history {
+        padding: 16px;
+    }
+
+    .admin-product__movements-table .admin-mov__row {
+        min-width: 0;
     }
 }
 
@@ -2111,7 +2155,9 @@
     }
     .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-events > :nth-child(4) {
         grid-area: event;
-        justify-self: stretch;
+        justify-self: flex-start;
+        align-items: center;
+        gap: 6px;
         min-width: 0;
     }
     .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-events > :nth-child(5) {

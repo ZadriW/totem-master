@@ -35,8 +35,8 @@
         const ok = window.confirm(
             'Confirma o reinício do sistema?\n\n' +
                 'Todas as vendas e dados de clientes serão apagados. ' +
-                'O estoque voltará aos valores de “estoque inicial” e o histórico ' +
-                'de movimentações (exceto inicial) será removido. Esta ação não pode ser desfeita.'
+                'O estoque no cadastro e em cada evento voltará a zero com novo “estoque inicial”, ' +
+                'e o histórico de movimentações (exceto inicial) será removido. Esta ação não pode ser desfeita.'
         );
         if (!ok) event.preventDefault();
     });

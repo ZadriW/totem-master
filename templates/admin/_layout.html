@@ -70,7 +70,7 @@
         </div>
     </header>
 
-    <main class="admin-main">
+    <main class="admin-main{% block admin_main_class %}{% endblock %}">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
             <div class="admin-flashes">

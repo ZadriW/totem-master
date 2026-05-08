@@ -84,6 +84,31 @@
         `;
     }
 
+    /** IDs das movimentações com painel de cliente aberto (preserva estado entre polls). */
+    function getExpandedMovementIds(table) {
+        const ids = [];
+        table.querySelectorAll('.admin-mov__details').forEach(panel => {
+            if (!panel.hidden && panel.id && panel.id.startsWith('details-')) {
+                ids.push(panel.id.slice('details-'.length));
+            }
+        });
+        return ids;
+    }
+
+    function applyExpandedMovementIds(table, ids) {
+        if (!ids || !ids.length) return;
+        const idSet = new Set(ids.map(String));
+        idSet.forEach(movId => {
+            const details = document.getElementById(`details-${movId}`);
+            const btn = table.querySelector(`button.admin-mov__toggle[data-toggle="${movId}"]`);
+            if (!details || !btn) return;
+            details.hidden = false;
+            btn.setAttribute('aria-expanded', 'true');
+            const icon = btn.querySelector('i');
+            if (icon) icon.className = 'fa-solid fa-chevron-up';
+        });
+    }
+
     function renderProductMovementRow(movement) {
         const reasonParts = [];
         if (movement.reference) reasonParts.push(`<code>${escapeHtml(movement.reference)}</code>`);
@@ -127,6 +152,7 @@
     }
 
     function renderProductMovements(table, movements) {
+        const expandedIds = getExpandedMovementIds(table);
         Array.from(table.children).forEach(child => {
             if (!child.classList.contains('admin-table__head')) child.remove();
         });
@@ -140,6 +166,7 @@
             return;
         }
         table.insertAdjacentHTML('beforeend', movements.map(renderProductMovementRow).join(''));
+        applyExpandedMovementIds(table, expandedIds);
     }
 
     function setupProductMovementToggles() {
@@ -205,7 +232,9 @@
         const exitButton = root.querySelector('.admin-card--saida button[type="submit"]');
         const adjustInput = root.querySelector('input[name="new_stock"]');
         const activeForm = root.querySelector('.admin-product__toggle');
-        const movementsTable = root.parentElement.querySelector('[data-product-movements]');
+        const movementsTable =
+            root.querySelector('[data-product-movements]') ||
+            root.parentElement.querySelector('[data-product-movements]');
 
         if (status) status.innerHTML = badge(product.status);
         if (stock) stock.innerHTML = `<strong>${escapeHtml(product.estoque)}</strong> un.`;
