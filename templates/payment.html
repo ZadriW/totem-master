@@ -60,6 +60,101 @@
                     >
                 </label>
 
+                <h2 class="payment__section-title payment__section-title--sub payment__section-title--cro">
+                    <i class="fa-solid fa-id-card" aria-hidden="true"></i>
+                    Registro Profissional (CRO)
+                </h2>
+                <p class="payment-cro__hint">Informe os dados do seu registro no Conselho Regional de Odontologia. Após preencher os campos, clique em <strong>Verificar CRO</strong> para validar.</p>
+
+                <label class="payment-field payment-field--quarter">
+                    <span class="payment-field__label">UF <span class="payment-field__required">*</span></span>
+                    <select name="cro_uf" id="paymentCroUF" class="payment-field__input" required>
+                        <option value="">UF</option>
+                        <option value="AC">AC</option>
+                        <option value="AL">AL</option>
+                        <option value="AP">AP</option>
+                        <option value="AM">AM</option>
+                        <option value="BA">BA</option>
+                        <option value="CE">CE</option>
+                        <option value="DF">DF</option>
+                        <option value="ES">ES</option>
+                        <option value="GO">GO</option>
+                        <option value="MA">MA</option>
+                        <option value="MT">MT</option>
+                        <option value="MS">MS</option>
+                        <option value="MG">MG</option>
+                        <option value="PA">PA</option>
+                        <option value="PB">PB</option>
+                        <option value="PR">PR</option>
+                        <option value="PE">PE</option>
+                        <option value="PI">PI</option>
+                        <option value="RJ">RJ</option>
+                        <option value="RN">RN</option>
+                        <option value="RS">RS</option>
+                        <option value="RO">RO</option>
+                        <option value="RR">RR</option>
+                        <option value="SC">SC</option>
+                        <option value="SP">SP</option>
+                        <option value="SE">SE</option>
+                        <option value="TO">TO</option>
+                    </select>
+                </label>
+
+                <label class="payment-field payment-field--half">
+                    <span class="payment-field__label">Número do registro <span class="payment-field__required">*</span></span>
+                    <input
+                        type="text"
+                        name="cro_numero"
+                        id="paymentCroNumero"
+                        class="payment-field__input"
+                        placeholder="Ex.: 123456"
+                        required
+                        maxlength="7"
+                        inputmode="numeric"
+                        autocomplete="off"
+                    >
+                </label>
+
+                <label class="payment-field payment-field--quarter">
+                    <span class="payment-field__label">Categoria <span class="payment-field__required">*</span></span>
+                    <select name="cro_categoria" id="paymentCroCategoria" class="payment-field__input" required>
+                        <option value="">Selecione...</option>
+                        <option value="cd">Cirurgião Dentista</option>
+                        <option value="tsb">Técnico em Saúde Bucal</option>
+                        <option value="tpd">Técnico em Prótese Dentária</option>
+                        <option value="asb">Auxiliar em Saúde Bucal</option>
+                        <option value="apd">Auxiliar de Prótese Dentária</option>
+                        <option value="estagiario">Estagiário</option>
+                        <option value="clinica-assistencia">Clínica/Entidade</option>
+                        <option value="laboratorio">Laboratório</option>
+                        <option value="comercio-industria">Comércio/Indústria</option>
+                    </select>
+                </label>
+
+                <div class="payment-cro__actions">
+                    <button type="button" id="paymentSearchCro" class="payment-cro__btn" disabled>
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        Verificar CRO
+                    </button>
+                    <span class="payment-field__loading" id="croLoading" hidden>
+                        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                        Verificando...
+                    </span>
+                </div>
+
+                <div class="payment-cro__result" id="croResult" hidden>
+                    <div class="payment-cro__result-icon" id="croResultIcon" aria-hidden="true"></div>
+                    <div class="payment-cro__result-body">
+                        <p class="payment-cro__result-title" id="croResultTitle"></p>
+                        <dl class="payment-cro__result-details" id="croResultDetails"></dl>
+                    </div>
+                </div>
+
+                <h2 class="payment__section-title payment__section-title--sub payment__section-title--address">
+                    <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
+                    Endereço para Retirada
+                </h2>
+
                 <label class="payment-field payment-field--half">
                     <span class="payment-field__label">CEP <span class="payment-field__required">*</span></span>
                     <div class="payment-field__wrap">

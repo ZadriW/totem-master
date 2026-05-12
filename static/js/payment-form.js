@@ -2,6 +2,7 @@
  * Formulário de dados do cliente em /pagamento
  * - Validação de CPF
  * - Busca automática de endereço via ViaCEP
+ * - Verificação de CRO via API Consultar.io (proxy Flask)
  * - Salva em sessionStorage e disponibiliza para payment-waiting.js
  *
  * Em /pagamento/aguardando não há formulário: load/clear continuam disponíveis.
@@ -18,6 +19,17 @@
     const addressInput = document.getElementById('paymentAddress');
     const cityInput = document.getElementById('paymentCity');
     const stateSelect = document.getElementById('paymentState');
+
+    // Elementos do bloco CRO
+    const croUFSelect = document.getElementById('paymentCroUF');
+    const croNumeroInput = document.getElementById('paymentCroNumero');
+    const croCategoriaSelect = document.getElementById('paymentCroCategoria');
+    const searchCroBtn = document.getElementById('paymentSearchCro');
+    const croLoading = document.getElementById('croLoading');
+    const croResult = document.getElementById('croResult');
+    const croResultIcon = document.getElementById('croResultIcon');
+    const croResultTitle = document.getElementById('croResultTitle');
+    const croResultDetails = document.getElementById('croResultDetails');
 
     function load() {
         try {
@@ -70,6 +82,10 @@
         return `${digits.slice(0, 5)}-${digits.slice(5, 8)}`;
     }
 
+    function maskCRO(value) {
+        return value.replace(/\D/g, '').slice(0, 7);
+    }
+
     function validateCPF(cpf) {
         const digits = cpf.replace(/\D/g, '');
         if (digits.length !== 11) return false;
@@ -87,6 +103,104 @@
         if (check >= 10) check = 0;
         return check === parseInt(digits.charAt(10), 10);
     }
+
+    /* -------------------------------------------------------------------- */
+    /* CRO — verificação via API proxy                                      */
+    /* -------------------------------------------------------------------- */
+    function croFieldsReady() {
+        return (
+            croUFSelect && croUFSelect.value &&
+            croNumeroInput && croNumeroInput.value.trim().length >= 1 &&
+            croCategoriaSelect && croCategoriaSelect.value
+        );
+    }
+
+    function syncCroBtn() {
+        if (searchCroBtn) searchCroBtn.disabled = !croFieldsReady();
+    }
+
+    function croResultState(state, data) {
+        if (!croResult) return;
+        croResult.hidden = false;
+        croResult.className = 'payment-cro__result payment-cro__result--' + state;
+
+        if (state === 'success') {
+            croResultIcon.innerHTML = '<i class="fa-solid fa-circle-check" aria-hidden="true"></i>';
+            croResultTitle.textContent = data.nome_razao_social || 'Registro encontrado';
+            croResultDetails.innerHTML = `
+                <div class="payment-cro__result-row">
+                    <dt>Situação</dt>
+                    <dd class="payment-cro__situacao payment-cro__situacao--${(data.situacao || '').toLowerCase()}">${data.situacao || '—'}</dd>
+                </div>
+                <div class="payment-cro__result-row">
+                    <dt>Categoria</dt>
+                    <dd>${data.categoria || '—'}</dd>
+                </div>
+                <div class="payment-cro__result-row">
+                    <dt>Registro</dt>
+                    <dd>CRO-${data.uf || ''} ${data.numero_registro || ''}</dd>
+                </div>`;
+        } else if (state === 'notfound') {
+            croResultIcon.innerHTML = '<i class="fa-solid fa-circle-xmark" aria-hidden="true"></i>';
+            croResultTitle.textContent = 'Registro não encontrado';
+            croResultDetails.innerHTML = '<div class="payment-cro__result-row"><dd>Verifique os dados informados e tente novamente.</dd></div>';
+        } else {
+            croResultIcon.innerHTML = '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>';
+            croResultTitle.textContent = 'Não foi possível verificar';
+            croResultDetails.innerHTML = `<div class="payment-cro__result-row"><dd>${data.message || 'Tente novamente em alguns instantes.'}</dd></div>`;
+        }
+    }
+
+    function croResultClear() {
+        if (croResult) {
+            croResult.hidden = true;
+            croResult.className = 'payment-cro__result';
+        }
+    }
+
+    async function searchCRO() {
+        if (!croFieldsReady()) return;
+        const uf = croUFSelect.value;
+        const numero = croNumeroInput.value.trim();
+        const categoria = croCategoriaSelect.value;
+
+        searchCroBtn.disabled = true;
+        croLoading.hidden = false;
+        croResultClear();
+
+        try {
+            const params = new URLSearchParams({ uf, numero_registro: numero, categoria });
+            const response = await fetch(`/api/cro/consultar?${params}`, {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+                croResultState('success', data);
+            } else if (response.status === 404) {
+                croResultState('notfound', data);
+            } else {
+                croResultState('error', data);
+            }
+        } catch (err) {
+            croResultState('error', { message: 'Erro de rede. Verifique a conexão e tente novamente.' });
+        } finally {
+            croLoading.hidden = true;
+            syncCroBtn();
+        }
+    }
+
+    if (searchCroBtn) {
+        searchCroBtn.addEventListener('click', searchCRO);
+    }
+
+    // Limpa resultado e re-sincroniza botão quando qualquer campo CRO muda
+    [croUFSelect, croNumeroInput, croCategoriaSelect].forEach(el => {
+        if (!el) return;
+        el.addEventListener('change', () => { croResultClear(); syncCroBtn(); });
+        el.addEventListener('input', () => { croResultClear(); syncCroBtn(); });
+    });
 
     /* -------------------------------------------------------------------- */
     /* ViaCEP                                                               */
@@ -117,6 +231,8 @@
             input.value = maskCPF(input.value);
             const valid = validateCPF(input.value);
             input.setCustomValidity(valid ? '' : 'CPF inválido');
+        } else if (input.name === 'cro_numero') {
+            input.value = maskCRO(input.value);
         } else if (input.name === 'zipcode') {
             input.value = maskCEP(input.value);
             const digits = input.value.replace(/\D/g, '');
@@ -165,6 +281,9 @@
         return {
             name: (data.get('name') || '').trim(),
             cpf: (data.get('cpf') || '').trim(),
+            cro_uf: (data.get('cro_uf') || '').trim(),
+            cro_numero: (data.get('cro_numero') || '').trim(),
+            cro_categoria: (data.get('cro_categoria') || '').trim(),
             zipcode: (data.get('zipcode') || '').trim(),
             address: (data.get('address') || '').trim(),
             number: (data.get('number') || '').trim(),
@@ -188,6 +307,9 @@
     if (stored) {
         if (stored.name) form.name.value = stored.name;
         if (stored.cpf) form.cpf.value = stored.cpf;
+        if (stored.cro_uf) form.cro_uf.value = stored.cro_uf;
+        if (stored.cro_numero) form.cro_numero.value = stored.cro_numero;
+        if (stored.cro_categoria) form.cro_categoria.value = stored.cro_categoria;
         if (stored.zipcode) form.zipcode.value = stored.zipcode;
         if (stored.address) form.address.value = stored.address;
         if (stored.number) form.number.value = stored.number;
@@ -198,4 +320,6 @@
         const pmRadio = form.querySelector(`input[name="payment_method"][value="${pm === 'pix' ? 'pix' : 'cartao'}"]`);
         if (pmRadio) pmRadio.checked = true;
     }
+
+    syncCroBtn();
 })();

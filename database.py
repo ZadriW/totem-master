@@ -238,6 +238,21 @@ def _ensure_transactions_client_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE transactions ADD COLUMN seller_name TEXT")
 
 
+def _ensure_transactions_cro_columns(conn: sqlite3.Connection) -> None:
+    """Adiciona colunas de validação CRO (Consultar.io) em transactions."""
+    cols = _table_columns(conn, "transactions")
+    cro_fields = {
+        "client_cro_uf": "TEXT",
+        "client_cro_numero": "TEXT",
+        "client_cro_categoria": "TEXT",
+        "client_cro_validated": "INTEGER DEFAULT 0",
+        "client_cro_validation_data": "TEXT",
+    }
+    for field, ddl in cro_fields.items():
+        if field not in cols:
+            conn.execute(f"ALTER TABLE transactions ADD COLUMN {field} {ddl}")
+
+
 def _ensure_events_tables(conn: sqlite3.Connection) -> None:
     """Cria tabelas de eventos caso a base seja anterior à sua introdução."""
     conn.executescript("""
@@ -403,6 +418,7 @@ def init_db() -> None:
         _ensure_products_sku_column(conn)
         _ensure_transaction_items_product_sku_column(conn)
         _ensure_transactions_client_columns(conn)
+        _ensure_transactions_cro_columns(conn)
         _ensure_transactions_payment_method(conn)
         _ensure_sellers_columns(conn)
         _ensure_events_tables(conn)
@@ -1413,6 +1429,7 @@ def create_transaction(
     created_by: str = "totem",
     seller_id: Optional[int] = None,
     seller_name: Optional[str] = None,
+    event_id: Optional[int] = None,
     client_name: Optional[str] = None,
     client_cpf: Optional[str] = None,
     client_zipcode: Optional[str] = None,
@@ -1422,6 +1439,11 @@ def create_transaction(
     client_city: Optional[str] = None,
     client_state: Optional[str] = None,
     payment_method: Optional[str] = None,
+    client_cro_uf: Optional[str] = None,
+    client_cro_numero: Optional[str] = None,
+    client_cro_categoria: Optional[str] = None,
+    client_cro_validated: bool = False,
+    client_cro_validation_data: Optional[str] = None,
 ) -> Dict:
     """Registra uma venda, seus itens e **decrementa o estoque atomicamente**.
 
@@ -1430,6 +1452,10 @@ def create_transaction(
     Se qualquer produto não tiver estoque suficiente, **nada é gravado**.
 
     Parâmetros opcionais de ``client_*`` guardam dados do cliente na transação.
+    Parâmetros ``client_cro_*`` armazenam dados de validação CRO (Consultar.io).
+    
+    ``event_id``: Se fornecido, verifica/decrementa estoque de ``event_products`` 
+    (venda em evento). Se None, usa estoque global de ``products`` (venda sem evento).
 
     Retorna ``{id, order_number, total, items_count, created_at}``.
     """
@@ -1504,17 +1530,41 @@ def create_transaction(
                 continue
             demand[i["product_id"]] = demand.get(i["product_id"], 0) + i["quantity"]
 
-        for pid, qty in demand.items():
-            row = conn.execute(
-                "SELECT name, stock FROM products WHERE id = ?", (pid,)
-            ).fetchone()
-            if row is None:
-                raise ValueError(f"Produto {pid} não encontrado no catálogo.")
-            if int(row["stock"] or 0) < qty:
-                raise ValueError(
-                    f"Estoque insuficiente para '{row['name']}': "
-                    f"disponível {int(row['stock'] or 0)}, pedido {qty}."
-                )
+        # Verifica estoque: se event_id presente, usa event_products; senão usa products
+        if event_id is not None:
+            # Venda em evento: verifica estoque do evento
+            for pid, qty in demand.items():
+                ep = conn.execute(
+                    """
+                    SELECT p.name, ep.stock
+                      FROM event_products ep
+                      JOIN products p ON p.id = ep.product_id
+                     WHERE ep.event_id = ? AND ep.product_id = ?
+                    """,
+                    (int(event_id), pid),
+                ).fetchone()
+                if ep is None:
+                    raise ValueError(
+                        f"Produto {pid} não está disponível neste evento."
+                    )
+                if int(ep["stock"] or 0) < qty:
+                    raise ValueError(
+                        f"Estoque insuficiente para '{ep['name']}' no evento: "
+                        f"disponível {int(ep['stock'] or 0)}, pedido {qty}."
+                    )
+        else:
+            # Venda sem evento: verifica estoque global
+            for pid, qty in demand.items():
+                row = conn.execute(
+                    "SELECT name, stock FROM products WHERE id = ?", (pid,)
+                ).fetchone()
+                if row is None:
+                    raise ValueError(f"Produto {pid} não encontrado no catálogo.")
+                if int(row["stock"] or 0) < qty:
+                    raise ValueError(
+                        f"Estoque insuficiente para '{row['name']}': "
+                        f"disponível {int(row['stock'] or 0)}, pedido {qty}."
+                    )
 
         order_number = generate_order_number(conn)
         created_at = _now_iso()
@@ -1525,14 +1575,18 @@ def create_transaction(
                 (order_number, created_at, total, items_count, status,
                  client_name, client_cpf, client_zipcode, client_address,
                  client_number, client_complement, client_city, client_state,
-                 seller_id, seller_name, payment_method)
-            VALUES (?, ?, ?, ?, 'confirmado', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 seller_id, seller_name, payment_method,
+                 client_cro_uf, client_cro_numero, client_cro_categoria,
+                 client_cro_validated, client_cro_validation_data)
+            VALUES (?, ?, ?, ?, 'confirmado', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 order_number, created_at, total, items_count,
                 client_name, client_cpf, client_zipcode, client_address,
                 client_number, client_complement, client_city, client_state,
                 seller_id, seller_name, payment_method,
+                client_cro_uf, client_cro_numero, client_cro_categoria,
+                1 if client_cro_validated else 0, client_cro_validation_data,
             ),
         )
         tx_id = cur.lastrowid
@@ -1560,17 +1614,32 @@ def create_transaction(
         )
 
         # Registra a saída de estoque para cada produto (agrupado).
-        for pid, qty in demand.items():
-            _apply_movement(
-                conn,
-                product_id=pid,
-                movement_type="venda",
-                delta=-qty,
-                reason="Venda no totem",
-                reference=order_number,
-                transaction_id=tx_id,
-                created_by=created_by,
-            )
+        # Se em evento, usa event_products; senão usa products global.
+        if event_id is not None:
+            for pid, qty in demand.items():
+                _apply_event_movement(
+                    conn,
+                    event_id=int(event_id),
+                    product_id=pid,
+                    movement_type="venda",
+                    delta=-qty,
+                    reason="Venda no totem",
+                    reference=order_number,
+                    transaction_id=tx_id,
+                    created_by=created_by,
+                )
+        else:
+            for pid, qty in demand.items():
+                _apply_movement(
+                    conn,
+                    product_id=pid,
+                    movement_type="venda",
+                    delta=-qty,
+                    reason="Venda no totem",
+                    reference=order_number,
+                    transaction_id=tx_id,
+                    created_by=created_by,
+                )
 
     return {
         "id": tx_id,
@@ -2012,6 +2081,8 @@ def _apply_event_movement(
     reason: Optional[str] = None,
     created_by: Optional[str] = None,
     unit_cost: Optional[float] = None,
+    reference: Optional[str] = None,
+    transaction_id: Optional[int] = None,
 ) -> Dict:
     """Atomicamente: atualiza event_products.stock e insere stock_movements com event_id."""
     if movement_type not in _VALID_TYPES:
@@ -2048,8 +2119,8 @@ def _apply_event_movement(
         """
         INSERT INTO stock_movements
             (product_id, event_id, movement_type, quantity, delta, balance_after,
-             unit_cost, reason, created_by, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             unit_cost, reason, reference, transaction_id, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             int(product_id),
@@ -2060,6 +2131,8 @@ def _apply_event_movement(
             new_stock,
             float(unit_cost) if unit_cost is not None else None,
             reason,
+            reference,
+            int(transaction_id) if transaction_id is not None else None,
             created_by,
             now,
         ),

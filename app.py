@@ -396,6 +396,34 @@ def api_products():
     return jsonify(products)
 
 
+@app.route("/api/cro/consultar")
+def api_cro_consultar():
+    """Proxy seguro para a API Consultar.io de validação de CRO.
+    Mantém o token no servidor; o frontend só chama este endpoint."""
+    uf = (request.args.get("uf") or "").strip().upper()
+    numero = (request.args.get("numero_registro") or "").strip()
+    categoria = (request.args.get("categoria") or "").strip().lower()
+
+    if not uf or not numero or not categoria:
+        return jsonify({"error": "params", "message": "Informe UF, número de registro e categoria."}), 400
+
+    try:
+        from consultar_io import consultar_cro, RegistroNaoEncontrado, CredenciaisInvalidas, ConsultarIOError
+        resultado = consultar_cro(uf=uf, numero_registro=numero, categoria=categoria)
+        return jsonify(resultado)
+    except RegistroNaoEncontrado as exc:
+        return jsonify({"error": "nao_encontrado", "message": str(exc)}), 404
+    except CredenciaisInvalidas as exc:
+        app.logger.error("Consultar.io credenciais/créditos: %s", exc)
+        return jsonify({"error": "api_indisponivel", "message": "Serviço de validação temporariamente indisponível."}), 503
+    except ConsultarIOError as exc:
+        app.logger.warning("Consultar.io erro: %s", exc)
+        return jsonify({"error": "api_erro", "message": str(exc)}), 502
+    except Exception:
+        app.logger.exception("Erro inesperado ao consultar CRO")
+        return jsonify({"error": "server_error", "message": "Erro interno ao consultar CRO."}), 500
+
+
 @app.route("/api/transacoes", methods=["POST"])
 def api_create_transaction():
     """Registra uma venda concluída e baixa o estoque atomicamente."""
@@ -405,6 +433,37 @@ def api_create_transaction():
     payment_method = _normalize_payment_method_for_db(
         payload.get("payment_method") or client.get("payment_method"),
     )
+    
+    # Dados de CRO (se fornecidos)
+    cro_uf = (client.get("cro_uf") or "").strip().upper()
+    cro_numero = (client.get("cro_numero") or "").strip()
+    cro_categoria = (client.get("cro_categoria") or "").strip().lower()
+    
+    # Validação CRO (opcional - só valida se todos os campos estiverem preenchidos)
+    cro_validated = False
+    cro_validation_data = None
+    
+    if cro_uf and cro_numero and cro_categoria:
+        try:
+            from consultar_io import consultar_cro
+            import json
+            
+            validation_result = consultar_cro(
+                uf=cro_uf,
+                numero_registro=cro_numero,
+                categoria=cro_categoria
+            )
+            cro_validated = True
+            cro_validation_data = json.dumps(validation_result, ensure_ascii=False)
+            app.logger.info(
+                f"CRO validado com sucesso: {cro_uf}-{cro_numero} "
+                f"({validation_result.get('nome_razao_social', 'N/A')})"
+            )
+        except Exception as exc:
+            # Log do erro mas não bloqueia a venda
+            app.logger.warning(f"Erro ao validar CRO {cro_uf}-{cro_numero}: {exc}")
+            # Mantém cro_validated = False mas segue com a venda
+    
     try:
         auth = _seller_auth()
         if not auth:
@@ -415,11 +474,17 @@ def api_create_transaction():
         if row is None or not row.get("active"):
             raise ValueError("Sessão de vendedor inválida ou inativa.")
         seller = {"id": int(row["id"]), "name": row["name"]}
+        
+        # Busca o evento ativo do vendedor (se houver)
+        active_event = get_active_event_for_seller(int(seller["id"]))
+        event_id = int(active_event["id"]) if active_event else None
+        
         result = create_transaction(
             items,
             created_by=f"vendedor:{seller['name']}",
             seller_id=int(seller["id"]),
             seller_name=seller["name"],
+            event_id=event_id,
             client_name=client.get("name"),
             client_cpf=client.get("cpf"),
             client_zipcode=client.get("zipcode"),
@@ -429,6 +494,11 @@ def api_create_transaction():
             client_city=client.get("city"),
             client_state=client.get("state"),
             payment_method=payment_method,
+            client_cro_uf=cro_uf or None,
+            client_cro_numero=cro_numero or None,
+            client_cro_categoria=cro_categoria or None,
+            client_cro_validated=cro_validated,
+            client_cro_validation_data=cro_validation_data,
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400

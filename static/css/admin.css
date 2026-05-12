@@ -1684,7 +1684,7 @@
 .admin-mov__badge--saida   { background: rgba(232, 137, 11, 0.15); color: #a5620a; }
 .admin-mov__badge--venda   { background: rgba(14, 22, 122, 0.12); color: var(--color-primary); }
 .admin-mov__badge--ajuste  { background: rgba(107, 114, 128, 0.15); color: #4b5563; }
-.admin-mov__badge--inicial { background: rgba(14, 22, 122, 0.08); color: var(--color-primary); }
+.admin-mov__badge--inicial { background: rgba(14, 22, 122, 0.08); color: var(--color-primary); white-space: nowrap; }
 
 .admin-mov__type-cell {
     display: inline-flex;

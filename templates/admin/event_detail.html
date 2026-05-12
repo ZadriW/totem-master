@@ -163,13 +163,16 @@
             <span role="columnheader">Tipo</span>
             <span class="admin-table__col--num" role="columnheader">Delta</span>
             <span class="admin-table__col--num" role="columnheader">Saldo após</span>
-            <span role="columnheader">Motivo</span>
+            <span role="columnheader">Motivo / Ref.</span>
         </div>
         {% for m in recent_movements %}
         <div class="admin-mov__row" role="row">
             <span>{{ m.created_at | datahora }}</span>
             <span class="admin-mov__product">
-                <strong>{{ m.product_name or '—' }}</strong>
+                <a href="{{ url_for('admin_product_detail', product_id=m.product_id) }}">
+                    {{ m.product_name or '—' }}
+                </a>
+                <small>#{{ m.product_id }} &middot; {{ m.product_category or '-' }}</small>
             </span>
             <span>
                 <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
@@ -180,7 +183,10 @@
                 {{ m.delta | signed }}
             </span>
             <span class="admin-table__col--num"><strong>{{ m.balance_after }}</strong></span>
-            <span>{{ m.reason or '—' }}</span>
+            <span class="admin-mov__reason">
+                {% if m.reference %}<code>{{ m.reference }}</code>{% endif %}
+                {{ m.reason or '-' }}
+            </span>
         </div>
         {% endfor %}
     </div>
