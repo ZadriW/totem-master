@@ -9,7 +9,10 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import os
+import re
 import secrets
 import unicodedata
 from collections import defaultdict
@@ -18,6 +21,7 @@ from datetime import datetime
 
 from flask import (
     Flask,
+    Response,
     current_app,
     flash,
     jsonify,
@@ -32,59 +36,63 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from data.products import CATEGORIES
 from database import (
+    EXPORT_MOVEMENTS_CSV_CAP,
+    add_product_to_event,
+    add_seller_to_event,
+    archive_event,
+    count_products_admin_filtered,
+    create_event,
     create_seller_account,
     create_transaction,
     delete_seller,
     ensure_seller_account,
-    get_seller,
-    get_seller_by_email,
-    get_product,
-    get_product_in_event,
-    get_stats,
-    get_product_events_stock_total,
-    get_products_library_stats,
-    get_transaction_by_order_number,
-    init_db,
-    list_seller_pin_hashes,
-    list_sellers,
-    list_products_admin,
-    list_products_admin_slice,
-    count_products_admin_filtered,
-    list_products_for_client,
-    list_active_product_stocks,
-    list_stock_movements,
-    list_transactions,
-    reset_totem_to_default_state,
-    set_product_active,
-    sync_products_from_wake,
-    update_seller_account,
-    update_seller_last_login,
-    create_event,
-    list_events,
-    get_event,
-    update_event,
-    archive_event,
-    restore_event,
+    event_badge_style_pairs,
     find_product_by_sku_or_id,
-    add_product_to_event,
-    remove_product_from_event,
-    update_event_product_stock,
-    list_event_products,
+    get_active_event_for_seller,
+    get_event,
+    get_event_sales_dashboard,
     get_event_stats,
     get_event_stock_stats,
+    get_product,
+    get_product_events_stock_total,
+    get_product_in_event,
+    get_products_library_stats,
+    get_seller,
+    get_seller_by_email,
+    get_stats,
+    get_transaction_by_order_number,
+    init_db,
+    list_active_event_product_stocks,
+    list_active_product_stocks,
+    list_event_products,
+    list_event_products_for_client,
+    list_event_sellers,
+    list_event_stock_movements,
+    list_events,
+    list_products_admin,
+    list_products_admin_slice,
+    list_products_for_client,
+    list_seller_pin_hashes,
+    list_sellers,
+    list_sellers_not_in_event,
+    list_stock_movements,
+    list_transaction_items_for_event_period,
+    list_transactions,
+    list_transactions_summary_for_event_period,
+    normalize_event_badge_color,
+    register_event_stock_adjustment,
     register_event_stock_entry,
     register_event_stock_exit,
-    register_event_stock_adjustment,
-    list_event_stock_movements,
-    list_event_sellers,
-    list_sellers_not_in_event,
-    add_seller_to_event,
+    remove_product_from_event,
     remove_seller_from_event,
-    get_active_event_for_seller,
-    list_event_products_for_client,
-    list_active_event_product_stocks,
-    normalize_event_badge_color,
-    event_badge_style_pairs,
+    reset_totem_to_default_state,
+    restore_event,
+    set_product_active,
+    sync_products_from_wake,
+    update_event,
+    update_event_product_stock,
+    update_seller_account,
+    update_seller_last_login,
 )
 import wake_api
 
@@ -396,34 +404,6 @@ def api_products():
     return jsonify(products)
 
 
-@app.route("/api/cro/consultar")
-def api_cro_consultar():
-    """Proxy seguro para a API Consultar.io de validação de CRO.
-    Mantém o token no servidor; o frontend só chama este endpoint."""
-    uf = (request.args.get("uf") or "").strip().upper()
-    numero = (request.args.get("numero_registro") or "").strip()
-    categoria = (request.args.get("categoria") or "").strip().lower()
-
-    if not uf or not numero or not categoria:
-        return jsonify({"error": "params", "message": "Informe UF, número de registro e categoria."}), 400
-
-    try:
-        from consultar_io import consultar_cro, RegistroNaoEncontrado, CredenciaisInvalidas, ConsultarIOError
-        resultado = consultar_cro(uf=uf, numero_registro=numero, categoria=categoria)
-        return jsonify(resultado)
-    except RegistroNaoEncontrado as exc:
-        return jsonify({"error": "nao_encontrado", "message": str(exc)}), 404
-    except CredenciaisInvalidas as exc:
-        app.logger.error("Consultar.io credenciais/créditos: %s", exc)
-        return jsonify({"error": "api_indisponivel", "message": "Serviço de validação temporariamente indisponível."}), 503
-    except ConsultarIOError as exc:
-        app.logger.warning("Consultar.io erro: %s", exc)
-        return jsonify({"error": "api_erro", "message": str(exc)}), 502
-    except Exception:
-        app.logger.exception("Erro inesperado ao consultar CRO")
-        return jsonify({"error": "server_error", "message": "Erro interno ao consultar CRO."}), 500
-
-
 @app.route("/api/transacoes", methods=["POST"])
 def api_create_transaction():
     """Registra uma venda concluída e baixa o estoque atomicamente."""
@@ -434,36 +414,10 @@ def api_create_transaction():
         payload.get("payment_method") or client.get("payment_method"),
     )
     
-    # Dados de CRO (se fornecidos)
+    # CRO: UF e número informados no checkout (sem API externa)
     cro_uf = (client.get("cro_uf") or "").strip().upper()
     cro_numero = (client.get("cro_numero") or "").strip()
-    cro_categoria = (client.get("cro_categoria") or "").strip().lower()
-    
-    # Validação CRO (opcional - só valida se todos os campos estiverem preenchidos)
-    cro_validated = False
-    cro_validation_data = None
-    
-    if cro_uf and cro_numero and cro_categoria:
-        try:
-            from consultar_io import consultar_cro
-            import json
-            
-            validation_result = consultar_cro(
-                uf=cro_uf,
-                numero_registro=cro_numero,
-                categoria=cro_categoria
-            )
-            cro_validated = True
-            cro_validation_data = json.dumps(validation_result, ensure_ascii=False)
-            app.logger.info(
-                f"CRO validado com sucesso: {cro_uf}-{cro_numero} "
-                f"({validation_result.get('nome_razao_social', 'N/A')})"
-            )
-        except Exception as exc:
-            # Log do erro mas não bloqueia a venda
-            app.logger.warning(f"Erro ao validar CRO {cro_uf}-{cro_numero}: {exc}")
-            # Mantém cro_validated = False mas segue com a venda
-    
+
     try:
         auth = _seller_auth()
         if not auth:
@@ -496,9 +450,6 @@ def api_create_transaction():
             payment_method=payment_method,
             client_cro_uf=cro_uf or None,
             client_cro_numero=cro_numero or None,
-            client_cro_categoria=cro_categoria or None,
-            client_cro_validated=cro_validated,
-            client_cro_validation_data=cro_validation_data,
         )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -792,34 +743,37 @@ def seller_stock():
 @seller_required
 def seller_movements():
     movement_type = (request.args.get("tipo") or "").strip()
-    product_id_raw = request.args.get("produto") or ""
-    product_id = _parse_int(product_id_raw, 0) or None
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        legacy_pid = _parse_int(request.args.get("produto") or "", 0)
+        if legacy_pid:
+            q = str(legacy_pid)
     pedido = (request.args.get("pedido") or "").strip()
+    q_search = q or None
 
     seller_ev = _get_seller_event()
     if seller_ev:
         ev_id = seller_ev["id"]
         movements = list_event_stock_movements(
             ev_id,
-            product_id=product_id,
+            product_id=None,
+            product_search=q_search,
             movement_type=movement_type or None,
             limit=500,
         )
-        ev_products = list_event_products_for_client(ev_id)
         return render_template(
             "seller/movements.html",
             movements=movements,
-            products=ev_products,
             filters={
                 "tipo": movement_type or "todos",
-                "produto": product_id or 0,
+                "q": q,
                 "pedido": pedido,
             },
             **_seller_shell_context(active_section="movimentacoes"),
         )
 
     movements = list_stock_movements(
-        product_id=product_id,
+        product_search=q_search,
         movement_type=movement_type or None,
         reference=pedido or None,
         limit=500,
@@ -827,10 +781,9 @@ def seller_movements():
     return render_template(
         "seller/movements.html",
         movements=movements,
-        products=list_products_admin(),
         filters={
             "tipo": movement_type or "todos",
-            "produto": product_id or 0,
+            "q": q,
             "pedido": pedido,
         },
         **_seller_shell_context(active_section="movimentacoes"),
@@ -1464,6 +1417,28 @@ def _product_status(product: dict) -> dict:
     return {"label": "OK", "kind": "success"}
 
 
+def _cro_pedido_fields(row: dict | None) -> dict[str, str] | None:
+    """UF e número do registro CRO salvos na transação (formulário de pagamento)."""
+    if not row:
+        return None
+
+    def _strip_val(v):
+        if v is None:
+            return ""
+        return str(v).strip()
+
+    uf_s = _strip_val(row.get("client_cro_uf"))
+    num_s = _strip_val(row.get("client_cro_numero"))
+    if not uf_s and not num_s:
+        return None
+    out: dict[str, str] = {}
+    if uf_s:
+        out["uf"] = uf_s
+    if num_s:
+        out["numero_registro"] = num_s
+    return out if out else None
+
+
 def _movement_payload(movement: dict) -> dict:
     reference = movement.get("reference")
     movement_type = movement.get("movement_type")
@@ -1485,6 +1460,7 @@ def _movement_payload(movement: dict) -> dict:
             else None
         ),
         "has_customer_details": movement_type == "venda" and bool(tx_id),
+        "cro_pedido": _cro_pedido_fields(movement),
     }
 
 
@@ -1669,6 +1645,253 @@ def admin_movements():
     )
 
 
+_EXPORT_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _csv_cell(value):
+    if value is None:
+        return ""
+    return value
+
+
+def _csv_attachment_response(filename: str, header: list[str], rows: list[list]) -> Response:
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\r\n")
+    writer.writerow(header)
+    for row in rows:
+        writer.writerow(row)
+    body = buf.getvalue().encode("utf-8-sig")
+    return Response(
+        body,
+        mimetype="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+def _movement_export_table(movements: list[dict]) -> tuple[list[str], list[list]]:
+    header = [
+        "id_movimento",
+        "data_hora",
+        "tipo",
+        "tipo_descricao",
+        "produto_id",
+        "produto_nome",
+        "categoria",
+        "quantidade",
+        "delta",
+        "saldo_apos",
+        "evento_id",
+        "evento_nome",
+        "referencia",
+        "motivo",
+        "transacao_id",
+        "registrado_por",
+        "custo_unitario",
+    ]
+    rows: list[list] = []
+    for m in movements:
+        mt = m.get("movement_type")
+        rows.append(
+            [
+                _csv_cell(m.get("id")),
+                _csv_cell(m.get("created_at")),
+                _csv_cell(mt),
+                mov_label_filter(mt),
+                _csv_cell(m.get("product_id")),
+                _csv_cell(m.get("product_name")),
+                _csv_cell(m.get("product_category")),
+                _csv_cell(m.get("quantity")),
+                _csv_cell(m.get("delta")),
+                _csv_cell(m.get("balance_after")),
+                _csv_cell(m.get("event_id")),
+                _csv_cell(m.get("event_name")),
+                _csv_cell(m.get("reference")),
+                _csv_cell(m.get("reason")),
+                _csv_cell(m.get("transaction_id")),
+                _csv_cell(m.get("created_by")),
+                _csv_cell(m.get("unit_cost")),
+            ]
+        )
+    return header, rows
+
+
+@app.route("/admin/movimentacoes/export.csv")
+@admin_required
+def admin_movements_export_csv():
+    movement_type = (request.args.get("tipo") or "").strip()
+    q = (request.args.get("q") or "").strip()
+    pedido = (request.args.get("pedido") or "").strip()
+    seller_raw = _parse_int(request.args.get("vendedor"), 0)
+    seller_filter = seller_raw if seller_raw > 0 else None
+    if seller_filter is not None:
+        known = {int(s["id"]) for s in list_sellers()}
+        if seller_filter not in known:
+            seller_filter = None
+
+    movements = list_stock_movements(
+        product_search=q or None,
+        movement_type=movement_type or None,
+        reference=pedido or None,
+        seller_id=seller_filter,
+        limit=EXPORT_MOVEMENTS_CSV_CAP,
+    )
+    header, rows = _movement_export_table(movements)
+    fname = f"movimentacoes_admin_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return _csv_attachment_response(fname, header, rows)
+
+
+@app.route("/admin/eventos/<int:event_id>/movimentacoes/export.csv")
+@admin_required
+def admin_event_movements_export_csv(event_id: int):
+    event = _event_or_404(event_id)
+    if event is None:
+        return redirect(url_for("admin_events"))
+
+    movement_type = (request.args.get("tipo") or "").strip()
+    q = (request.args.get("q") or "").strip()
+    event_sellers_rows = list_event_sellers(event_id)
+    event_seller_ids = {int(s["id"]) for s in event_sellers_rows}
+    seller_raw = _parse_int(request.args.get("vendedor"), 0)
+    seller_filter = seller_raw if seller_raw > 0 and seller_raw in event_seller_ids else None
+
+    movements = list_event_stock_movements(
+        event_id,
+        product_id=None,
+        product_search=q or None,
+        movement_type=movement_type or None,
+        seller_id=seller_filter,
+        limit=EXPORT_MOVEMENTS_CSV_CAP,
+    )
+    header, rows = _movement_export_table(movements)
+    safe_ev = re.sub(r"[^a-zA-Z0-9_-]+", "_", (event.get("name") or str(event_id)))[:40].strip("_") or str(event_id)
+    fname = f"movimentacoes_evento_{event_id}_{safe_ev}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return _csv_attachment_response(fname, header, rows)
+
+
+@app.route("/admin/eventos/<int:event_id>/vendas/export.csv")
+@admin_required
+def admin_event_sales_export_csv(event_id: int):
+    event = _event_or_404(event_id)
+    if event is None:
+        return redirect(url_for("admin_events"))
+
+    raw_from = (request.args.get("data_inicio") or "").strip()
+    raw_to = (request.args.get("data_fim") or "").strip()
+    for label, raw in (("Data inicial", raw_from), ("Data final", raw_to)):
+        if raw and not _EXPORT_DATE_RE.fullmatch(raw):
+            flash(f"{label}: use o formato AAAA-MM-DD.", "error")
+            return redirect(url_for("admin_event_detail", event_id=event_id))
+
+    nivel = (request.args.get("nivel") or "pedidos").strip().lower()
+    if nivel not in ("pedidos", "itens"):
+        nivel = "pedidos"
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_ev = re.sub(r"[^a-zA-Z0-9_-]+", "_", (event.get("name") or str(event_id)))[:40].strip("_") or str(event_id)
+
+    if nivel == "pedidos":
+        rows_data = list_transactions_summary_for_event_period(
+            event_id,
+            date_from=raw_from or None,
+            date_to=raw_to or None,
+        )
+        header = [
+            "pedido_id",
+            "codigo_pedido",
+            "data_hora",
+            "total",
+            "qtd_itens",
+            "status",
+            "cliente_nome",
+            "cliente_cpf",
+            "cliente_cep",
+            "cliente_endereco",
+            "cliente_numero",
+            "cliente_complemento",
+            "cliente_cidade",
+            "cliente_estado",
+            "vendedor_id",
+            "vendedor_nome",
+            "forma_pagamento",
+            "cro_uf",
+            "cro_numero_registro",
+        ]
+        rows = []
+        for t in rows_data:
+            rows.append(
+                [
+                    _csv_cell(t.get("id")),
+                    _csv_cell(t.get("order_number")),
+                    _csv_cell(t.get("created_at")),
+                    _csv_cell(t.get("total")),
+                    _csv_cell(t.get("items_count")),
+                    _csv_cell(t.get("status")),
+                    _csv_cell(t.get("client_name")),
+                    _csv_cell(t.get("client_cpf")),
+                    _csv_cell(t.get("client_zipcode")),
+                    _csv_cell(t.get("client_address")),
+                    _csv_cell(t.get("client_number")),
+                    _csv_cell(t.get("client_complement")),
+                    _csv_cell(t.get("client_city")),
+                    _csv_cell(t.get("client_state")),
+                    _csv_cell(t.get("seller_id")),
+                    _csv_cell(t.get("seller_name")),
+                    _csv_cell(t.get("payment_method")),
+                    _csv_cell(t.get("client_cro_uf")),
+                    _csv_cell(t.get("client_cro_numero")),
+                ]
+            )
+        fname = f"vendas_evento_{event_id}_{safe_ev}_pedidos_{ts}.csv"
+    else:
+        rows_data = list_transaction_items_for_event_period(
+            event_id,
+            date_from=raw_from or None,
+            date_to=raw_to or None,
+        )
+        header = [
+            "item_id",
+            "pedido_id",
+            "codigo_pedido",
+            "data_hora_pedido",
+            "vendedor_id",
+            "vendedor_nome",
+            "forma_pagamento",
+            "produto_id",
+            "produto_nome",
+            "categoria",
+            "sku",
+            "quantidade",
+            "preco_unitario",
+            "subtotal",
+        ]
+        rows = []
+        for ti in rows_data:
+            rows.append(
+                [
+                    _csv_cell(ti.get("item_id")),
+                    _csv_cell(ti.get("transaction_id")),
+                    _csv_cell(ti.get("order_number")),
+                    _csv_cell(ti.get("created_at")),
+                    _csv_cell(ti.get("seller_id")),
+                    _csv_cell(ti.get("seller_name")),
+                    _csv_cell(ti.get("payment_method")),
+                    _csv_cell(ti.get("product_id")),
+                    _csv_cell(ti.get("product_name")),
+                    _csv_cell(ti.get("category")),
+                    _csv_cell(ti.get("product_sku")),
+                    _csv_cell(ti.get("quantity")),
+                    _csv_cell(ti.get("unit_price")),
+                    _csv_cell(ti.get("subtotal")),
+                ]
+            )
+        fname = f"vendas_evento_{event_id}_{safe_ev}_itens_{ts}.csv"
+
+    return _csv_attachment_response(fname, header, rows)
+
+
 # ---------------------------------------------------------------------------
 # Eventos de estoque — helpers
 # ---------------------------------------------------------------------------
@@ -1723,6 +1946,7 @@ def _event_movement_payload(movement: dict, *, event_id: int) -> dict:
             else None
         ),
         "has_customer_details": movement_type == "venda" and bool(tx_id),
+        "cro_pedido": _cro_pedido_fields(movement),
     }
 
 
@@ -1776,12 +2000,14 @@ def admin_event_detail(event_id: int):
     if event is None:
         return redirect(url_for("admin_events"))
     stats = get_event_stock_stats(event_id)
+    sales_dashboard = get_event_sales_dashboard(event_id)
     recent_movements = list_event_stock_movements(event_id, limit=5)
     sellers = list_event_sellers(event_id)
     return render_template(
         "admin/event_detail.html",
         event=event,
         stats=stats,
+        sales_dashboard=sales_dashboard,
         recent_movements=recent_movements,
         sellers=sellers,
         active_event_tab="dashboard",
@@ -2216,6 +2442,12 @@ def datahora_filter(value):
 @app.template_filter("paymethod")
 def paymethod_filter(value):
     return _payment_method_label(value)
+
+
+@app.template_filter("cro_pedido")
+def cro_pedido_filter(row):
+    """Extrai UF e número do registro CRO da linha de movimentação / transação."""
+    return _cro_pedido_fields(row if isinstance(row, dict) else None)
 
 
 @app.template_filter("signed")

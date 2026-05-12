@@ -29,6 +29,38 @@
         return '—';
     }
 
+    function normalizeCroPedido(movement) {
+        let c = movement.cro_pedido;
+        const looksGood =
+            c !== null &&
+            c !== undefined &&
+            typeof c === 'object' &&
+            !Array.isArray(c) &&
+            (String(c.uf || '').trim() || String(c.numero_registro || '').trim());
+        if (looksGood) {
+            return c;
+        }
+        const uf = String(movement.client_cro_uf ?? '').trim();
+        const numero_registro = String(movement.client_cro_numero ?? '').trim();
+        if (!uf && !numero_registro) {
+            return null;
+        }
+        return { uf, numero_registro };
+    }
+
+    function croPedidoHtml(movement) {
+        const c = normalizeCroPedido(movement);
+        if (!c) return '';
+        let html = '';
+        if (c.uf) {
+            html += `<div class="admin-mov__details-item"><dt>UF (CRO)</dt><dd>${escapeHtml(c.uf)}</dd></div>`;
+        }
+        if (c.numero_registro) {
+            html += `<div class="admin-mov__details-item"><dt>Número do registro (CRO)</dt><dd>${escapeHtml(c.numero_registro)}</dd></div>`;
+        }
+        return html;
+    }
+
     function closeAllDetails() {
         scope.querySelectorAll('.admin-mov__details').forEach(panel => {
             panel.hidden = true;
@@ -74,6 +106,7 @@
                             <dt>Endereço</dt>
                             <dd>${address}</dd>
                         </div>
+                        ${croPedidoHtml(movement)}
                     </dl>
                 </div>
             </div>

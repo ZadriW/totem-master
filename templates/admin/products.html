@@ -48,6 +48,7 @@
             <span class="admin-filter__label">Situação</span>
             <select name="status" class="admin-filter__input">
                 <option value="todos" {% if filters.status == 'todos' %}selected{% endif %}>Todas</option>
+                <option value="ok" {% if filters.status == 'ok' %}selected{% endif %}>Estoque OK</option>
                 <option value="baixo" {% if filters.status == 'baixo' %}selected{% endif %}>Abaixo do mínimo</option>
                 <option value="sem_estoque" {% if filters.status == 'sem_estoque' %}selected{% endif %}>Sem estoque</option>
                 <option value="inativo" {% if filters.status == 'inativo' %}selected{% endif %}>Inativo</option>

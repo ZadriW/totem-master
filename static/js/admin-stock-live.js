@@ -50,6 +50,38 @@
             return '—';
         })();
 
+        function normalizeCroPedidoLocal(mov) {
+            let c = mov.cro_pedido;
+            const looksGood =
+                c !== null &&
+                c !== undefined &&
+                typeof c === 'object' &&
+                !Array.isArray(c) &&
+                (String(c.uf || '').trim() || String(c.numero_registro || '').trim());
+            if (looksGood) {
+                return c;
+            }
+            const uf = String(mov.client_cro_uf ?? '').trim();
+            const numero_registro = String(mov.client_cro_numero ?? '').trim();
+            if (!uf && !numero_registro) {
+                return null;
+            }
+            return { uf, numero_registro };
+        }
+
+        function croPedidoHtmlLocal(mov) {
+            const c = normalizeCroPedidoLocal(mov);
+            if (!c) return '';
+            let html = '';
+            if (c.uf) {
+                html += `<div class="admin-mov__details-item"><dt>UF (CRO)</dt><dd>${escapeHtml(c.uf)}</dd></div>`;
+            }
+            if (c.numero_registro) {
+                html += `<div class="admin-mov__details-item"><dt>Número do registro (CRO)</dt><dd>${escapeHtml(c.numero_registro)}</dd></div>`;
+            }
+            return html;
+        }
+
         return `
             <div class="admin-mov__details" id="details-${escapeHtml(movement.id)}" hidden>
                 <div class="admin-mov__details-content">
@@ -78,6 +110,7 @@
                             <dt>Endereço</dt>
                             <dd>${address}</dd>
                         </div>
+                        ${croPedidoHtmlLocal(movement)}
                     </dl>
                 </div>
             </div>

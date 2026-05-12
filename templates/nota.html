@@ -459,7 +459,8 @@
         </div>
 
         <!-- ──────────────────── DADOS DO CLIENTE ──────────────────── -->
-        {% if tx.client_name or tx.client_cpf %}
+        {% set cro = tx | cro_pedido %}
+        {% if tx.client_name or tx.client_cpf or tx.client_zipcode or tx.client_address or cro %}
         <div class="receipt__section">
             <div class="receipt__section-title">Dados do cliente</div>
             <div class="receipt__client-rows">
@@ -488,6 +489,20 @@
                         {{ tx.client_address }}{% if tx.client_number %}, {{ tx.client_number }}{% endif %}{% if tx.client_complement %} — {{ tx.client_complement }}{% endif %}{% if tx.client_city %}, {{ tx.client_city }}{% endif %}{% if tx.client_state %} — {{ tx.client_state }}{% endif %}
                     </span>
                 </div>
+                {% endif %}
+                {% if cro %}
+                    {% if cro.get('uf') %}
+                    <div class="receipt__client-row">
+                        <span class="receipt__client-key">UF (CRO)</span>
+                        <span class="receipt__client-val">{{ cro['uf'] }}</span>
+                    </div>
+                    {% endif %}
+                    {% if cro.get('numero_registro') %}
+                    <div class="receipt__client-row">
+                        <span class="receipt__client-key">Número do registro (CRO)</span>
+                        <span class="receipt__client-val">{{ cro['numero_registro'] }}</span>
+                    </div>
+                    {% endif %}
                 {% endif %}
             </div>
         </div>

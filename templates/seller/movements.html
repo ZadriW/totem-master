@@ -1,4 +1,5 @@
 {% extends "seller/_layout.html" %}
+{% from "macros/admin_mov_cro.html" import admin_mov_cro_details %}
 
 {% block title %}Movimentações{% if seller_event %} — {{ seller_event.name }}{% endif %} - Vendedor | Dental Odonto Master{% endblock %}
 
@@ -41,16 +42,20 @@
             </select>
         </label>
 
-        <label class="admin-filter">
-            <span class="admin-filter__label">Produto</span>
-            <select name="produto" class="admin-filter__input">
-                <option value="0" {% if filters.produto == 0 %}selected{% endif %}>Todos</option>
-                {% for p in products %}
-                <option value="{{ p.id }}" {% if filters.produto == p.id %}selected{% endif %}>
-                    {{ p.nome }}
-                </option>
-                {% endfor %}
-            </select>
+        <label class="admin-filter admin-filter--search">
+            <span class="admin-filter__label">Buscar</span>
+            <span class="admin-filter__wrap">
+                <i class="fa-solid fa-magnifying-glass admin-filter__icon" aria-hidden="true"></i>
+                <input
+                    type="search"
+                    name="q"
+                    value="{{ filters.q }}"
+                    placeholder="Nome, descrição, SKU ou ID do produto..."
+                    class="admin-filter__input"
+                    autocomplete="off"
+                    inputmode="search"
+                >
+            </span>
         </label>
 
         {% if not seller_event %}
@@ -183,6 +188,7 @@
                                     {% endif %}
                                 </dd>
                             </div>
+                            {{ admin_mov_cro_details(m) }}
                         </dl>
                     </div>
                 </div>

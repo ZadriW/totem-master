@@ -583,6 +583,140 @@
     font-size: 13px;
 }
 
+/* ---------- Dashboard de vendas (detalhe do evento) ---------- */
+.admin-event-dash-sales {
+    margin-top: 28px;
+    padding-top: 26px;
+    border-top: 1px solid var(--color-border);
+}
+
+.admin-event-dash-sales__intro {
+    margin-bottom: 18px;
+}
+
+.admin-event-dash-sales__title {
+    margin: 0 0 6px;
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--color-text);
+    letter-spacing: -0.02em;
+}
+
+.admin-event-dash-sales__subtitle {
+    margin: 0;
+    font-size: 14px;
+    color: var(--color-text-muted);
+    line-height: 1.45;
+    max-width: 720px;
+}
+
+.admin-kpis--sales-dash {
+    margin-bottom: 22px;
+}
+
+.admin-event-dash-sales__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+    gap: 20px;
+    align-items: start;
+}
+
+.admin-event-dash-sales__panel {
+    background: var(--color-surface);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: 18px 20px 20px;
+    overflow-x: auto;
+}
+
+.admin-event-dash-sales__panel-title {
+    margin: 0 0 8px;
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--color-text);
+}
+
+.admin-event-dash-sales__panel-title i {
+    color: var(--color-primary);
+    opacity: 0.9;
+}
+
+.admin-event-dash-sales__panel-hint {
+    margin: 0 0 14px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+}
+
+.admin-event-dash-sales__table.admin-table {
+    box-shadow: none;
+    background: var(--color-bg);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+}
+
+.admin-event-dash-sales__table .admin-table__head {
+    font-size: 11px;
+}
+
+/* Linhas base (grid definido por modificador --by-day / --top-skus abaixo da regra global .admin-table__head) */
+.admin-event-dash-sales__row {
+    border-bottom: 1px solid var(--color-border);
+    font-size: 14px;
+}
+
+.admin-event-dash-sales__table > .admin-event-dash-sales__row:last-child {
+    border-bottom: none;
+}
+
+.admin-event-dash-sales__row.admin-table__head {
+    background: rgba(14, 22, 122, 0.06);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.admin-event-dash-sales__rank {
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-muted);
+}
+
+.admin-event-dash-sales__sku {
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: rgba(14, 22, 122, 0.06);
+    word-break: break-all;
+}
+
+.admin-event-dash-sales__prod-name {
+    min-width: 0;
+}
+
+.admin-event-dash-sales__prod-name a {
+    font-weight: 600;
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.admin-event-dash-sales__prod-name a:hover {
+    text-decoration: underline;
+}
+
+.admin-event-dash-sales__empty {
+    margin: 0;
+    padding: 14px 4px 6px;
+    font-size: 14px;
+    color: var(--color-text-muted);
+}
+
 /* ---------- Tabela de transações ---------- */
 .admin-table {
     background: var(--color-surface);
@@ -613,6 +747,73 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--color-text-muted);
+}
+
+/* Dashboard do evento — vendas: grids próprias (neutraliza a grid genérica de 6 colunas em .admin-table__head) */
+.admin-event-dash-sales__table--by-day > .admin-event-dash-sales__row {
+    display: grid;
+    grid-template-columns: minmax(128px, 1fr) minmax(5rem, auto);
+    column-gap: 20px;
+    row-gap: 4px;
+    align-items: center;
+    padding: 11px 16px;
+}
+
+.admin-event-dash-sales__table--by-day > .admin-event-dash-sales__row.admin-table__head {
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.admin-event-dash-sales__table--by-day > .admin-event-dash-sales__row:not(.admin-table__head):nth-child(even) {
+    background: rgba(14, 22, 122, 0.04);
+}
+
+.admin-event-dash-sales__cell--day {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    color: var(--color-text);
+}
+
+.admin-event-dash-sales__table--by-day > .admin-table__head .admin-event-dash-sales__cell--day {
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    color: var(--color-text-muted);
+}
+
+.admin-event-dash-sales__cell--orders {
+    justify-self: end;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    min-width: 5rem;
+}
+
+.admin-event-dash-sales__table--by-day > .admin-table__head .admin-event-dash-sales__cell--orders {
+    font-weight: 700;
+}
+
+.admin-event-dash-sales__table--top-skus > .admin-event-dash-sales__row.admin-event-dash-sales__row--top {
+    display: grid;
+    grid-template-columns: 36px minmax(76px, 1fr) minmax(0, 1.55fr) minmax(3.25rem, auto) minmax(5.5rem, auto);
+    column-gap: 14px;
+    row-gap: 6px;
+    align-items: center;
+    padding: 11px 14px;
+    min-width: min(100%, 520px);
+}
+
+.admin-event-dash-sales__table--top-skus > .admin-event-dash-sales__row--top:not(.admin-table__head):nth-child(even) {
+    background: rgba(14, 22, 122, 0.04);
+}
+
+.admin-event-dash-sales__table--top-skus .admin-table__col--num {
+    justify-self: end;
+    text-align: right;
+}
+
+.admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank {
+    justify-self: center;
+    text-align: center;
 }
 
 /* Vendedores: o seletor genérico .admin-table__head usa grid de 6 colunas (transações). Repete a grid de 7 colunas das linhas. */
@@ -1209,8 +1410,6 @@
 .admin-filters__actions {
     display: inline-flex;
     gap: 8px;
-    align-items: end;
-    justify-content: flex-end;
 }
 
 /* Paginação (estoque admin e similares) */
@@ -2116,7 +2315,6 @@
     .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide:not(.admin-mov__row--wide-events) > :nth-child(7)::before {
         content: "Usuário";
         display: block;
-        margin-bottom: 4px;
         font-size: 10px;
         font-weight: 800;
         letter-spacing: 0.06em;
@@ -2821,7 +3019,8 @@
 .admin-mov__details {
     margin-top: 0;
     padding: 0;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: visible;
 }
 
 .admin-mov__details[hidden] {
@@ -2851,6 +3050,7 @@
 .admin-mov__details-list {
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: stretch;
     gap: 16px 24px;
     margin: 0;
@@ -2860,8 +3060,8 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    flex: 1 1 0;
-    min-width: 140px;
+    flex: 1 1 160px;
+    min-width: min(140px, 100%);
     max-width: 100%;
 }
 

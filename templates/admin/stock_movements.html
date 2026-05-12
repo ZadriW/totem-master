@@ -1,4 +1,5 @@
 {% extends "admin/_layout.html" %}
+{% from "macros/admin_mov_cro.html" import admin_mov_cro_details %}
 
 {% block title %}Movimentações - Admin | Dental Odonto Master{% endblock %}
 
@@ -80,6 +81,14 @@
                 Aplicar
             </button>
             <a href="{{ url_for('admin_movements') }}" class="admin-btn admin-btn--ghost">Limpar</a>
+            <a
+                href="{{ url_for('admin_movements_export_csv', tipo=filters.tipo, vendedor=filters.vendedor, q=filters.q, pedido=filters.pedido) }}"
+                class="admin-btn admin-btn--ghost"
+                title="Exporta até 100 mil linhas com os mesmos filtros (UTF-8, compatível com Excel)"
+            >
+                <i class="fa-solid fa-file-csv" aria-hidden="true"></i>
+                Exportar CSV
+            </a>
         </div>
     </form>
 
@@ -194,6 +203,7 @@
                                     {% endif %}
                                 </dd>
                             </div>
+                            {{ admin_mov_cro_details(m) }}
                         </dl>
                     </div>
                 </div>

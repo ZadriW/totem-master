@@ -86,6 +86,145 @@
             <span class="kpi__hint">{{ stats.sem_estoque }} sem estoque</span>
         </article>
     </div>
+
+    <div class="admin-event-dash-sales" aria-labelledby="event-dash-sales-title">
+        <div class="admin-event-dash-sales__intro">
+            <h2 id="event-dash-sales-title" class="admin-event-dash-sales__title">Desempenho de vendas</h2>
+            <p class="admin-event-dash-sales__subtitle">
+                Pedidos confirmados no totem com estoque baixado neste evento.
+                Ticket médio = receita ÷ quantidade de pedidos.
+            </p>
+        </div>
+
+        <div class="admin-kpis admin-kpis--sales-dash">
+            <article class="kpi kpi--primary">
+                <span class="kpi__icon"><i class="fa-solid fa-receipt" aria-hidden="true"></i></span>
+                <span class="kpi__label">Pedidos no evento</span>
+                <span class="kpi__value">{{ sales_dashboard.orders_count }}</span>
+                <span class="kpi__hint">Total histórico</span>
+            </article>
+            <article class="kpi kpi--success">
+                <span class="kpi__icon"><i class="fa-solid fa-sack-dollar" aria-hidden="true"></i></span>
+                <span class="kpi__label">Receita total</span>
+                <span class="kpi__value">{{ sales_dashboard.revenue_total | brl }}</span>
+                <span class="kpi__hint">Soma dos pedidos</span>
+            </article>
+            <article class="kpi">
+                <span class="kpi__icon"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>
+                <span class="kpi__label">Ticket médio</span>
+                <span class="kpi__value">
+                    {% if sales_dashboard.orders_count > 0 %}
+                        {{ sales_dashboard.avg_ticket | brl }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </span>
+                <span class="kpi__hint">Valor médio por pedido</span>
+            </article>
+        </div>
+
+        <div class="admin-event-dash-sales__grid">
+            <div class="admin-event-dash-sales__panel">
+                <h3 class="admin-event-dash-sales__panel-title">
+                    <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+                    Vendas por dia
+                </h3>
+                <p class="admin-event-dash-sales__panel-hint">
+                    Até {{ sales_dashboard.sales_days_limit }} dias distintos com pedidos (mais recentes primeiro).
+                </p>
+                {% if sales_dashboard.sales_by_day %}
+                <div class="admin-table admin-event-dash-sales__table admin-event-dash-sales__table--by-day" role="table" aria-label="Vendas por dia">
+                    <div class="admin-table__head admin-event-dash-sales__row" role="row">
+                        <span role="columnheader" class="admin-event-dash-sales__cell--day">Data</span>
+                        <span role="columnheader" class="admin-event-dash-sales__cell--orders">Pedidos</span>
+                    </div>
+                    {% for row in sales_dashboard.sales_by_day %}
+                    <div class="admin-event-dash-sales__row" role="row">
+                        <span class="admin-event-dash-sales__cell--day">
+                            {% set p = row.day.split('-') %}
+                            {{ p[2] }}/{{ p[1] }}/{{ p[0] }}
+                        </span>
+                        <span class="admin-event-dash-sales__cell--orders"><strong>{{ row.orders_count }}</strong></span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="admin-event-dash-sales__empty">Nenhuma venda registrada neste evento ainda.</p>
+                {% endif %}
+            </div>
+
+            <div class="admin-event-dash-sales__panel">
+                <h3 class="admin-event-dash-sales__panel-title">
+                    <i class="fa-solid fa-ranking-star" aria-hidden="true"></i>
+                    Top 5 produtos (SKU)
+                </h3>
+                <p class="admin-event-dash-sales__panel-hint">Por quantidade de unidades vendidas no evento.</p>
+                {% if sales_dashboard.top_products %}
+                <div class="admin-table admin-event-dash-sales__table admin-event-dash-sales__table--top-skus" role="table" aria-label="Produtos mais vendidos">
+                    <div class="admin-table__head admin-event-dash-sales__row admin-event-dash-sales__row--top" role="row">
+                        <span role="columnheader">#</span>
+                        <span role="columnheader">SKU</span>
+                        <span role="columnheader">Produto</span>
+                        <span role="columnheader" class="admin-table__col--num">Unid.</span>
+                        <span role="columnheader" class="admin-table__col--num">Receita</span>
+                    </div>
+                    {% for item in sales_dashboard.top_products %}
+                    <div class="admin-event-dash-sales__row admin-event-dash-sales__row--top" role="row">
+                        <span class="admin-event-dash-sales__rank">{{ loop.index }}</span>
+                        <span><code class="admin-event-dash-sales__sku">{{ item.sku }}</code></span>
+                        <span class="admin-event-dash-sales__prod-name">
+                            {% if item.product_id %}
+                            <a href="{{ url_for('admin_product_detail', product_id=item.product_id) }}">{{ item.product_name }}</a>
+                            {% else %}
+                            {{ item.product_name }}
+                            {% endif %}
+                        </span>
+                        <span class="admin-table__col--num"><strong>{{ item.units_sold }}</strong></span>
+                        <span class="admin-table__col--num">{{ item.revenue | brl }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="admin-event-dash-sales__empty">Sem dados de ranking até haver vendas.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <h2 class="admin-section__title">Exportar vendas (CSV)</h2>
+            <p class="admin-section__subtitle">
+                Pedidos confirmados com movimentação de venda neste evento. Opcional: período pela data do pedido.
+                Campos vazios exportam o histórico completo (até os limites do servidor).
+            </p>
+        </div>
+    </header>
+    <form class="admin-filters" method="get" action="{{ url_for('admin_event_sales_export_csv', event_id=event.id) }}" aria-label="Exportar vendas em CSV">
+        <label class="admin-filter">
+            <span class="admin-filter__label">Data inicial</span>
+            <input type="date" name="data_inicio" class="admin-filter__input">
+        </label>
+        <label class="admin-filter">
+            <span class="admin-filter__label">Data final</span>
+            <input type="date" name="data_fim" class="admin-filter__input">
+        </label>
+        <label class="admin-filter">
+            <span class="admin-filter__label">Detalhe</span>
+            <select name="nivel" class="admin-filter__input" title="Um arquivo por pedido ou uma linha por item vendido">
+                <option value="pedidos">Resumo por pedido</option>
+                <option value="itens">Uma linha por item</option>
+            </select>
+        </label>
+        <div class="admin-filters__actions">
+            <button type="submit" class="admin-btn admin-btn--primary">
+                <i class="fa-solid fa-file-csv" aria-hidden="true"></i>
+                Baixar CSV
+            </button>
+        </div>
+    </form>
 </section>
 
 <dialog class="admin-modal" id="event-edit-modal" aria-labelledby="event-edit-modal-title">

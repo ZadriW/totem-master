@@ -239,7 +239,7 @@ def _ensure_transactions_client_columns(conn: sqlite3.Connection) -> None:
 
 
 def _ensure_transactions_cro_columns(conn: sqlite3.Connection) -> None:
-    """Adiciona colunas de validação CRO (Consultar.io) em transactions."""
+    """Garante colunas de UF/número CRO e campos legados (categoria/validação) em transactions."""
     cols = _table_columns(conn, "transactions")
     cro_fields = {
         "client_cro_uf": "TEXT",
@@ -664,7 +664,12 @@ def _admin_products_library_filter_clause(
         parts.append("LOWER(p.category) = LOWER(?)")
         params.append(categoria)
     st = (status or "todos").strip().lower()
-    if st == "baixo":
+    if st == "ok":
+        parts.append(
+            f"p.active = 1 AND {ev} > 0 AND "
+            f"(p.min_stock <= 0 OR {ev} >= p.min_stock)"
+        )
+    elif st == "baixo":
         parts.append(f"{ev} > 0 AND {ev} < p.min_stock")
     elif st == "sem_estoque":
         parts.append(f"{ev} <= 0")
@@ -1274,7 +1279,8 @@ def list_stock_movements(
         "evt.badge_color AS event_badge_color, "
         "t.client_name, t.client_cpf, t.client_zipcode, t.client_address, "
         "t.client_number, t.client_complement, t.client_city, t.client_state, "
-        "t.payment_method "
+        "t.payment_method, "
+        "t.client_cro_uf, t.client_cro_numero "
         "FROM stock_movements m "
         "LEFT JOIN products p ON p.id = m.product_id "
         "LEFT JOIN events evt ON evt.id = m.event_id "
@@ -1441,9 +1447,6 @@ def create_transaction(
     payment_method: Optional[str] = None,
     client_cro_uf: Optional[str] = None,
     client_cro_numero: Optional[str] = None,
-    client_cro_categoria: Optional[str] = None,
-    client_cro_validated: bool = False,
-    client_cro_validation_data: Optional[str] = None,
 ) -> Dict:
     """Registra uma venda, seus itens e **decrementa o estoque atomicamente**.
 
@@ -1452,8 +1455,8 @@ def create_transaction(
     Se qualquer produto não tiver estoque suficiente, **nada é gravado**.
 
     Parâmetros opcionais de ``client_*`` guardam dados do cliente na transação.
-    Parâmetros ``client_cro_*`` armazenam dados de validação CRO (Consultar.io).
-    
+    ``client_cro_uf`` e ``client_cro_numero``: registro profissional informado no checkout.
+
     ``event_id``: Se fornecido, verifica/decrementa estoque de ``event_products`` 
     (venda em evento). Se None, usa estoque global de ``products`` (venda sem evento).
 
@@ -1578,15 +1581,14 @@ def create_transaction(
                  seller_id, seller_name, payment_method,
                  client_cro_uf, client_cro_numero, client_cro_categoria,
                  client_cro_validated, client_cro_validation_data)
-            VALUES (?, ?, ?, ?, 'confirmado', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, 'confirmado', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL)
             """,
             (
                 order_number, created_at, total, items_count,
                 client_name, client_cpf, client_zipcode, client_address,
                 client_number, client_complement, client_city, client_state,
                 seller_id, seller_name, payment_method,
-                client_cro_uf, client_cro_numero, client_cro_categoria,
-                1 if client_cro_validated else 0, client_cro_validation_data,
+                client_cro_uf, client_cro_numero,
             ),
         )
         tx_id = cur.lastrowid
@@ -2067,6 +2069,101 @@ def get_event_stock_stats(event_id: int) -> Dict:
         }
 
 
+def get_event_sales_dashboard(event_id: int, *, sales_days_limit: int = 120) -> Dict:
+    """Vendas do evento: pedidos confirmados com movimento ``venda`` neste ``event_id``.
+
+    Retorna receita total, ticket médio, até ``sales_days_limit`` dias distintos com vendas
+    (mais recentes primeiro) e os 5 produtos mais vendidos por quantidade de unidades.
+    """
+    eid = int(event_id)
+    lim_days = max(1, min(int(sales_days_limit), 366))
+    tx_filter = (
+        "FROM transactions t "
+        "WHERE t.status = 'confirmado' "
+        "AND EXISTS ("
+        " SELECT 1 FROM stock_movements m "
+        " WHERE m.transaction_id = t.id AND m.movement_type = 'venda' "
+        " AND m.event_id = ?)"
+    )
+
+    with get_conn() as conn:
+        agg = conn.execute(
+            f"SELECT COUNT(*) AS orders_count, COALESCE(SUM(t.total), 0) AS revenue_total {tx_filter}",
+            (eid,),
+        ).fetchone()
+        orders_count = int(agg["orders_count"] or 0)
+        revenue_total = float(agg["revenue_total"] or 0.0)
+        avg_ticket = (revenue_total / orders_count) if orders_count else 0.0
+
+        day_rows = conn.execute(
+            f"""
+            SELECT date(t.created_at) AS day, COUNT(*) AS orders_count
+            {tx_filter}
+            GROUP BY date(t.created_at)
+            ORDER BY day DESC
+            LIMIT ?
+            """,
+            (eid, lim_days),
+        ).fetchall()
+        sales_by_day = [
+            {"day": str(r["day"]), "orders_count": int(r["orders_count"] or 0)}
+            for r in day_rows
+        ]
+
+        top_rows = conn.execute(
+            """
+            SELECT
+                ti.product_id AS product_id_raw,
+                MAX(ti.product_name) AS product_name,
+                SUM(ti.quantity) AS units_sold,
+                SUM(ti.subtotal) AS revenue_subtotal,
+                COALESCE(
+                    MAX(NULLIF(TRIM(ti.product_sku), '')),
+                    MAX(p.sku),
+                    ''
+                ) AS sku_display
+            FROM transaction_items ti
+            JOIN transactions t ON t.id = ti.transaction_id
+            LEFT JOIN products p ON p.id = CAST(ti.product_id AS INTEGER)
+            WHERE t.status = 'confirmado'
+              AND EXISTS (
+                SELECT 1 FROM stock_movements m
+                WHERE m.transaction_id = t.id AND m.movement_type = 'venda'
+                  AND m.event_id = ?
+              )
+            GROUP BY ti.product_id
+            ORDER BY units_sold DESC
+            LIMIT 5
+            """,
+            (eid,),
+        ).fetchall()
+
+    top_products: List[Dict] = []
+    for r in top_rows:
+        raw_pid = r["product_id_raw"]
+        pid_int: Optional[int] = None
+        if raw_pid is not None and str(raw_pid).strip().isdigit():
+            pid_int = int(str(raw_pid).strip())
+        top_products.append(
+            {
+                "product_id": pid_int,
+                "sku": (r["sku_display"] or "").strip() or "—",
+                "product_name": (r["product_name"] or "").strip() or "—",
+                "units_sold": int(r["units_sold"] or 0),
+                "revenue": float(r["revenue_subtotal"] or 0.0),
+            }
+        )
+
+    return {
+        "orders_count": orders_count,
+        "revenue_total": revenue_total,
+        "avg_ticket": avg_ticket,
+        "sales_by_day": sales_by_day,
+        "top_products": top_products,
+        "sales_days_limit": lim_days,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Movimentações escopadas ao evento
 # ---------------------------------------------------------------------------
@@ -2245,7 +2342,8 @@ def list_event_stock_movements(
         "evt.badge_color AS event_badge_color, "
         "t.client_name, t.client_cpf, t.client_zipcode, t.client_address, "
         "t.client_number, t.client_complement, t.client_city, t.client_state, "
-        "t.payment_method "
+        "t.payment_method, "
+        "t.client_cro_uf, t.client_cro_numero "
         "FROM stock_movements m "
         "LEFT JOIN products p ON p.id = m.product_id "
         "LEFT JOIN events evt ON evt.id = m.event_id "
@@ -2270,6 +2368,85 @@ def list_event_stock_movements(
         params.append(int(seller_id))
     sql += " ORDER BY datetime(m.created_at) DESC, m.id DESC LIMIT ?"
     params.append(int(limit))
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+# Limites para exportações CSV (painel admin).
+EXPORT_MOVEMENTS_CSV_CAP = 100_000
+EXPORT_SALES_SUMMARY_CSV_CAP = 50_000
+EXPORT_SALES_ITEMS_CSV_CAP = 200_000
+
+
+def list_transactions_summary_for_event_period(
+    event_id: int,
+    *,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    limit: int = EXPORT_SALES_SUMMARY_CSV_CAP,
+) -> List[Dict]:
+    """Pedidos com venda registrada em ``stock_movements`` para o evento (``movement_type='venda'``).
+
+    ``date_from`` / ``date_to``: ``YYYY-MM-DD``, comparados com ``date(transactions.created_at)`` (inclusive).
+    """
+    cap = max(1, min(int(limit), EXPORT_SALES_SUMMARY_CSV_CAP))
+    sql = (
+        "SELECT t.id, t.order_number, t.created_at, t.total, t.items_count, t.status, "
+        "t.client_name, t.client_cpf, t.client_zipcode, t.client_address, "
+        "t.client_number, t.client_complement, t.client_city, t.client_state, "
+        "t.seller_id, t.seller_name, t.payment_method, "
+        "t.client_cro_uf, t.client_cro_numero "
+        "FROM transactions t "
+        "WHERE EXISTS ("
+        " SELECT 1 FROM stock_movements m "
+        " WHERE m.transaction_id = t.id AND m.movement_type = 'venda' "
+        " AND m.event_id = ?)"
+    )
+    params: List = [int(event_id)]
+    if date_from:
+        sql += " AND date(t.created_at) >= date(?)"
+        params.append(date_from)
+    if date_to:
+        sql += " AND date(t.created_at) <= date(?)"
+        params.append(date_to)
+    sql += " ORDER BY datetime(t.created_at) DESC, t.id DESC LIMIT ?"
+    params.append(cap)
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def list_transaction_items_for_event_period(
+    event_id: int,
+    *,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    limit: int = EXPORT_SALES_ITEMS_CSV_CAP,
+) -> List[Dict]:
+    """Itens de pedidos cuja venda está ligada ao evento (via ``stock_movements``)."""
+    cap = max(1, min(int(limit), EXPORT_SALES_ITEMS_CSV_CAP))
+    sql = (
+        "SELECT ti.id AS item_id, t.id AS transaction_id, t.order_number, t.created_at, "
+        "t.seller_id, t.seller_name, t.payment_method, "
+        "ti.product_id, ti.product_name, ti.category, ti.product_sku, "
+        "ti.quantity, ti.unit_price, ti.subtotal "
+        "FROM transaction_items ti "
+        "JOIN transactions t ON t.id = ti.transaction_id "
+        "WHERE EXISTS ("
+        " SELECT 1 FROM stock_movements m "
+        " WHERE m.transaction_id = t.id AND m.movement_type = 'venda' "
+        " AND m.event_id = ?)"
+    )
+    params: List = [int(event_id)]
+    if date_from:
+        sql += " AND date(t.created_at) >= date(?)"
+        params.append(date_from)
+    if date_to:
+        sql += " AND date(t.created_at) <= date(?)"
+        params.append(date_to)
+    sql += " ORDER BY datetime(t.created_at) DESC, ti.id ASC LIMIT ?"
+    params.append(cap)
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]

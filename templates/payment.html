@@ -60,11 +60,13 @@
                     >
                 </label>
 
+                <hr class="payment__divider payment__divider--form" aria-hidden="true">
+
                 <h2 class="payment__section-title payment__section-title--sub payment__section-title--cro">
                     <i class="fa-solid fa-id-card" aria-hidden="true"></i>
                     Registro Profissional (CRO)
                 </h2>
-                <p class="payment-cro__hint">Informe os dados do seu registro no Conselho Regional de Odontologia. Após preencher os campos, clique em <strong>Verificar CRO</strong> para validar.</p>
+                <p class="payment-cro__hint">Informe a UF e o número do seu registro no Conselho Regional de Odontologia.</p>
 
                 <label class="payment-field payment-field--quarter">
                     <span class="payment-field__label">UF <span class="payment-field__required">*</span></span>
@@ -100,7 +102,7 @@
                     </select>
                 </label>
 
-                <label class="payment-field payment-field--half">
+                <label class="payment-field payment-field--three-quarters">
                     <span class="payment-field__label">Número do registro <span class="payment-field__required">*</span></span>
                     <input
                         type="text"
@@ -115,40 +117,7 @@
                     >
                 </label>
 
-                <label class="payment-field payment-field--quarter">
-                    <span class="payment-field__label">Categoria <span class="payment-field__required">*</span></span>
-                    <select name="cro_categoria" id="paymentCroCategoria" class="payment-field__input" required>
-                        <option value="">Selecione...</option>
-                        <option value="cd">Cirurgião Dentista</option>
-                        <option value="tsb">Técnico em Saúde Bucal</option>
-                        <option value="tpd">Técnico em Prótese Dentária</option>
-                        <option value="asb">Auxiliar em Saúde Bucal</option>
-                        <option value="apd">Auxiliar de Prótese Dentária</option>
-                        <option value="estagiario">Estagiário</option>
-                        <option value="clinica-assistencia">Clínica/Entidade</option>
-                        <option value="laboratorio">Laboratório</option>
-                        <option value="comercio-industria">Comércio/Indústria</option>
-                    </select>
-                </label>
-
-                <div class="payment-cro__actions">
-                    <button type="button" id="paymentSearchCro" class="payment-cro__btn" disabled>
-                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
-                        Verificar CRO
-                    </button>
-                    <span class="payment-field__loading" id="croLoading" hidden>
-                        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-                        Verificando...
-                    </span>
-                </div>
-
-                <div class="payment-cro__result" id="croResult" hidden>
-                    <div class="payment-cro__result-icon" id="croResultIcon" aria-hidden="true"></div>
-                    <div class="payment-cro__result-body">
-                        <p class="payment-cro__result-title" id="croResultTitle"></p>
-                        <dl class="payment-cro__result-details" id="croResultDetails"></dl>
-                    </div>
-                </div>
+                <hr class="payment__divider payment__divider--form" aria-hidden="true">
 
                 <h2 class="payment__section-title payment__section-title--sub payment__section-title--address">
                     <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
