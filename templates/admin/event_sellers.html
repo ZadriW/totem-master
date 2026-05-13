@@ -57,11 +57,10 @@
     </div>
     {% endif %}
 
-    <div class="admin-table admin-sellers" role="table" aria-label="Vendedores do evento">
+    <div class="admin-table admin-sellers admin-sellers--event-detail" role="table" aria-label="Vendedores do evento">
         <div class="admin-table__head admin-sellers__row" role="row">
             <span role="columnheader">Vendedor</span>
             <span role="columnheader">Status</span>
-            <span role="columnheader">PIN</span>
             <span class="admin-table__col--num" role="columnheader">Vendas</span>
             <span class="admin-table__col--num" role="columnheader">Faturamento</span>
             <span role="columnheader">Último login</span>
@@ -80,13 +79,6 @@
                         <span class="admin-badge admin-badge--success">Ativo</span>
                     {% else %}
                         <span class="admin-badge admin-badge--neutral">Inativo</span>
-                    {% endif %}
-                </span>
-                <span>
-                    {% if seller.pin_hash %}
-                        <span class="admin-badge admin-badge--success">Configurado</span>
-                    {% else %}
-                        <span class="admin-badge admin-badge--warn">Pendente</span>
                     {% endif %}
                 </span>
                 <span class="admin-table__col--num">{{ seller.transactions_count }}</span>

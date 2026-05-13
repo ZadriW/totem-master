@@ -51,6 +51,33 @@
                 {% if fe.email %}<p class="admin-field__error" id="seller-email-err">{{ fe.email }}</p>{% endif %}
             </div>
             <div class="admin-field">
+                <label class="admin-field__label" for="seller-event-id">Evento <span aria-hidden="true">*</span></label>
+                <select
+                    id="seller-event-id"
+                    name="event_id"
+                    class="admin-field__input{% if fe.event_id %} admin-field__input--invalid{% endif %}"
+                    required
+                    {% if not events_for_seller_form %}disabled{% endif %}
+                    {% if fe.event_id %}aria-invalid="true" aria-describedby="seller-event-err"{% endif %}
+                >
+                    <option value="" {% if not sf.event_id %}selected{% endif %} disabled>Selecione o evento…</option>
+                    {% for ev in events_for_seller_form %}
+                    <option
+                        value="{{ ev.id }}"
+                        {% if (sf.event_id or '') | string == ev.id | string %}selected{% endif %}
+                    >
+                        {{ ev.name }}{% if not ev.active %} (arquivado){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                {% if fe.event_id %}<p class="admin-field__error" id="seller-event-err">{{ fe.event_id }}</p>{% endif %}
+                {% if not events_for_seller_form %}
+                <p class="admin-field__hint" role="status">Não há eventos cadastrados. <a href="{{ url_for('admin_events') }}">Crie um evento</a> antes de associar vendedores.</p>
+                {% else %}
+                <p class="admin-field__hint">O vendedor passa a operar neste evento (estoque e vendas). Você pode gerenciar vínculos depois na página do evento.</p>
+                {% endif %}
+            </div>
+            <div class="admin-field">
                 <label class="admin-field__label" for="seller-password">Senha inicial</label>
                 <span class="admin-field__wrap admin-field__wrap--has-toggle">
                     <input
@@ -77,38 +104,6 @@
                 </span>
                 {% if fe.password %}<p class="admin-field__error" id="seller-password-err">{{ fe.password }}</p>{% endif %}
             </div>
-            <div class="admin-field">
-                <label class="admin-field__label" for="seller-pin">PIN de venda</label>
-                <span class="admin-field__wrap admin-field__wrap--has-toggle">
-                    <input
-                        id="seller-pin"
-                        class="admin-field__input{% if fe.pin %} admin-field__input--invalid{% endif %}"
-                        type="password"
-                        name="pin"
-                        inputmode="numeric"
-                        pattern="[0-9]{4}"
-                        maxlength="4"
-                        minlength="4"
-                        placeholder="0000"
-                        value="{{ sf.pin | default('', true) }}"
-                        oninput="this.value = this.value.replace(/\D/g, '').slice(0, 4)"
-                        required
-                        autocomplete="off"
-                        {% if fe.pin %}aria-invalid="true" aria-describedby="seller-pin-err"{% endif %}
-                    >
-                    <button
-                        type="button"
-                        class="admin-field__toggle-pass"
-                        id="adminSellerCreateTogglePin"
-                        aria-label="Mostrar PIN"
-                        aria-pressed="false"
-                        title="Mostrar PIN"
-                    >
-                        <i class="fa-regular fa-eye" aria-hidden="true"></i>
-                    </button>
-                </span>
-                {% if fe.pin %}<p class="admin-field__error" id="seller-pin-err">{{ fe.pin }}</p>{% endif %}
-            </div>
             <button type="submit" class="admin-btn admin-btn--primary admin-btn--block">
                 <i class="fa-solid fa-plus" aria-hidden="true"></i>
                 Criar vendedor
@@ -132,7 +127,6 @@
             <span role="columnheader">Vendedor</span>
             <span role="columnheader">Evento</span>
             <span role="columnheader">Status</span>
-            <span role="columnheader">PIN</span>
             <span class="admin-table__col--num" role="columnheader">Vendas</span>
             <span class="admin-table__col--num" role="columnheader">Faturamento</span>
             <span role="columnheader">Último login</span>
@@ -169,13 +163,6 @@
                         <span class="admin-badge admin-badge--success">Ativo</span>
                     {% else %}
                         <span class="admin-badge admin-badge--neutral">Inativo</span>
-                    {% endif %}
-                </span>
-                <span>
-                    {% if seller.pin_hash %}
-                        <span class="admin-badge admin-badge--success">Configurado</span>
-                    {% else %}
-                        <span class="admin-badge admin-badge--warn">Pendente</span>
                     {% endif %}
                 </span>
                 <span class="admin-table__col--num">{{ seller.transactions_count }}</span>
@@ -238,7 +225,6 @@
         });
     }
     bindToggle('seller-password', 'adminSellerCreateTogglePassword', 'Mostrar senha', 'Ocultar senha');
-    bindToggle('seller-pin', 'adminSellerCreateTogglePin', 'Mostrar PIN', 'Ocultar PIN');
 })();
 </script>
 {% endblock %}

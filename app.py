@@ -72,7 +72,6 @@ from database import (
     list_products_admin,
     list_products_admin_slice,
     list_products_for_client,
-    list_seller_pin_hashes,
     list_sellers,
     list_sellers_not_in_event,
     list_stock_movements,
@@ -115,8 +114,6 @@ ADMIN_PASSWORD = os.environ.get("TOTEM_ADMIN_PASS", "adminmaster430@")
 SELLER_DEFAULT_NAME = os.environ.get("TOTEM_SELLER_NAME", "Vendedor")
 SELLER_DEFAULT_EMAIL = os.environ.get("TOTEM_SELLER_EMAIL", "vendedor@odontomaster.local")
 SELLER_DEFAULT_PASSWORD = os.environ.get("TOTEM_SELLER_PASS", "vendedor123")
-SELLER_DEFAULT_PIN = os.environ.get("TOTEM_SELLER_PIN", "0000")
-
 ADMIN_AUTH_COOKIE = "totem_admin_auth"
 SELLER_AUTH_COOKIE = "totem_seller_auth"
 ADMIN_AUTH_SALT = "totem-admin-auth"
@@ -218,7 +215,7 @@ try:
         SELLER_DEFAULT_NAME,
         SELLER_DEFAULT_EMAIL,
         generate_password_hash(SELLER_DEFAULT_PASSWORD),
-        generate_password_hash(SELLER_DEFAULT_PIN),
+        pin_hash=None,
     )
 except Exception as exc:
     app.logger.warning("Conta inicial de vendedor indisponivel: %s", exc)
@@ -349,23 +346,6 @@ def seller_required(view):
         return view(*args, **kwargs)
 
     return wrapped
-
-
-def _normalize_seller_pin(pin: str) -> str:
-    value = (pin or "").strip()
-    if not (value.isdigit() and len(value) == 4):
-        raise ValueError("O PIN deve conter exatamente 4 dígitos.")
-    return value
-
-
-def _pin_is_available(pin: str, *, ignore_seller_id: int | None = None) -> bool:
-    value = _normalize_seller_pin(pin)
-    for seller in list_seller_pin_hashes():
-        if ignore_seller_id is not None and int(seller["id"]) == int(ignore_seller_id):
-            continue
-        if check_password_hash(seller["pin_hash"], value):
-            return False
-    return True
 
 
 # ---------------------------------------------------------------------------
@@ -955,7 +935,7 @@ def admin_dashboard():
 # Painel administrativo — vendedores
 # ---------------------------------------------------------------------------
 
-_SELLER_FORM_FIELD_ORDER = ("name", "email", "password", "pin")
+_SELLER_FORM_FIELD_ORDER = ("name", "email", "event_id", "password")
 
 
 def _first_seller_form_error_message(errors: dict[str, str]) -> str:
@@ -970,7 +950,8 @@ def _parse_new_seller_post(form) -> tuple[dict[str, str], dict[str, str]]:
     name = (form.get("name") or "").strip()
     email = (form.get("email") or "").strip().lower()
     password = form.get("password") or ""
-    pin_raw = form.get("pin") or ""
+    event_id_raw = (form.get("event_id") or "").strip()
+    event_id = _parse_int(event_id_raw, 0)
 
     errors: dict[str, str] = {}
     if not name:
@@ -983,16 +964,10 @@ def _parse_new_seller_post(form) -> tuple[dict[str, str], dict[str, str]]:
     if len(password) < 6:
         errors["password"] = "A senha deve ter pelo menos 6 caracteres."
 
-    if not (pin_raw or "").strip():
-        errors["pin"] = "PIN do vendedor é obrigatório."
-    else:
-        try:
-            pin_norm = _normalize_seller_pin(pin_raw)
-        except ValueError as exc:
-            errors["pin"] = str(exc)
-            pin_norm = None
-        if "pin" not in errors and not _pin_is_available(pin_norm):
-            errors["pin"] = "Este PIN já está em uso por outro vendedor."
+    if event_id <= 0:
+        errors["event_id"] = "Selecione o evento ao qual este vendedor será associado."
+    elif get_event(event_id) is None:
+        errors["event_id"] = "Evento não encontrado."
 
     if "email" not in errors and email and get_seller_by_email(email):
         errors["email"] = "Já existe um vendedor com este e-mail."
@@ -1004,7 +979,7 @@ def _parse_new_seller_post(form) -> tuple[dict[str, str], dict[str, str]]:
         "name": keep("name", name),
         "email": keep("email", email),
         "password": keep("password", password),
-        "pin": keep("pin", pin_raw),
+        "event_id": "" if "event_id" in errors else event_id_raw,
     }
     return errors, repop
 
@@ -1015,7 +990,6 @@ def _parse_edit_seller_post(form, seller_id: int) -> tuple[dict[str, str], dict]
     email = (form.get("email") or "").strip().lower()
     active = form.get("active") == "1"
     password = form.get("password") or ""
-    pin_raw = (form.get("pin") or "").strip()
 
     errors: dict[str, str] = {}
     if not name:
@@ -1028,23 +1002,11 @@ def _parse_edit_seller_post(form, seller_id: int) -> tuple[dict[str, str], dict]
     if password and len(password) < 6:
         errors["password"] = "A nova senha deve ter pelo menos 6 caracteres."
 
-    if pin_raw:
-        try:
-            pin_norm = _normalize_seller_pin(pin_raw)
-        except ValueError as exc:
-            errors["pin"] = str(exc)
-            pin_norm = None
-        if "pin" not in errors and not _pin_is_available(
-            pin_norm, ignore_seller_id=seller_id
-        ):
-            errors["pin"] = "Este PIN já está em uso por outro vendedor."
-
     repop = {
         "name": "" if "name" in errors else name,
         "email": "" if "email" in errors else email,
         "active": active,
         "password": "" if "password" in errors else password,
-        "pin": "" if "pin" in errors else pin_raw,
     }
     return errors, repop
 
@@ -1058,15 +1020,20 @@ def admin_sellers():
         seller_form_errors, seller_form = _parse_new_seller_post(request.form)
         if not seller_form_errors:
             try:
+                event_id = _parse_int(request.form.get("event_id") or "", 0)
                 seller = create_seller_account(
                     (request.form.get("name") or "").strip(),
                     (request.form.get("email") or "").strip().lower(),
                     generate_password_hash(request.form.get("password") or ""),
-                    generate_password_hash(
-                        _normalize_seller_pin(request.form.get("pin") or "")
-                    ),
+                    pin_hash=None,
                 )
-                flash(f"Vendedor {seller['name']} criado com sucesso.", "success")
+                add_seller_to_event(event_id, int(seller["id"]))
+                ev = get_event(event_id)
+                ev_label = (ev or {}).get("name") or f"#{event_id}"
+                flash(
+                    f"Vendedor {seller['name']} criado e associado ao evento «{ev_label}».",
+                    "success",
+                )
                 return redirect(url_for("admin_seller_detail", seller_id=seller["id"]))
             except ValueError as exc:
                 msg = str(exc)
@@ -1082,11 +1049,13 @@ def admin_sellers():
             flash(_first_seller_form_error_message(seller_form_errors), "error")
 
     sellers = list_sellers()
+    events_for_seller_form = list_events(include_archived=True)
     return render_template(
         "admin/sellers.html",
         sellers=sellers,
         seller_form=seller_form,
         seller_form_errors=seller_form_errors,
+        events_for_seller_form=events_for_seller_form,
         **_admin_shell_context(active_section="vendedores"),
     )
 
@@ -1138,13 +1107,9 @@ def admin_seller_update(seller_id: int):
     email = (request.form.get("email") or "").strip().lower()
     active = request.form.get("active") == "1"
     password = request.form.get("password") or ""
-    pin = (request.form.get("pin") or "").strip()
     password_hash = None
     if password:
         password_hash = generate_password_hash(password)
-    pin_hash = None
-    if pin:
-        pin_hash = generate_password_hash(_normalize_seller_pin(pin))
     try:
         seller = update_seller_account(
             seller_id,
@@ -1152,7 +1117,7 @@ def admin_seller_update(seller_id: int):
             email=email,
             active=active,
             password_hash=password_hash,
-            pin_hash=pin_hash,
+            clear_pin_hash=True,
         )
         flash(f"Dados de {seller['name']} atualizados.", "success")
     except ValueError as exc:

@@ -167,6 +167,13 @@
     color: #b71c1c;
 }
 
+.admin-field__hint {
+    margin: 6px 0 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--color-text-muted);
+}
+
 .admin-login__submit {
     margin-top: 8px;
     padding: 14px 18px;
@@ -229,7 +236,7 @@
 
 .admin-sellers__row {
     display: grid;
-    grid-template-columns: minmax(220px, 1.35fr) minmax(150px, 1fr) 0.62fr 0.76fr 0.48fr 0.74fr 0.82fr 0.52fr;
+    grid-template-columns: minmax(220px, 1.35fr) minmax(150px, 1fr) 0.62fr 0.48fr 0.74fr 0.82fr 0.52fr;
     gap: 12px;
     align-items: center;
     padding: 12px 20px;
@@ -239,6 +246,15 @@
 
 .admin-sellers__row:last-child {
     border-bottom: none;
+}
+
+/* Tabela de vendedores na página do evento (sem coluna Evento) */
+.admin-sellers.admin-sellers--event-detail .admin-sellers__row {
+    grid-template-columns: minmax(200px, 1.55fr) 0.62fr 0.52fr 0.72fr 0.85fr 0.52fr;
+}
+
+.admin-sellers.admin-sellers--event-detail .admin-table__head.admin-sellers__row {
+    grid-template-columns: minmax(200px, 1.55fr) 0.62fr 0.52fr 0.72fr 0.85fr 0.52fr;
 }
 
 .admin-sellers__person {
@@ -818,7 +834,7 @@
 
 /* Vendedores: o seletor genérico .admin-table__head usa grid de 6 colunas (transações). Repete a grid de 7 colunas das linhas. */
 .admin-sellers .admin-table__head.admin-sellers__row {
-    grid-template-columns: minmax(220px, 1.35fr) minmax(150px, 1fr) 0.62fr 0.76fr 0.48fr 0.74fr 0.82fr 0.52fr;
+    grid-template-columns: minmax(220px, 1.35fr) minmax(150px, 1fr) 0.62fr 0.48fr 0.74fr 0.82fr 0.52fr;
     padding: 12px 20px;
 }
 
@@ -3156,7 +3172,6 @@
         grid-template-areas:
             "person status"
             "events events"
-            "pin pin"
             "sales revenue"
             "login action";
         margin-bottom: 12px;
@@ -3176,22 +3191,48 @@
         justify-self: end;
     }
     .admin-sellers__row > :nth-child(4) {
-        grid-area: pin;
-    }
-    .admin-sellers__row > :nth-child(5) {
         grid-area: sales;
         justify-self: start;
     }
-    .admin-sellers__row > :nth-child(6) {
+    .admin-sellers__row > :nth-child(5) {
         grid-area: revenue;
         justify-self: end;
     }
-    .admin-sellers__row > :nth-child(7) {
+    .admin-sellers__row > :nth-child(6) {
         grid-area: login;
         font-size: 12px;
         color: var(--color-text-muted);
     }
-    .admin-sellers__row > :nth-child(8) {
+    .admin-sellers__row > :nth-child(7) {
+        grid-area: action;
+        justify-self: end;
+    }
+
+    /* Vendedores do evento: 6 colunas no desktop; no mobile sem linha “eventos” */
+    .admin-sellers.admin-sellers--event-detail .admin-sellers__row {
+        grid-template-areas:
+            "person status"
+            "sales revenue"
+            "login action";
+    }
+    .admin-sellers.admin-sellers--event-detail .admin-sellers__row > :nth-child(2) {
+        grid-area: status;
+        justify-self: end;
+    }
+    .admin-sellers.admin-sellers--event-detail .admin-sellers__row > :nth-child(3) {
+        grid-area: sales;
+        justify-self: start;
+    }
+    .admin-sellers.admin-sellers--event-detail .admin-sellers__row > :nth-child(4) {
+        grid-area: revenue;
+        justify-self: end;
+    }
+    .admin-sellers.admin-sellers--event-detail .admin-sellers__row > :nth-child(5) {
+        grid-area: login;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-sellers.admin-sellers--event-detail .admin-sellers__row > :nth-child(6) {
         grid-area: action;
         justify-self: end;
     }

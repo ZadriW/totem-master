@@ -851,9 +851,12 @@ def create_seller_account(
     name: str,
     email: str,
     password_hash: str,
-    pin_hash: str,
+    pin_hash: Optional[str] = None,
 ) -> Dict:
-    """Cria uma conta de vendedor, falhando se o e-mail já estiver em uso."""
+    """Cria uma conta de vendedor, falhando se o e-mail já estiver em uso.
+
+    ``pin_hash`` é opcional (PIN de venda não é mais usado no fluxo atual).
+    """
     normalized_email = (email or "").strip().lower()
     seller_name = (name or "").strip()
     if not seller_name:
@@ -864,8 +867,7 @@ def create_seller_account(
         raise ValueError("Informe um e-mail válido.")
     if not (password_hash or "").strip():
         raise ValueError("Senha do vendedor é obrigatória.")
-    if not (pin_hash or "").strip():
-        raise ValueError("PIN do vendedor é obrigatório.")
+    ph = (pin_hash or "").strip() or None
     now = _now_iso()
     with get_conn() as conn:
         exists = conn.execute(
@@ -880,7 +882,7 @@ def create_seller_account(
                 (name, email, password_hash, pin_hash, active, created_at, updated_at)
             VALUES (?, ?, ?, ?, 1, ?, ?)
             """,
-            (seller_name, normalized_email, password_hash, pin_hash, now, now),
+            (seller_name, normalized_email, password_hash, ph, now, now),
         )
         row = conn.execute(
             "SELECT * FROM sellers WHERE id = ?",
@@ -1010,6 +1012,7 @@ def update_seller_account(
     active: bool,
     password_hash: Optional[str] = None,
     pin_hash: Optional[str] = None,
+    clear_pin_hash: bool = False,
 ) -> Dict:
     """Atualiza dados principais do vendedor e opcionalmente redefine a senha."""
     normalized_email = (email or "").strip().lower()
@@ -1035,7 +1038,9 @@ def update_seller_account(
         if password_hash:
             updates.append("password_hash = ?")
             params.append(password_hash)
-        if pin_hash:
+        if clear_pin_hash:
+            updates.append("pin_hash = NULL")
+        elif pin_hash:
             updates.append("pin_hash = ?")
             params.append(pin_hash)
         updates.append("updated_at = ?")

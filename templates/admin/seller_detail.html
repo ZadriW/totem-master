@@ -14,7 +14,6 @@
             <p class="admin-section__subtitle">
                 {{ seller.email }} &middot;
                 {% if seller.active %}Conta ativa{% else %}Conta inativa{% endif %} &middot;
-                PIN {% if seller.pin_hash %}configurado{% else %}pendente{% endif %} &middot;
                 Último login: {{ seller.last_login_at | datahora }}
             </p>
         </div>
@@ -81,13 +80,11 @@
         {% set v_email = seller_form.email %}
         {% set v_active = seller_form.active %}
         {% set v_password = seller_form.password %}
-        {% set v_pin = seller_form.pin %}
     {% else %}
         {% set v_name = seller.name %}
         {% set v_email = seller.email %}
         {% set v_active = seller.active %}
         {% set v_password = '' %}
-        {% set v_pin = '' %}
     {% endif %}
     <article class="admin-card">
         <form
@@ -157,37 +154,6 @@
                     </button>
                 </span>
                 {% if fe.password %}<p class="admin-field__error" id="detail-seller-password-err">{{ fe.password }}</p>{% endif %}
-            </div>
-            <div class="admin-field">
-                <label class="admin-field__label" for="detail-seller-pin">Novo PIN de venda</label>
-                <span class="admin-field__wrap admin-field__wrap--has-toggle">
-                    <input
-                        id="detail-seller-pin"
-                        class="admin-field__input{% if fe.pin %} admin-field__input--invalid{% endif %}"
-                        type="password"
-                        name="pin"
-                        inputmode="numeric"
-                        pattern="[0-9]{4}"
-                        maxlength="4"
-                        minlength="4"
-                        placeholder="Deixe em branco para manter"
-                        value="{{ v_pin }}"
-                        oninput="this.value = this.value.replace(/\D/g, '').slice(0, 4)"
-                        autocomplete="off"
-                        {% if fe.pin %}aria-invalid="true" aria-describedby="detail-seller-pin-err"{% endif %}
-                    >
-                    <button
-                        type="button"
-                        class="admin-field__toggle-pass"
-                        id="adminSellerDetailTogglePin"
-                        aria-label="Mostrar PIN"
-                        aria-pressed="false"
-                        title="Mostrar PIN"
-                    >
-                        <i class="fa-regular fa-eye" aria-hidden="true"></i>
-                    </button>
-                </span>
-                {% if fe.pin %}<p class="admin-field__error" id="detail-seller-pin-err">{{ fe.pin }}</p>{% endif %}
             </div>
             <button type="submit" class="admin-btn admin-btn--primary admin-btn--block">
                 <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i>
@@ -316,7 +282,6 @@
         });
     }
     bindToggle('detail-seller-password', 'adminSellerDetailTogglePassword', 'Mostrar senha', 'Ocultar senha');
-    bindToggle('detail-seller-pin', 'adminSellerDetailTogglePin', 'Mostrar PIN', 'Ocultar PIN');
 })();
 </script>
 {% endblock %}
