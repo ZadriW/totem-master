@@ -1414,6 +1414,7 @@
     font-size: 14px;
     color: var(--color-text);
     transition: border-color var(--transition), background var(--transition);
+    cursor: pointer;
 }
 
 .admin-filter__input:focus {
@@ -1423,8 +1424,13 @@
     box-shadow: 0 0 0 3px rgba(14, 22, 122, 0.10);
 }
 
-.admin-filters__actions {
-    display: inline-flex;
+/* Ocupa a linha inteira no grid para não ficar preso numa coluna estreita/desalinhada */
+.admin-filters > .admin-filters__actions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
     gap: 8px;
 }
 

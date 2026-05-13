@@ -180,13 +180,50 @@ def _normalize_payment_method_for_db(value) -> str:
     return "cartao"
 
 
-def _payment_method_label(value) -> str:
+def _payment_method_label(value, card_installments=None) -> str:
     v = (value or "").strip().lower()
     if v == "pix":
         return "PIX"
     if v == "cartao":
+        try:
+            n = int(card_installments)
+        except (TypeError, ValueError):
+            n = None
+        if n is not None and n > 1:
+            return f"Cartão em {n}x"
         return "Cartão"
     return "—"
+
+
+def _format_brl(value) -> str:
+    try:
+        n = float(value or 0)
+    except (TypeError, ValueError):
+        n = 0.0
+    formatted = f"{n:,.2f}"
+    formatted = formatted.replace(",", "§").replace(".", ",").replace("§", ".")
+    return f"R$ {formatted}"
+
+
+def _card_installment_plan_text(total, payment_method, card_installments):
+    """Texto do parcelamento no cartão (ex.: ``2x de R$187,25``)."""
+    pm = (payment_method or "").strip().lower()
+    if pm != "cartao":
+        return None
+    try:
+        n = int(card_installments)
+    except (TypeError, ValueError):
+        return None
+    if n < 2:
+        return None
+    try:
+        t = float(total or 0)
+    except (TypeError, ValueError):
+        return None
+    if t <= 0:
+        return None
+    per = round(t / n, 2)
+    return f"{n}x de {_format_brl(per)}"
 
 
 def _display_created_by(value) -> str:
@@ -207,9 +244,15 @@ def _event_badge_style_filter(raw) -> str:
     return f"background-color:{bg};color:{fg};"
 
 
+def _parcelas_cartao_filter(total, payment_method, installments):
+    """Filtro Jinja: ``{{ total | parcelas_cartao(pm, inst) }}``."""
+    return _card_installment_plan_text(total, payment_method, installments) or ""
+
+
 # Registro imediato: garante o filtro Jinja mesmo com importações parciais / reload.
 app.add_template_filter(_display_created_by, "display_created_by")
 app.add_template_filter(_event_badge_style_filter, "event_badge_style")
+app.add_template_filter(_parcelas_cartao_filter, "parcelas_cartao")
 
 # Inicializa o schema e popula o catálogo inicial (se vazio).
 init_db()
@@ -398,12 +441,22 @@ def api_create_transaction():
     payment_method = _normalize_payment_method_for_db(
         payload.get("payment_method") or client.get("payment_method"),
     )
-    
+
     # CRO: UF e número informados no checkout (sem API externa)
     cro_uf = (client.get("cro_uf") or "").strip().upper()
     cro_numero = (client.get("cro_numero") or "").strip()
 
     try:
+        inst_raw = payload.get("installments")
+        if inst_raw is None:
+            inst_raw = client.get("installments")
+        card_installments = None
+        if inst_raw not in (None, ""):
+            try:
+                card_installments = int(inst_raw)
+            except (TypeError, ValueError):
+                raise ValueError("Número de parcelas inválido.") from None
+
         auth = _seller_auth()
         if not auth:
             raise ValueError(
@@ -433,6 +486,7 @@ def api_create_transaction():
             client_city=client.get("city"),
             client_state=client.get("state"),
             payment_method=payment_method,
+            card_installments=card_installments,
             client_cro_uf=cro_uf or None,
             client_cro_numero=cro_numero or None,
         )
@@ -786,7 +840,15 @@ def _seller_transaction_api(tx: dict) -> dict:
         "total_display": brl_filter(tx["total"]),
         "status": tx["status"],
         "payment_method": tx.get("payment_method"),
-        "payment_method_label": _payment_method_label(tx.get("payment_method")),
+        "payment_method_label": _payment_method_label(
+            tx.get("payment_method"),
+            tx.get("card_installments"),
+        ),
+        "parcelas_cartao": _card_installment_plan_text(
+            tx.get("total"),
+            tx.get("payment_method"),
+            tx.get("card_installments"),
+        ),
         "items": [
             {
                 "product_name": it.get("product_name") or "",
@@ -1980,7 +2042,12 @@ def admin_event_sales_export_csv(event_id: int):
                     _csv_cell(t.get("client_state")),
                     _csv_cell(t.get("seller_id")),
                     _csv_cell(t.get("seller_name")),
-                    _csv_cell(t.get("payment_method")),
+                    _csv_cell(
+                        _payment_method_label(
+                            t.get("payment_method"),
+                            t.get("card_installments"),
+                        )
+                    ),
                     _csv_cell(t.get("client_cro_uf")),
                     _csv_cell(t.get("client_cro_numero")),
                 ]
@@ -2018,7 +2085,12 @@ def admin_event_sales_export_csv(event_id: int):
                     _csv_cell(ti.get("created_at")),
                     _csv_cell(ti.get("seller_id")),
                     _csv_cell(ti.get("seller_name")),
-                    _csv_cell(ti.get("payment_method")),
+                    _csv_cell(
+                        _payment_method_label(
+                            ti.get("payment_method"),
+                            ti.get("card_installments"),
+                        )
+                    ),
                     _csv_cell(ti.get("product_id")),
                     _csv_cell(ti.get("product_name")),
                     _csv_cell(ti.get("category")),
@@ -2584,13 +2656,7 @@ def receipt(order_number: str):
 
 @app.template_filter("brl")
 def brl_filter(value):
-    try:
-        n = float(value or 0)
-    except (TypeError, ValueError):
-        n = 0.0
-    formatted = f"{n:,.2f}"
-    formatted = formatted.replace(",", "§").replace(".", ",").replace("§", ".")
-    return f"R$ {formatted}"
+    return _format_brl(value)
 
 
 @app.template_filter("datahora")
@@ -2605,8 +2671,8 @@ def datahora_filter(value):
 
 
 @app.template_filter("paymethod")
-def paymethod_filter(value):
-    return _payment_method_label(value)
+def paymethod_filter(value, installments=None):
+    return _payment_method_label(value, installments)
 
 
 @app.template_filter("cro_pedido")

@@ -67,6 +67,9 @@
 
     Cart.subscribe(() => {
         renderSummary();
+        if (window.PaymentForm && typeof window.PaymentForm.syncInstallmentsFromCart === 'function') {
+            window.PaymentForm.syncInstallmentsFromCart();
+        }
     });
 
     renderSummary();

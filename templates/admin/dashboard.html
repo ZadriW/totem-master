@@ -204,7 +204,7 @@
                         <strong>{{ tx.total | brl }}</strong>
                     </span>
                     <span class="admin-table__col">
-                        {{ tx.payment_method | paymethod }}
+                        {{ tx.payment_method | paymethod(tx.card_installments) }}
                     </span>
                     <span class="admin-table__col admin-table__col--seller">
                         {{ tx.seller_name or '—' }}
@@ -252,8 +252,15 @@
                         <div class="admin-tx__summary">
                             <div class="admin-tx__summary-row">
                                 <span>Forma de pagamento</span>
-                                <strong>{{ tx.payment_method | paymethod }}</strong>
+                                <strong>{{ tx.payment_method | paymethod(tx.card_installments) }}</strong>
                             </div>
+                            {% set parcelas_txt = tx.total | parcelas_cartao(tx.payment_method, tx.card_installments) %}
+                            {% if parcelas_txt %}
+                            <div class="admin-tx__summary-row">
+                                <span>Valor das parcelas</span>
+                                <strong>{{ parcelas_txt }}</strong>
+                            </div>
+                            {% endif %}
                             <div class="admin-tx__summary-row admin-tx__summary-row--total">
                                 <span>Total da transação</span>
                                 <strong>{{ tx.total | brl }}</strong>

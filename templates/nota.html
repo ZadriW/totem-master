@@ -450,7 +450,7 @@
             </div>
             <div class="receipt__meta-item">
                 <span class="receipt__meta-label">Pagamento</span>
-                <span class="receipt__meta-value">{{ tx.payment_method | paymethod }}</span>
+                <span class="receipt__meta-value">{{ tx.payment_method | paymethod(tx.card_installments) }}</span>
             </div>
             <div class="receipt__meta-item">
                 <span class="receipt__meta-label">Qtd. de itens</span>

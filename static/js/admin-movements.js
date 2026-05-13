@@ -22,9 +22,11 @@
         }[char]));
     }
 
-    function paymentMethodLabel(raw) {
+    function paymentMethodLabel(raw, installments) {
         const v = String(raw || '').toLowerCase();
         if (v === 'pix') return 'PIX';
+        const n = parseInt(String(installments ?? ''), 10);
+        if (Number.isFinite(n) && n > 1) return `Cartão em ${n}x`;
         if (v === 'cartao') return 'Cartão';
         return '—';
     }
@@ -96,7 +98,7 @@
                         </div>
                         <div class="admin-mov__details-item">
                             <dt>Forma de pagamento</dt>
-                            <dd>${escapeHtml(paymentMethodLabel(movement.payment_method))}</dd>
+                            <dd>${escapeHtml(paymentMethodLabel(movement.payment_method, movement.card_installments))}</dd>
                         </div>
                         <div class="admin-mov__details-item">
                             <dt>CEP</dt>

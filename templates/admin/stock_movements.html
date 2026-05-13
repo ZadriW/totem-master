@@ -186,7 +186,7 @@
                         </div>
                         <div class="admin-mov__details-item">
                             <dt>Forma de pagamento</dt>
-                            <dd>{{ m.payment_method | paymethod }}</dd>
+                            <dd>{{ m.payment_method | paymethod(m.card_installments) }}</dd>
                         </div>
                         <div class="admin-mov__details-item">
                             <dt>CEP</dt>

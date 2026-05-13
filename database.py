@@ -28,6 +28,7 @@ que insere a ``stock_movements`` correspondente, garantindo consistência.
 
 from __future__ import annotations
 
+import math
 import os
 import random
 import re
@@ -220,6 +221,12 @@ def _ensure_transactions_payment_method(conn: sqlite3.Connection) -> None:
     if "payment_method" in _table_columns(conn, "transactions"):
         return
     conn.execute("ALTER TABLE transactions ADD COLUMN payment_method TEXT")
+
+
+def _ensure_transactions_card_installments(conn: sqlite3.Connection) -> None:
+    if "card_installments" in _table_columns(conn, "transactions"):
+        return
+    conn.execute("ALTER TABLE transactions ADD COLUMN card_installments INTEGER")
 
 
 def _ensure_transactions_client_columns(conn: sqlite3.Connection) -> None:
@@ -420,6 +427,7 @@ def init_db() -> None:
         _ensure_transactions_client_columns(conn)
         _ensure_transactions_cro_columns(conn)
         _ensure_transactions_payment_method(conn)
+        _ensure_transactions_card_installments(conn)
         _ensure_sellers_columns(conn)
         _ensure_events_tables(conn)
         _ensure_events_badge_color(conn)
@@ -1299,7 +1307,7 @@ def list_stock_movements(
         "evt.badge_color AS event_badge_color, "
         "t.client_name, t.client_cpf, t.client_zipcode, t.client_address, "
         "t.client_number, t.client_complement, t.client_city, t.client_state, "
-        "t.payment_method, "
+        "t.payment_method, t.card_installments, "
         "t.client_cro_uf, t.client_cro_numero "
         "FROM stock_movements m "
         "LEFT JOIN products p ON p.id = m.product_id "
@@ -1449,6 +1457,45 @@ def generate_order_number(conn: Optional[sqlite3.Connection] = None) -> str:
     return f"{prefix}-{int(datetime.now().timestamp())}"
 
 
+_MIN_TOTAL_PARCELAS_REAIS = 120.0
+_MIN_PARCELA_REAIS = 120.0
+_MAX_PARCELAS_CARTAO = 24
+
+
+def _max_card_installments_allowed(total: float) -> int:
+    """Mesma regra do checkout: total > R$120 e cada parcela > R$120 (estrito)."""
+    t = float(total)
+    if not math.isfinite(t) or t <= _MIN_TOTAL_PARCELAS_REAIS:
+        return 1
+    max_k = 1
+    for k in range(2, _MAX_PARCELAS_CARTAO + 1):
+        if t / k > _MIN_PARCELA_REAIS:
+            max_k = k
+        else:
+            break
+    return max_k
+
+
+def _normalize_card_installments_for_db(
+    payment_method: Optional[str],
+    total: float,
+    raw,
+) -> Optional[int]:
+    pm = (payment_method or "").strip().lower()
+    if pm != "cartao":
+        return None
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError("Número de parcelas inválido.") from None
+    if n < 1:
+        raise ValueError("Número de parcelas inválido.")
+    max_allowed = _max_card_installments_allowed(total)
+    if n > max_allowed:
+        raise ValueError("Número de parcelas inválido para o valor do pedido.")
+    return n
+
+
 def create_transaction(
     items: Iterable[Dict],
     *,
@@ -1465,6 +1512,7 @@ def create_transaction(
     client_city: Optional[str] = None,
     client_state: Optional[str] = None,
     payment_method: Optional[str] = None,
+    card_installments: Optional[int] = None,
     client_cro_uf: Optional[str] = None,
     client_cro_numero: Optional[str] = None,
 ) -> Dict:
@@ -1525,6 +1573,9 @@ def create_transaction(
 
     total = round(sum(i["subtotal"] for i in normalized), 2)
     items_count = sum(i["quantity"] for i in normalized)
+    card_installments_store = _normalize_card_installments_for_db(
+        payment_method, total, card_installments if card_installments is not None else 1,
+    )
 
     with get_conn() as conn:
         pids = {i["product_id"] for i in normalized if i["product_id"] is not None}
@@ -1598,16 +1649,16 @@ def create_transaction(
                 (order_number, created_at, total, items_count, status,
                  client_name, client_cpf, client_zipcode, client_address,
                  client_number, client_complement, client_city, client_state,
-                 seller_id, seller_name, payment_method,
+                 seller_id, seller_name, payment_method, card_installments,
                  client_cro_uf, client_cro_numero, client_cro_categoria,
                  client_cro_validated, client_cro_validation_data)
-            VALUES (?, ?, ?, ?, 'confirmado', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL)
+            VALUES (?, ?, ?, ?, 'confirmado', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL)
             """,
             (
                 order_number, created_at, total, items_count,
                 client_name, client_cpf, client_zipcode, client_address,
                 client_number, client_complement, client_city, client_state,
-                seller_id, seller_name, payment_method,
+                seller_id, seller_name, payment_method, card_installments_store,
                 client_cro_uf, client_cro_numero,
             ),
         )
@@ -1672,6 +1723,7 @@ def create_transaction(
         "seller_id": seller_id,
         "seller_name": seller_name,
         "payment_method": payment_method,
+        "card_installments": card_installments_store,
     }
 
 
@@ -1701,7 +1753,7 @@ def list_transactions(limit: int = 200, seller_id: Optional[int] = None) -> List
         tx_rows = conn.execute(
             f"""
             SELECT id, order_number, created_at, total, items_count, status,
-                   seller_id, seller_name, payment_method
+                   seller_id, seller_name, payment_method, card_installments
               FROM transactions
              {where}
              ORDER BY datetime(created_at) DESC, id DESC
@@ -2583,7 +2635,7 @@ def list_event_stock_movements(
         "evt.badge_color AS event_badge_color, "
         "t.client_name, t.client_cpf, t.client_zipcode, t.client_address, "
         "t.client_number, t.client_complement, t.client_city, t.client_state, "
-        "t.payment_method, "
+        "t.payment_method, t.card_installments, "
         "t.client_cro_uf, t.client_cro_numero "
         "FROM stock_movements m "
         "LEFT JOIN products p ON p.id = m.product_id "
@@ -2636,7 +2688,7 @@ def list_transactions_summary_for_event_period(
         "SELECT t.id, t.order_number, t.created_at, t.total, t.items_count, t.status, "
         "t.client_name, t.client_cpf, t.client_zipcode, t.client_address, "
         "t.client_number, t.client_complement, t.client_city, t.client_state, "
-        "t.seller_id, t.seller_name, t.payment_method, "
+        "t.seller_id, t.seller_name, t.payment_method, t.card_installments, "
         "t.client_cro_uf, t.client_cro_numero "
         "FROM transactions t "
         "WHERE EXISTS ("
@@ -2669,7 +2721,7 @@ def list_transaction_items_for_event_period(
     cap = max(1, min(int(limit), EXPORT_SALES_ITEMS_CSV_CAP))
     sql = (
         "SELECT ti.id AS item_id, t.id AS transaction_id, t.order_number, t.created_at, "
-        "t.seller_id, t.seller_name, t.payment_method, "
+        "t.seller_id, t.seller_name, t.payment_method, t.card_installments, "
         "ti.product_id, ti.product_name, ti.category, ti.product_sku, "
         "ti.quantity, ti.unit_price, ti.subtotal "
         "FROM transaction_items ti "

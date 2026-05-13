@@ -46,6 +46,8 @@
         const payLabel = (() => {
             const v = String(movement.payment_method || '').toLowerCase();
             if (v === 'pix') return 'PIX';
+            const n = parseInt(String(movement.card_installments ?? ''), 10);
+            if (Number.isFinite(n) && n > 1) return `Cartão em ${n}x`;
             if (v === 'cartao') return 'Cartão';
             return '—';
         })();

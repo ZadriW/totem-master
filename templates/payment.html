@@ -230,24 +230,36 @@
                         <option value="TO">Tocantins</option>
                     </select>
                 </label>
+            </form>
+        </section>
 
-                <h2 class="payment__section-title payment__section-title--sub payment__section-title--method">
+        <div class="payment__sidebar">
+            <section
+                class="payment__section payment__section--method-flow"
+                aria-labelledby="paymentMethodHeading"
+            >
+                <h2
+                    id="paymentMethodHeading"
+                    class="payment__section-title payment__section-title--sub payment__section-title--method"
+                >
                     <i class="fa-solid fa-money-bill-wave" aria-hidden="true"></i>
                     Forma de pagamento
                 </h2>
-                <p class="payment-method__hint">Selecione como o pagamento será processado na maquininha.</p>
-                <fieldset class="payment-method">
+                <p class="payment-method__hint payment-method__hint--sidebar">
+                    Escolha PIX ou cartão antes de continuar — o valor será processado na maquininha na próxima etapa.
+                </p>
+                <fieldset class="payment-method" form="paymentForm">
                     <legend class="payment-method__legend">Opção <span class="payment-field__required">*</span></legend>
                     <div class="payment-method__options">
                         <label class="payment-method__choice">
-                            <input type="radio" name="payment_method" value="pix" required>
+                            <input type="radio" name="payment_method" form="paymentForm" value="pix" required>
                             <span class="payment-method__box">
                                 <i class="fa-brands fa-pix" aria-hidden="true"></i>
                                 <span class="payment-method__label">PIX</span>
                             </span>
                         </label>
                         <label class="payment-method__choice">
-                            <input type="radio" name="payment_method" value="cartao" checked>
+                            <input type="radio" name="payment_method" form="paymentForm" value="cartao" checked>
                             <span class="payment-method__box">
                                 <i class="fa-solid fa-credit-card" aria-hidden="true"></i>
                                 <span class="payment-method__label">Cartão</span>
@@ -255,51 +267,72 @@
                         </label>
                     </div>
                 </fieldset>
-            </form>
-        </section>
 
-        <aside class="payment__section">
-            <h2 class="payment__section-title">
-                <i class="fa-solid fa-credit-card" aria-hidden="true"></i>
-                Pagamento
-            </h2>
-
-            <div class="payment__summary-rows">
-                <div class="payment__summary-row">
-                    <span>Itens</span>
-                    <strong id="paymentCount">0</strong>
+                <div
+                    class="payment-installments"
+                    id="paymentInstallmentsPanel"
+                    aria-hidden="true"
+                >
+                    <div class="payment-installments__inner">
+                        <label class="payment-installments__field" for="paymentInstallments">
+                            <span class="payment-installments__label">Parcelamento no cartão</span>
+                            <select
+                                id="paymentInstallments"
+                                class="payment-installments__select"
+                                form="paymentForm"
+                                name="installments"
+                                disabled
+                                aria-describedby="paymentInstallmentsHint"
+                            ></select>
+                        </label>
+                        <p class="payment-installments__hint" id="paymentInstallmentsHint"></p>
+                    </div>
                 </div>
-                <div class="payment__summary-row">
-                    <span>Subtotal</span>
-                    <strong id="paymentSubtotal">R$ 0,00</strong>
+            </section>
+
+            <aside class="payment__section payment__aside-summary">
+                <h2 class="payment__section-title">
+                    <i class="fa-solid fa-credit-card" aria-hidden="true"></i>
+                    Pagamento
+                </h2>
+
+                <div class="payment__summary-rows">
+                    <div class="payment__summary-row">
+                        <span>Itens</span>
+                        <strong id="paymentCount">0</strong>
+                    </div>
+                    <div class="payment__summary-row">
+                        <span>Subtotal</span>
+                        <strong id="paymentSubtotal">R$ 0,00</strong>
+                    </div>
                 </div>
-            </div>
 
-            <div class="payment__summary-total">
-                <span class="payment__summary-total-label">Total</span>
-                <span class="payment__summary-total-value" id="paymentTotal">R$ 0,00</span>
-            </div>
-
-            <div class="payment__instructions">
-                <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-                <div>
-                    <strong>Próximo passo</strong>
-                    Revise os itens, os dados e a forma de pagamento (PIX ou cartão). Em seguida você será direcionado à tela
-                    <em>Aguardando pagamento</em>, onde poderá usar a maquininha e confirmar
-                    quando o pagamento for concluído.
+                <div class="payment__summary-total">
+                    <span class="payment__summary-total-label">Total</span>
+                    <span class="payment__summary-total-value" id="paymentTotal">R$ 0,00</span>
                 </div>
-            </div>
 
-            <div class="payment__actions">
-                <button type="button" class="payment__btn payment__btn--next" id="paymentContinue">
-                    <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
-                    Continuar para o pagamento
-                </button>
-                <button type="button" class="payment__btn payment__btn--secondary" id="paymentCancel">
-                    Cancelar e voltar ao catálogo
-                </button>
-            </div>
-        </aside>
+                <div class="payment__instructions">
+                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                    <div>
+                        <strong>Próximo passo</strong>
+                        Revise os itens, os dados e a forma de pagamento (PIX ou cartão). Em seguida você será direcionado à tela
+                        <em>Aguardando pagamento</em>, onde poderá usar a maquininha e confirmar
+                        quando o pagamento for concluído.
+                    </div>
+                </div>
+
+                <div class="payment__actions">
+                    <button type="button" class="payment__btn payment__btn--next" id="paymentContinue">
+                        <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                        Continuar para o pagamento
+                    </button>
+                    <button type="button" class="payment__btn payment__btn--secondary" id="paymentCancel">
+                        Cancelar e voltar ao catálogo
+                    </button>
+                </div>
+            </aside>
+        </div>
     </main>
 </div>
 {% endblock %}

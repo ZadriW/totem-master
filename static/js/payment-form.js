@@ -36,9 +36,113 @@
         } catch (_) {}
     }
 
+    const installmentsPanel = document.getElementById('paymentInstallmentsPanel');
+    const installmentsSelect = document.getElementById('paymentInstallments');
+    const installmentsHint = document.getElementById('paymentInstallmentsHint');
+
+    const MIN_TOTAL_PARCELAMENTO_REAIS = 120;
+    const MIN_PARCELA_REAIS = 120;
+    const MAX_PARCELAS_UI = 24;
+
+    function formatBRL(value) {
+        if (window.Cart && typeof window.Cart.formatBRL === 'function') {
+            return window.Cart.formatBRL(value);
+        }
+        const n = Number(value) || 0;
+        return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function cartTotal() {
+        if (!window.Cart || typeof window.Cart.total !== 'function') return 0;
+        const t = Number(window.Cart.total());
+        return Number.isFinite(t) ? t : 0;
+    }
+
+    /**
+     * Parcelamento só para total > R$120; cada parcela deve ser > R$120 (valor estrito).
+     * Ou seja: para k≥2, exige-se total/k > 120.
+     */
+    function maxParcelasPermitidas(total) {
+        const t = Number(total);
+        if (!Number.isFinite(t) || t <= MIN_TOTAL_PARCELAMENTO_REAIS) return 1;
+        let max = 1;
+        for (let k = 2; k <= MAX_PARCELAS_UI; k++) {
+            if (t / k > MIN_PARCELA_REAIS) max = k;
+            else break;
+        }
+        return max;
+    }
+
+    function isCartaoSelected() {
+        const r = document.querySelector(
+            'input[name="payment_method"][form="paymentForm"]:checked, '
+                + '#paymentForm input[name="payment_method"]:checked',
+        );
+        return !!(r && r.value === 'cartao');
+    }
+
+    function rebuildInstallmentsOptions(preferred) {
+        if (!installmentsSelect) return;
+        const total = cartTotal();
+        const max = maxParcelasPermitidas(total);
+        installmentsSelect.innerHTML = '';
+        for (let k = 1; k <= max; k++) {
+            const opt = document.createElement('option');
+            opt.value = String(k);
+            const parcela = total / k;
+            opt.textContent =
+                k === 1
+                    ? `À vista — ${formatBRL(total)}`
+                    : `${k}x de ${formatBRL(parcela)}`;
+            installmentsSelect.appendChild(opt);
+        }
+        let pick = parseInt(String(preferred ?? installmentsSelect.value ?? '1'), 10);
+        if (!Number.isFinite(pick)) pick = 1;
+        pick = Math.min(Math.max(1, pick), max);
+        installmentsSelect.value = String(pick);
+    }
+
+    function syncInstallmentsFromCart() {
+        if (!installmentsPanel || !installmentsSelect) return;
+
+        const cartao = isCartaoSelected();
+        if (!cartao) {
+            installmentsPanel.classList.remove('is-visible');
+            installmentsPanel.setAttribute('aria-hidden', 'true');
+            installmentsSelect.disabled = true;
+            if (installmentsHint) installmentsHint.textContent = '';
+            return;
+        }
+
+        const stored = load();
+        const preferred =
+            stored && stored.installments != null ? stored.installments : installmentsSelect.value;
+
+        installmentsSelect.disabled = false;
+        rebuildInstallmentsOptions(preferred);
+
+        const total = cartTotal();
+        if (installmentsHint) {
+            if (total <= MIN_TOTAL_PARCELAMENTO_REAIS) {
+                installmentsHint.textContent =
+                    `Total até ${formatBRL(MIN_TOTAL_PARCELAMENTO_REAIS)}: apenas pagamento à vista no cartão.`;
+            } else {
+                installmentsHint.textContent =
+                    `Parcelamento: só é permitido com total acima de ${formatBRL(MIN_TOTAL_PARCELAMENTO_REAIS)} `
+                    + `e cada parcela precisa ser maior que ${formatBRL(MIN_PARCELA_REAIS)}.`;
+            }
+        }
+
+        installmentsPanel.setAttribute('aria-hidden', 'false');
+        requestAnimationFrame(() => {
+            installmentsPanel.classList.add('is-visible');
+        });
+    }
+
     window.PaymentForm = {
         load,
         clear,
+        syncInstallmentsFromCart,
         isValid() {
             return false;
         },
@@ -169,6 +273,25 @@
             return null;
         }
         const data = new FormData(form);
+        const pmNorm = (data.get('payment_method') || 'cartao').trim().toLowerCase();
+
+        let installments = 1;
+        if (pmNorm === 'cartao') {
+            const total = cartTotal();
+            const max = maxParcelasPermitidas(total);
+            installments = parseInt(String(data.get('installments') || '1'), 10) || 1;
+            if (installments < 1 || installments > max) {
+                if (installmentsSelect) {
+                    installmentsSelect.setCustomValidity(
+                        'Selecione uma quantidade de parcelas válida para o valor do pedido.',
+                    );
+                    installmentsSelect.reportValidity();
+                }
+                return null;
+            }
+            if (installmentsSelect) installmentsSelect.setCustomValidity('');
+        }
+
         return {
             name: (data.get('name') || '').trim(),
             cpf: (data.get('cpf') || '').trim(),
@@ -180,7 +303,8 @@
             complement: (data.get('complement') || '').trim(),
             city: (data.get('city') || '').trim(),
             state: (data.get('state') || '').trim(),
-            payment_method: (data.get('payment_method') || 'cartao').trim().toLowerCase(),
+            payment_method: pmNorm,
+            installments,
         };
     };
 
@@ -206,7 +330,19 @@
         if (stored.city) form.city.value = stored.city;
         if (stored.state) form.state.value = stored.state;
         const pm = (stored.payment_method || 'cartao').toLowerCase();
-        const pmRadio = form.querySelector(`input[name="payment_method"][value="${pm === 'pix' ? 'pix' : 'cartao'}"]`);
+        const pmVal = pm === 'pix' ? 'pix' : 'cartao';
+        const pmRadio = document.querySelector(
+            `input[name="payment_method"][value="${pmVal}"][form="paymentForm"], #paymentForm input[name="payment_method"][value="${pmVal}"]`,
+        );
         if (pmRadio) pmRadio.checked = true;
     }
+
+    document.querySelector('.payment__section--method-flow')?.addEventListener('change', event => {
+        const t = event.target;
+        if (t && t.name === 'payment_method') {
+            syncInstallmentsFromCart();
+        }
+    });
+
+    syncInstallmentsFromCart();
 })();

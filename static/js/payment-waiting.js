@@ -28,17 +28,20 @@
     /** Número do pedido retornado pela API (ex.: OMyymmdd-1234), definido após sucesso. */
     let confirmedOrderNumber = null;
 
-    function paymentMethodLabel(raw) {
+    function paymentMethodLabel(raw, installments) {
         const v = String(raw || '').toLowerCase();
         if (v === 'pix') return 'PIX';
+        const n = parseInt(String(installments ?? ''), 10);
+        if (Number.isFinite(n) && n > 1) return `Cartão em ${n}x`;
         return 'Cartão';
     }
 
     function syncWaitingPaymentMethodUi() {
         const clientData = window.PaymentForm ? window.PaymentForm.load() : null;
         const pm = clientData && clientData.payment_method;
+        const inst = clientData && clientData.installments;
         const methodEl = document.getElementById('waitingPaymentMethod');
-        if (methodEl) methodEl.textContent = paymentMethodLabel(pm);
+        if (methodEl) methodEl.textContent = paymentMethodLabel(pm, inst);
         const heroIcon = document.querySelector('.payment-wait__pulse i');
         if (heroIcon) {
             if (String(pm || '').toLowerCase() === 'pix') {
