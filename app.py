@@ -58,14 +58,18 @@ from database import (
     get_product_in_event,
     get_products_library_stats,
     get_seller,
+    get_seller_admin_event_selection_id,
     get_seller_by_email,
     get_stats,
     get_transaction_by_order_number,
     init_db,
     list_active_event_product_stocks,
     list_active_product_stocks,
+    list_distinct_product_categories,
+    count_event_products_filtered,
     list_event_products,
     list_event_products_for_client,
+    list_event_products_slice,
     list_event_sellers,
     list_event_stock_movements,
     list_events,
@@ -84,6 +88,7 @@ from database import (
     register_event_stock_exit,
     remove_product_from_event,
     remove_seller_from_event,
+    replace_seller_event_assignment,
     reset_totem_to_default_state,
     restore_event,
     set_product_active,
@@ -707,7 +712,7 @@ def seller_stock():
         "seller/stock.html",
         products=products,
         stock=get_products_library_stats(),
-        categories=CATEGORIES,
+        categories=_admin_stock_library_category_options(),
         filters=filters,
         pagination=pagination,
         allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
@@ -984,12 +989,13 @@ def _parse_new_seller_post(form) -> tuple[dict[str, str], dict[str, str]]:
     return errors, repop
 
 
-def _parse_edit_seller_post(form, seller_id: int) -> tuple[dict[str, str], dict]:
+def _parse_edit_seller_post(form, _seller_id: int) -> tuple[dict[str, str], dict]:
     """Validação da edição de vendedor. Retorna (erros_por_campo, valores_para_reexibir)."""
     name = (form.get("name") or "").strip()
     email = (form.get("email") or "").strip().lower()
     active = form.get("active") == "1"
     password = form.get("password") or ""
+    event_id_raw = (form.get("event_id") or "").strip()
 
     errors: dict[str, str] = {}
     if not name:
@@ -1002,11 +1008,21 @@ def _parse_edit_seller_post(form, seller_id: int) -> tuple[dict[str, str], dict]
     if password and len(password) < 6:
         errors["password"] = "A nova senha deve ter pelo menos 6 caracteres."
 
+    if not event_id_raw:
+        pass  # sem evento permitido
+    else:
+        eid = _parse_int(event_id_raw, 0)
+        if eid <= 0:
+            errors["event_id"] = "Selecione um evento válido ou «Sem evento»."
+        elif get_event(eid) is None:
+            errors["event_id"] = "Evento não encontrado."
+
     repop = {
         "name": "" if "name" in errors else name,
         "email": "" if "email" in errors else email,
         "active": active,
         "password": "" if "password" in errors else password,
+        "event_id": "" if "event_id" in errors else event_id_raw,
     }
     return errors, repop
 
@@ -1069,6 +1085,8 @@ def admin_seller_detail(seller_id: int):
         return redirect(url_for("admin_sellers"))
     stats = get_stats(seller_id=seller_id)
     transactions = list_transactions(limit=200, seller_id=seller_id)
+    events_for_seller_form = list_events(include_archived=True)
+    seller_primary_event_id = get_seller_admin_event_selection_id(seller_id)
     return render_template(
         "admin/seller_detail.html",
         seller=seller,
@@ -1076,6 +1094,8 @@ def admin_seller_detail(seller_id: int):
         transactions=transactions,
         seller_form=None,
         seller_form_errors={},
+        events_for_seller_form=events_for_seller_form,
+        seller_primary_event_id=seller_primary_event_id,
         **_admin_shell_context(active_section="vendedores"),
     )
 
@@ -1093,6 +1113,8 @@ def admin_seller_update(seller_id: int):
         flash(_first_seller_form_error_message(seller_form_errors), "error")
         stats = get_stats(seller_id=seller_id)
         transactions = list_transactions(limit=200, seller_id=seller_id)
+        events_for_seller_form = list_events(include_archived=True)
+        seller_primary_event_id = get_seller_admin_event_selection_id(seller_id)
         return render_template(
             "admin/seller_detail.html",
             seller=seller,
@@ -1100,6 +1122,8 @@ def admin_seller_update(seller_id: int):
             transactions=transactions,
             seller_form=seller_form,
             seller_form_errors=seller_form_errors,
+            events_for_seller_form=events_for_seller_form,
+            seller_primary_event_id=seller_primary_event_id,
             **_admin_shell_context(active_section="vendedores"),
         )
 
@@ -1107,6 +1131,8 @@ def admin_seller_update(seller_id: int):
     email = (request.form.get("email") or "").strip().lower()
     active = request.form.get("active") == "1"
     password = request.form.get("password") or ""
+    event_raw = (request.form.get("event_id") or "").strip()
+    assigned_event_id = None if not event_raw else _parse_int(event_raw, 0)
     password_hash = None
     if password:
         password_hash = generate_password_hash(password)
@@ -1119,7 +1145,6 @@ def admin_seller_update(seller_id: int):
             password_hash=password_hash,
             clear_pin_hash=True,
         )
-        flash(f"Dados de {seller['name']} atualizados.", "success")
     except ValueError as exc:
         msg = str(exc)
         seller_form_errors: dict[str, str] = {}
@@ -1133,6 +1158,8 @@ def admin_seller_update(seller_id: int):
         flash(_first_seller_form_error_message(seller_form_errors), "error")
         stats = get_stats(seller_id=seller_id)
         transactions = list_transactions(limit=200, seller_id=seller_id)
+        events_for_seller_form = list_events(include_archived=True)
+        seller_primary_event_id = get_seller_admin_event_selection_id(seller_id)
         return render_template(
             "admin/seller_detail.html",
             seller=seller,
@@ -1140,8 +1167,20 @@ def admin_seller_update(seller_id: int):
             transactions=transactions,
             seller_form=seller_form,
             seller_form_errors=seller_form_errors,
+            events_for_seller_form=events_for_seller_form,
+            seller_primary_event_id=seller_primary_event_id,
             **_admin_shell_context(active_section="vendedores"),
         )
+
+    try:
+        replace_seller_event_assignment(seller_id, assigned_event_id)
+    except ValueError as exc:
+        flash(
+            f"Dados de {seller['name']} foram atualizados, mas o vínculo com o evento não foi alterado: {exc}",
+            "error",
+        )
+    else:
+        flash(f"Dados de {seller['name']} atualizados.", "success")
     return redirect(url_for("admin_seller_detail", seller_id=seller_id))
 
 
@@ -1255,12 +1294,12 @@ def _admin_stock_list_query_params():
     return q, category, status, per_page, page
 
 
-def _admin_stock_page_view():
+def _admin_stock_page_view(*, ignore_status_filter: bool = False):
     q_display, category, status, per_page, page = _admin_stock_list_query_params()
     q_lower = q_display.lower() if q_display else ""
     q_filter = q_lower or None
     cat_norm = category or "todos"
-    stat_norm = status or "todos"
+    stat_norm = "todos" if ignore_status_filter else (status or "todos")
 
     total = count_products_admin_filtered(q_filter, cat_norm, stat_norm)
     total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
@@ -1296,6 +1335,84 @@ def _admin_stock_page_view():
     return products, filters, pagination
 
 
+def _admin_event_stock_page_view(event_id: int):
+    """Lista paginada de produtos no evento com os mesmos filtros GET da biblioteca geral."""
+    q_display, category, status, per_page, page = _admin_stock_list_query_params()
+    q_lower = q_display.lower() if q_display else ""
+    q_filter = q_lower or None
+    cat_norm = category or "todos"
+    stat_norm = status or "todos"
+
+    total = count_event_products_filtered(event_id, q_filter, cat_norm, stat_norm)
+    total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
+    page = min(page, total_pages)
+    offset = (page - 1) * per_page
+    products = list_event_products_slice(
+        event_id,
+        q_filter,
+        cat_norm,
+        stat_norm,
+        limit=per_page,
+        offset=offset,
+    )
+
+    showing_from = offset + 1 if total > 0 else 0
+    showing_to = min(offset + len(products), total) if total > 0 else 0
+
+    filters = {
+        "q": q_display,
+        "categoria": cat_norm,
+        "status": stat_norm,
+        "per_page": per_page,
+    }
+    pagination = {
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "showing_from": showing_from,
+        "showing_to": showing_to,
+    }
+    return products, filters, pagination
+
+
+def _event_stock_return_filters_from_form() -> dict:
+    """Lê ret_* dos POSTs para preservar filtros ao redirecionar."""
+    per_page = _parse_int(request.form.get("ret_per_page"), DEFAULT_ADMIN_STOCK_PER_PAGE)
+    if per_page not in ALLOWED_ADMIN_STOCK_PER_PAGE:
+        per_page = DEFAULT_ADMIN_STOCK_PER_PAGE
+    return {
+        "q": (request.form.get("ret_q") or "").strip(),
+        "categoria": (request.form.get("ret_categoria") or "todos").strip(),
+        "status": (request.form.get("ret_status") or "todos").strip(),
+        "per_page": per_page,
+        "page": max(1, _parse_int(request.form.get("ret_page"), 1)),
+    }
+
+
+def _url_for_admin_event_stock_list(event_id: int, filters: dict, *, page_override: int | None = None) -> str:
+    per_page = _parse_int(filters.get("per_page"), DEFAULT_ADMIN_STOCK_PER_PAGE)
+    if per_page not in ALLOWED_ADMIN_STOCK_PER_PAGE:
+        per_page = DEFAULT_ADMIN_STOCK_PER_PAGE
+    if page_override is not None:
+        pg = max(1, int(page_override))
+    else:
+        pg = max(1, _parse_int(filters.get("page"), 1))
+    kw = {
+        "event_id": event_id,
+        "categoria": (filters.get("categoria") or "todos").strip(),
+        "status": (filters.get("status") or "todos").strip(),
+        "per_page": per_page,
+        "page": pg,
+    }
+    q = (filters.get("q") or "").strip()
+    if q:
+        kw["q"] = q
+    return url_for("admin_event_stock", **kw)
+
+
 @app.route("/admin/estoque")
 @admin_required
 def admin_stock_legacy_redirect():
@@ -1304,20 +1421,69 @@ def admin_stock_legacy_redirect():
     return redirect(f"{target}?{qs}" if qs else target, code=302)
 
 
+def _admin_stock_library_category_options() -> list[str]:
+    """Opções do filtro Categoria: banco (fonte de verdade) + cache Wake após sync."""
+    db_cats = list_distinct_product_categories()
+    seen = {c.casefold() for c in db_cats}
+    merged = list(db_cats)
+    for c in CATEGORIES:
+        label = str(c).strip() if c is not None else ""
+        if label and label.casefold() not in seen:
+            seen.add(label.casefold())
+            merged.append(label)
+    return sorted(merged, key=lambda s: s.casefold())
+
+
 @app.route("/admin/produtos")
 @admin_required
 def admin_products():
-    products, filters, pagination = _admin_stock_page_view()
+    products, filters, pagination = _admin_stock_page_view(ignore_status_filter=True)
     return render_template(
         "admin/products.html",
         products=products,
         stock=get_products_library_stats(),
-        categories=CATEGORIES,
+        categories=_admin_stock_library_category_options(),
         filters=filters,
         pagination=pagination,
         allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
+        events_for_modal=list_events(include_archived=False),
         **_admin_shell_context(active_section="produtos"),
     )
+
+
+@app.route("/admin/produtos/<int:product_id>/adicionar-ao-evento", methods=["POST"])
+@admin_required
+def admin_product_add_to_event(product_id: int):
+    product = get_product(product_id)
+    if product is None:
+        return jsonify({"error": "Produto não encontrado."}), 404
+    event_id = _parse_int(request.form.get("event_id") or "", 0)
+    if event_id <= 0:
+        return jsonify({"error": "Selecione um evento."}), 400
+    event = get_event(event_id)
+    if event is None:
+        return jsonify({"error": "Evento não encontrado."}), 400
+    initial_stock = max(0, _parse_int(request.form.get("initial_stock") or "", 0))
+    min_stock = max(0, _parse_int(request.form.get("min_stock") or "", 0))
+    link_note = (request.form.get("link_note") or "").strip()
+    if not link_note:
+        return jsonify({"error": "Informe Motivo / Ref."}), 400
+    try:
+        add_product_to_event(
+            event_id,
+            product_id,
+            initial_stock,
+            min_stock,
+            link_audit_reason=link_note,
+            link_audit_reference=None,
+            created_by=_current_admin_user(),
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 409
+    return jsonify({
+        "ok": True,
+        "message": f"\u00ab{product['name']}\u00bb adicionado ao evento \u00ab{event['name']}\u00bb.",
+    })
 
 
 @app.route("/admin/estoque/<int:product_id>")
@@ -1409,6 +1575,16 @@ def _movement_payload(movement: dict) -> dict:
     movement_type = movement.get("movement_type")
     tx_id = movement.get("transaction_id")
     ev_bg, ev_fg = event_badge_style_pairs(movement.get("event_badge_color"))
+    try:
+        d_raw = int(movement.get("delta") or 0)
+    except (TypeError, ValueError):
+        d_raw = 0
+    if d_raw > 0:
+        delta_kind = "positive"
+    elif d_raw < 0:
+        delta_kind = "negative"
+    else:
+        delta_kind = "neutral"
     return {
         **movement,
         "event_badge_bg": ev_bg,
@@ -1417,7 +1593,7 @@ def _movement_payload(movement: dict) -> dict:
         "created_at_display": datahora_filter(movement.get("created_at")),
         "movement_label": mov_label_filter(movement_type),
         "delta_display": signed_filter(movement.get("delta")),
-        "delta_kind": "positive" if int(movement.get("delta") or 0) > 0 else "negative",
+        "delta_kind": delta_kind,
         "product_url": url_for("admin_product_detail", product_id=movement["product_id"]),
         "receipt_url": (
             url_for("receipt", order_number=reference)
@@ -1501,7 +1677,7 @@ def admin_product_toggle_active(product_id: int):
 
 
 def _admin_api_products_list_payload():
-    products, _filters, pagination = _admin_stock_page_view()
+    products, _filters, pagination = _admin_stock_page_view(ignore_status_filter=True)
     return jsonify({
         "stock": get_products_library_stats(),
         "pagination": {
@@ -1895,6 +2071,16 @@ def _event_movement_payload(movement: dict, *, event_id: int) -> dict:
     movement_type = movement.get("movement_type")
     tx_id = movement.get("transaction_id")
     ev_bg, ev_fg = event_badge_style_pairs(movement.get("event_badge_color"))
+    try:
+        d_raw = int(movement.get("delta") or 0)
+    except (TypeError, ValueError):
+        d_raw = 0
+    if d_raw > 0:
+        delta_kind = "positive"
+    elif d_raw < 0:
+        delta_kind = "negative"
+    else:
+        delta_kind = "neutral"
     return {
         **movement,
         "event_badge_bg": ev_bg,
@@ -1903,7 +2089,7 @@ def _event_movement_payload(movement: dict, *, event_id: int) -> dict:
         "created_at_display": datahora_filter(movement.get("created_at")),
         "movement_label": mov_label_filter(movement_type),
         "delta_display": signed_filter(movement.get("delta")),
-        "delta_kind": "positive" if int(movement.get("delta") or 0) > 0 else "negative",
+        "delta_kind": delta_kind,
         "product_url": url_for("admin_product_detail", product_id=int(movement["product_id"])),
         "receipt_url": (
             url_for("receipt", order_number=reference)
@@ -2029,13 +2215,17 @@ def admin_event_stock(event_id: int):
     event = _event_or_404(event_id)
     if event is None:
         return redirect(url_for("admin_events"))
-    products = list_event_products(event_id)
+    products, filters, pagination = _admin_event_stock_page_view(event_id)
     stats = get_event_stock_stats(event_id)
     return render_template(
         "admin/event_stock.html",
         event=event,
         products=products,
         stats=stats,
+        filters=filters,
+        pagination=pagination,
+        categories=_admin_stock_library_category_options(),
+        allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
         active_event_tab="estoque",
         **_admin_shell_context(active_section="eventos"),
     )
@@ -2066,22 +2256,23 @@ def admin_event_stock_product(event_id: int, product_id: int):
 @admin_required
 def admin_event_add_product(event_id: int):
     event = _event_or_404(event_id)
+    preserved = _event_stock_return_filters_from_form()
     if event is None:
         return redirect(url_for("admin_events"))
     q = (request.form.get("sku_or_id") or "").strip()
     if not q:
         flash("Informe o SKU ou ID do produto.", "error")
-        return redirect(url_for("admin_event_stock", event_id=event_id))
+        return redirect(_url_for_admin_event_stock_list(event_id, preserved))
     product = find_product_by_sku_or_id(q)
     if product is None:
         flash(f"Produto \"{q}\" não encontrado.", "error")
-        return redirect(url_for("admin_event_stock", event_id=event_id))
+        return redirect(_url_for_admin_event_stock_list(event_id, preserved))
     try:
         add_product_to_event(event_id, int(product["id"]), 0, 0)
         flash(f"Produto \"{product['name']}\" adicionado ao evento.", "success")
     except ValueError as exc:
         flash(str(exc), "error")
-    return redirect(url_for("admin_event_stock", event_id=event_id))
+    return redirect(_url_for_admin_event_stock_list(event_id, preserved, page_override=1))
 
 
 @app.route("/admin/eventos/<int:event_id>/produtos/<int:product_id>/remover", methods=["POST"])
@@ -2089,9 +2280,10 @@ def admin_event_add_product(event_id: int):
 def admin_event_remove_product(event_id: int, product_id: int):
     if _event_or_404(event_id) is None:
         return redirect(url_for("admin_events"))
+    preserved = _event_stock_return_filters_from_form()
     remove_product_from_event(event_id, product_id)
     flash("Produto removido do evento.", "success")
-    return redirect(url_for("admin_event_stock", event_id=event_id))
+    return redirect(_url_for_admin_event_stock_list(event_id, preserved))
 
 
 @app.route("/admin/eventos/<int:event_id>/produtos/<int:product_id>/entrada", methods=["POST"])
@@ -2327,9 +2519,17 @@ def admin_event_remove_seller(event_id: int, seller_id: int):
 @app.route("/admin/api/eventos/<int:event_id>/estoque")
 @admin_required
 def admin_api_event_stock(event_id: int):
-    products = list_event_products(event_id)
+    if _event_or_404(event_id) is None:
+        return jsonify({"error": "Evento não encontrado."}), 404
+    products, _filters, pagination = _admin_event_stock_page_view(event_id)
     return jsonify({
         "stats": get_event_stock_stats(event_id),
+        "pagination": {
+            "page": pagination["page"],
+            "per_page": pagination["per_page"],
+            "total": pagination["total"],
+            "total_pages": pagination["total_pages"],
+        },
         "products": [
             {
                 **p,

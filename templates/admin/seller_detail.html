@@ -60,7 +60,9 @@
     <header class="admin-section__header admin-section__header--row admin-section__header--collapsible">
         <div>
             <h2 class="admin-section__title">Dados e acesso</h2>
-            <p class="admin-section__subtitle">Atualize cadastro, status e senha de acesso do vendedor.</p>
+            <p class="admin-section__subtitle">
+                Atualize cadastro, evento de trabalho (painel do vendedor), status e senha de acesso.
+            </p>
         </div>
         <button
             type="button"
@@ -80,11 +82,13 @@
         {% set v_email = seller_form.email %}
         {% set v_active = seller_form.active %}
         {% set v_password = seller_form.password %}
+        {% set v_event_id = seller_form.event_id %}
     {% else %}
         {% set v_name = seller.name %}
         {% set v_email = seller.email %}
         {% set v_active = seller.active %}
         {% set v_password = '' %}
+        {% set v_event_id = seller_primary_event_id|string if seller_primary_event_id else '' %}
     {% endif %}
     <article class="admin-card">
         <form
@@ -127,6 +131,29 @@
                     <option value="1" {% if v_active %}selected{% endif %}>Ativo</option>
                     <option value="0" {% if not v_active %}selected{% endif %}>Inativo</option>
                 </select>
+            </div>
+            <div class="admin-field">
+                <label class="admin-field__label" for="seller-detail-event">Evento de trabalho</label>
+                <select
+                    id="seller-detail-event"
+                    name="event_id"
+                    class="admin-field__input{% if fe.event_id %} admin-field__input--invalid{% endif %}"
+                    {% if fe.event_id %}aria-invalid="true" aria-describedby="detail-seller-event-err"{% endif %}
+                >
+                    <option value="" {% if not v_event_id %}selected{% endif %}>Sem evento (catálogo global)</option>
+                    {% for ev in events_for_seller_form %}
+                    <option
+                        value="{{ ev.id }}"
+                        {% if v_event_id|string == ev.id|string %}selected{% endif %}
+                    >
+                        {{ ev.name }}{% if not ev.active %} (arquivado){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="admin-field__hint">
+                    Define qual evento o vendedor enxerga no painel (vendas, catálogo e estoque do evento).
+                </p>
+                {% if fe.event_id %}<p class="admin-field__error" id="detail-seller-event-err">{{ fe.event_id }}</p>{% endif %}
             </div>
             <div class="admin-field">
                 <label class="admin-field__label" for="detail-seller-password">Nova senha</label>

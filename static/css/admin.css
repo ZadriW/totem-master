@@ -1569,7 +1569,7 @@
         text-align: left;
     }
 
-    /* Preço, estoque, mínimo: números alinhados à direita dentro da célula */
+    /* Preço, estoque, mínimo (quando a tabela tem coluna Mínimo): números centralizados */
     .admin-stock__row > :nth-child(3),
     .admin-stock__row > :nth-child(4),
     .admin-stock__row > :nth-child(5) {
@@ -1588,6 +1588,24 @@
 
     .admin-stock__row > .admin-stock__actions-head,
     .admin-stock__row > .admin-stock__actions {
+        justify-self: end;
+    }
+
+    /* Biblioteca geral: sem Mínimo nem Situação (por evento). */
+    .admin-stock.admin-stock--library:has(.admin-stock__actions-head) .admin-stock__row {
+        grid-template-columns:
+            minmax(200px, 3.55fr)
+            minmax(92px, 1fr)
+            minmax(84px, 0.78fr)
+            minmax(72px, 0.58fr)
+            minmax(56px, 0.68fr);
+    }
+
+    .admin-stock.admin-stock--library:has(.admin-stock__actions-head) .admin-stock__row > :nth-child(5) {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        text-align: initial;
         justify-self: end;
     }
 }
@@ -1938,6 +1956,10 @@
 }
 .admin-mov__delta--positive { color: #0c8a4d; }
 .admin-mov__delta--negative { color: #b91c1c; }
+.admin-mov__delta--neutral {
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+}
 
 .admin-mov__product {
     display: flex;
@@ -2108,6 +2130,31 @@
             "price   min"
             "status  actions";
     }
+
+    /* Biblioteca geral no mobile: produto, estoque, categoria, preço + ações (sem situação). */
+    .admin-stock.admin-stock--library .admin-stock__row:has(.admin-stock__actions) {
+        grid-template-areas:
+            "product qty"
+            "category category"
+            "price actions";
+    }
+
+    .admin-stock.admin-stock--library .admin-stock__row > :nth-child(5)::before {
+        content: none !important;
+        margin-right: 0 !important;
+    }
+
+    .admin-stock.admin-stock--library .admin-stock__row > :nth-child(5) {
+        grid-area: actions;
+        justify-content: flex-end;
+        align-self: center;
+        justify-self: end;
+        display: flex;
+        color: var(--color-text);
+        font-size: inherit;
+        min-width: 0;
+    }
+
     .admin-stock__row > :nth-child(1) {
         grid-area: product;
         align-self: center;
@@ -3603,6 +3650,87 @@
     gap: 10px;
     flex-wrap: wrap;
     margin-top: 4px;
+}
+
+/* Modal — adicionar produto a evento */
+.admin-modal--add-event {
+    max-width: 500px;
+}
+
+.admin-modal__product-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--color-bg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+}
+
+.admin-modal__product-thumb {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+    background: var(--color-surface);
+}
+
+.admin-modal__product-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.admin-modal__product-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-modal__product-sku {
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+
+.admin-modal__stock-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.admin-modal__feedback {
+    font-size: 13px;
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    margin: 0;
+}
+
+.admin-modal__feedback[hidden] {
+    display: none !important;
+}
+
+.admin-modal__feedback--error {
+    color: var(--color-danger, #dc2626);
+    background: rgba(220, 38, 38, 0.07);
+}
+
+.admin-modal__feedback--success {
+    color: #0c8a4d;
+    background: rgba(12, 138, 77, 0.1);
+}
+
+.admin-modal__hint {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 /* Responsivo da sub-nav do evento */

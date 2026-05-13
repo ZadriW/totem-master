@@ -230,7 +230,7 @@
                             </button>
                         {% endif %}
                     </span>
-                    <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% else %}negative{% endif %}">
+                    <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% elif m.delta < 0 %}negative{% else %}neutral{% endif %}">
                         {{ m.delta | signed }}
                     </span>
                     <span class="admin-table__col--num"><strong>{{ m.balance_after }}</strong></span>

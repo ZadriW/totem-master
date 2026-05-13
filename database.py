@@ -644,6 +644,21 @@ def list_products_admin() -> List[Dict]:
     return out
 
 
+def list_distinct_product_categories() -> List[str]:
+    """Valores distintos de categoria na biblioteca de produtos (filtro admin)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT TRIM(category)
+              FROM products
+             WHERE TRIM(COALESCE(category, '')) != ''
+             ORDER BY LOWER(TRIM(category))
+            """
+        ).fetchall()
+    # Índice posicional: compatível com todos os sqlite3.Row / builds onde alias falha.
+    return [str(row[0]) for row in rows if row[0] is not None and str(row[0]).strip()]
+
+
 def _admin_products_library_filter_clause(
     q: Optional[str],
     categoria: str,
@@ -1953,12 +1968,27 @@ def add_product_to_event(
     product_id: int,
     stock: int = 0,
     min_stock: int = 0,
+    *,
+    link_audit_reason: Optional[str] = None,
+    link_audit_reference: Optional[str] = None,
+    created_by: Optional[str] = None,
 ) -> None:
     """Adiciona um produto ao evento com estoque inicial.
 
-    Lança ``ValueError`` se o produto já pertence ao evento.
+    ``link_audit_reason`` quando informado ativa o fluxo da biblioteca geral: grava
+    inclusão como movimentação tipo ``ajuste`` (``stock_movements`` com ``event_id``),
+    visível nas movimentações globais e do evento. Estoque inicial > 0 vira o delta do
+    ajuste; com estoque 0 grava-se linha de auditoria com delta 0.
+
+    Sem ``link_audit_reason``, mantém o comportamento legado (apenas ``INSERT`` em
+    ``event_products``).
+
+    Lança ``ValueError`` se o produto já pertence ao evento ou motivo vazio no fluxo com auditoria.
     """
     now = _now_iso()
+    stock_i = max(0, int(stock))
+    min_i = max(0, int(min_stock))
+
     with get_conn() as conn:
         existing = conn.execute(
             "SELECT id FROM event_products WHERE event_id = ? AND product_id = ?",
@@ -1966,14 +1996,68 @@ def add_product_to_event(
         ).fetchone()
         if existing:
             raise ValueError("Produto já adicionado a este evento.")
+
+        if link_audit_reason is None:
+            conn.execute(
+                """
+                INSERT INTO event_products
+                    (event_id, product_id, stock, min_stock, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (event_id, product_id, stock_i, min_i, now, now),
+            )
+            return
+
+        note = (link_audit_reason or "").strip()
+        if not note:
+            raise ValueError("Informe Motivo / Ref.")
+        ref_note = (link_audit_reference or "").strip() or None
+
+        ev_ok = conn.execute(
+            "SELECT 1 FROM events WHERE id = ?", (int(event_id),)
+        ).fetchone()
+        if ev_ok is None:
+            raise ValueError("Evento não encontrado.")
+
+        prod_ok = conn.execute(
+            "SELECT 1 FROM products WHERE id = ?", (int(product_id),)
+        ).fetchone()
+        if prod_ok is None:
+            raise ValueError("Produto não encontrado.")
+
         conn.execute(
             """
             INSERT INTO event_products
                 (event_id, product_id, stock, min_stock, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, 0, ?, ?, ?)
             """,
-            (event_id, product_id, max(0, int(stock)), max(0, int(min_stock)), now, now),
+            (event_id, product_id, min_i, now, now),
         )
+
+        if stock_i > 0:
+            _apply_event_movement(
+                conn,
+                event_id=int(event_id),
+                product_id=int(product_id),
+                movement_type="ajuste",
+                delta=stock_i,
+                reason=note,
+                reference=ref_note,
+                created_by=created_by,
+            )
+        else:
+            _insert_event_stock_movement_row(
+                conn,
+                event_id=int(event_id),
+                product_id=int(product_id),
+                movement_type="ajuste",
+                quantity=0,
+                delta=0,
+                balance_after=0,
+                reason=note,
+                reference=ref_note,
+                created_by=created_by,
+            )
 
 
 def remove_product_from_event(event_id: int, product_id: int) -> None:
@@ -2029,6 +2113,103 @@ def list_event_products(event_id: int) -> List[Dict]:
             ORDER BY p.name COLLATE NOCASE
             """,
             (event_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+_EVENT_PRODUCTS_ADMIN_FROM = """
+FROM event_products ep
+JOIN products p ON p.id = ep.product_id
+WHERE ep.event_id = ?
+"""
+
+
+def _event_products_admin_filter_clause(
+    q: Optional[str],
+    categoria: str,
+    status: str,
+) -> Tuple[str, List]:
+    """Cláusula AND … para filtros da grade de estoque do evento (admin)."""
+    parts: List[str] = []
+    params: List = []
+    if q:
+        like = f"%{q.lower()}%"
+        parts.append(
+            "(LOWER(p.name) LIKE ? OR LOWER(COALESCE(p.description, '')) LIKE ? "
+            "OR LOWER(COALESCE(p.sku, '')) LIKE ?)"
+        )
+        params.extend([like, like, like])
+    cat = (categoria or "todos").strip().lower()
+    if cat != "todos":
+        parts.append("LOWER(p.category) = LOWER(?)")
+        params.append(categoria)
+    st = (status or "todos").strip().lower()
+    if st == "ok":
+        parts.append(
+            "p.active = 1 AND ep.stock > 0 AND "
+            "(ep.min_stock <= 0 OR ep.stock >= ep.min_stock)"
+        )
+    elif st == "baixo":
+        parts.append(
+            "ep.min_stock > 0 AND ep.stock > 0 AND ep.stock < ep.min_stock"
+        )
+    elif st == "sem_estoque":
+        parts.append("ep.stock <= 0")
+    elif st == "inativo":
+        parts.append("p.active = 0")
+    extra = f" AND {' AND '.join(parts)}" if parts else ""
+    return extra, params
+
+
+def count_event_products_filtered(
+    event_id: int,
+    q: Optional[str],
+    categoria: str = "todos",
+    status: str = "todos",
+) -> int:
+    """Quantidade de vínculos evento–produto após filtros (lista admin)."""
+    extra, params = _event_products_admin_filter_clause(q, categoria, status)
+    sql = f"SELECT COUNT(*) AS c {_EVENT_PRODUCTS_ADMIN_FROM}{extra}"
+    with get_conn() as conn:
+        row = conn.execute(sql, (event_id, *params)).fetchone()
+    return int(row["c"] if row else 0)
+
+
+def list_event_products_slice(
+    event_id: int,
+    q: Optional[str],
+    categoria: str = "todos",
+    status: str = "todos",
+    *,
+    limit: int,
+    offset: int,
+) -> List[Dict]:
+    """Página da grade de estoque do evento com os mesmos filtros da biblioteca geral."""
+    extra, params = _event_products_admin_filter_clause(q, categoria, status)
+    sql = f"""
+            SELECT
+                ep.id            AS ep_id,
+                ep.event_id,
+                ep.product_id,
+                ep.stock,
+                ep.min_stock,
+                ep.created_at    AS ep_created_at,
+                ep.updated_at    AS ep_updated_at,
+                p.name,
+                p.sku,
+                p.category,
+                p.image,
+                p.price,
+                p.active         AS product_active
+            {_EVENT_PRODUCTS_ADMIN_FROM}
+            {extra}
+            ORDER BY p.name COLLATE NOCASE
+            LIMIT ? OFFSET ?
+            """
+    with get_conn() as conn:
+        rows = conn.execute(
+            sql,
+            (event_id, *params, limit, offset),
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -2172,6 +2353,61 @@ def get_event_sales_dashboard(event_id: int, *, sales_days_limit: int = 120) -> 
 # ---------------------------------------------------------------------------
 # Movimentações escopadas ao evento
 # ---------------------------------------------------------------------------
+
+def _insert_event_stock_movement_row(
+    conn: sqlite3.Connection,
+    *,
+    event_id: int,
+    product_id: int,
+    movement_type: str,
+    quantity: int,
+    delta: int,
+    balance_after: int,
+    reason: Optional[str] = None,
+    reference: Optional[str] = None,
+    created_by: Optional[str] = None,
+    unit_cost: Optional[float] = None,
+    transaction_id: Optional[int] = None,
+) -> Dict:
+    """Insere uma linha em ``stock_movements`` com ``event_id`` sem alterar ``event_products``.
+
+    Usado para auditoria com delta 0 (ex.: produto associado ao evento sem estoque inicial).
+    """
+    if movement_type not in _VALID_TYPES:
+        raise ValueError(f"Tipo de movimentação inválido: {movement_type}")
+    now = _now_iso()
+    cur = conn.execute(
+        """
+        INSERT INTO stock_movements
+            (product_id, event_id, movement_type, quantity, delta, balance_after,
+             unit_cost, reason, reference, transaction_id, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            int(product_id),
+            int(event_id),
+            movement_type,
+            int(quantity),
+            int(delta),
+            int(balance_after),
+            float(unit_cost) if unit_cost is not None else None,
+            reason,
+            reference,
+            int(transaction_id) if transaction_id is not None else None,
+            created_by,
+            now,
+        ),
+    )
+    return {
+        "id": cur.lastrowid,
+        "event_id": int(event_id),
+        "product_id": int(product_id),
+        "movement_type": movement_type,
+        "delta": int(delta),
+        "balance_after": int(balance_after),
+        "created_at": now,
+    }
+
 
 def _apply_event_movement(
     conn: sqlite3.Connection,
@@ -2529,6 +2765,54 @@ def remove_seller_from_event(event_id: int, seller_id: int) -> None:
         conn.execute(
             "DELETE FROM event_sellers WHERE event_id = ? AND seller_id = ?",
             (int(event_id), int(seller_id)),
+        )
+
+
+def get_seller_admin_event_selection_id(seller_id: int) -> Optional[int]:
+    """Id do evento para pré-selecionar no admin: ativo mais recente; senão qualquer vínculo mais recente."""
+    sid = int(seller_id)
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT es.event_id
+              FROM event_sellers es
+              JOIN events e ON e.id = es.event_id
+             WHERE es.seller_id = ? AND e.active = 1
+             ORDER BY es.added_at DESC
+             LIMIT 1
+            """,
+            (sid,),
+        ).fetchone()
+        if row:
+            return int(row["event_id"])
+        row = conn.execute(
+            """
+            SELECT es.event_id
+              FROM event_sellers es
+             WHERE es.seller_id = ?
+             ORDER BY es.added_at DESC
+             LIMIT 1
+            """,
+            (sid,),
+        ).fetchone()
+        return int(row["event_id"]) if row else None
+
+
+def replace_seller_event_assignment(seller_id: int, event_id: Optional[int]) -> None:
+    """Remove todos os vínculos evento×vendedor e associa no máximo a um evento (substituição exclusiva)."""
+    sid = int(seller_id)
+    with get_conn() as conn:
+        conn.execute("DELETE FROM event_sellers WHERE seller_id = ?", (sid,))
+        if event_id is None or int(event_id) <= 0:
+            return
+        eid = int(event_id)
+        ev = conn.execute("SELECT id FROM events WHERE id = ?", (eid,)).fetchone()
+        if ev is None:
+            raise ValueError("Evento não encontrado.")
+        now = _now_iso()
+        conn.execute(
+            "INSERT INTO event_sellers (event_id, seller_id, added_at) VALUES (?, ?, ?)",
+            (eid, sid, now),
         )
 
 
