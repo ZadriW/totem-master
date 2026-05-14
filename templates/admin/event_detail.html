@@ -192,41 +192,6 @@
     </div>
 </section>
 
-<section class="admin-section">
-    <header class="admin-section__header admin-section__header--row">
-        <div>
-            <h2 class="admin-section__title">Exportar vendas (CSV)</h2>
-            <p class="admin-section__subtitle">
-                Pedidos confirmados com movimentação de venda neste evento. Opcional: período pela data do pedido.
-                Campos vazios exportam o histórico completo (até os limites do servidor).
-            </p>
-        </div>
-    </header>
-    <form class="admin-filters" method="get" action="{{ url_for('admin_event_sales_export_csv', event_id=event.id) }}" aria-label="Exportar vendas em CSV">
-        <label class="admin-filter">
-            <span class="admin-filter__label">Data inicial</span>
-            <input type="date" name="data_inicio" class="admin-filter__input">
-        </label>
-        <label class="admin-filter">
-            <span class="admin-filter__label">Data final</span>
-            <input type="date" name="data_fim" class="admin-filter__input">
-        </label>
-        <label class="admin-filter">
-            <span class="admin-filter__label">Detalhe</span>
-            <select name="nivel" class="admin-filter__input" title="Um arquivo por pedido ou uma linha por item vendido">
-                <option value="pedidos">Resumo por pedido</option>
-                <option value="itens">Uma linha por item</option>
-            </select>
-        </label>
-        <div class="admin-filters__actions">
-            <button type="submit" class="admin-btn admin-btn--primary">
-                <i class="fa-solid fa-file-csv" aria-hidden="true"></i>
-                Baixar CSV
-            </button>
-        </div>
-    </form>
-</section>
-
 <dialog class="admin-modal" id="event-edit-modal" aria-labelledby="event-edit-modal-title">
     <div class="admin-modal__panel">
         <header class="admin-modal__header">
