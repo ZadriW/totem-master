@@ -4,7 +4,7 @@
 - ``/catalogo`` etc. Rotas antigas redirecionam para ``/`` (venda só com vendedor logado).
 - ``/api/...``         Endpoints JSON (vendas exigem sessão do vendedor).
 - ``/admin/...``       Painel administrativo.
-- ``/vendedor/...``    Painel do vendedor (dashboard, venda/catálogo, estoque, movimentações).
+- ``/vendedor/...``    Painel do vendedor (dashboard, venda/catálogo, estoque, movimentações, transações).
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from flask import (
     Response,
     current_app,
     flash,
+    has_request_context,
     jsonify,
     redirect,
     render_template,
@@ -32,6 +33,7 @@ from flask import (
     url_for,
 )
 from itsdangerous import BadSignature, URLSafeSerializer
+from werkzeug.routing.exceptions import BuildError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from data.products import CATEGORIES
@@ -43,7 +45,9 @@ from database import (
     count_products_admin_filtered,
     create_event,
     create_seller_account,
+    confirm_transaction_with_aut,
     create_transaction,
+    update_pending_transaction,
     delete_seller,
     ensure_seller_account,
     event_badge_style_pairs,
@@ -57,6 +61,9 @@ from database import (
     get_product_events_stock_total,
     get_product_in_event,
     get_products_library_stats,
+    cancel_pending_transaction_for_seller,
+    get_pending_transaction_if_owned,
+    get_pending_transaction_restore_payload,
     get_seller,
     get_seller_admin_event_selection_id,
     get_seller_by_email,
@@ -67,7 +74,10 @@ from database import (
     list_active_product_stocks,
     list_distinct_product_categories,
     count_event_products_filtered,
+    count_transactions_for_event,
+    count_transactions_for_seller,
     list_event_products,
+    list_event_products_filtered_for_client,
     list_event_products_for_client,
     list_event_products_slice,
     list_event_sellers,
@@ -77,17 +87,16 @@ from database import (
     list_products_admin_slice,
     list_products_for_client,
     list_sellers,
-    list_sellers_not_in_event,
     list_stock_movements,
     list_transaction_items_for_event_period,
     list_transactions,
-    list_transactions_summary_for_event_period,
+    list_transactions_for_event,
+    list_transactions_for_seller,
     normalize_event_badge_color,
     register_event_stock_adjustment,
     register_event_stock_entry,
     register_event_stock_exit,
     remove_product_from_event,
-    remove_seller_from_event,
     replace_seller_event_assignment,
     reset_totem_to_default_state,
     restore_event,
@@ -171,6 +180,28 @@ def _url_if_registered(endpoint: str, *, fallback: str) -> str:
     if endpoint in views:
         return url_for(endpoint)
     return fallback
+
+
+def _seller_pending_cancel_url(tx_id: int) -> str:
+    """POST para descartar pedido pendente; fallback seguro se ``url_for`` falhar."""
+    eid = int(tx_id)
+
+    def fallback_path() -> str:
+        prefix = (
+            (request.script_root or "").rstrip("/") if has_request_context() else ""
+        )
+        return f"{prefix}/vendedor/pedido/{eid}/cancelar-pendente"
+
+    try:
+        views = current_app.view_functions
+    except RuntimeError:
+        return fallback_path()
+    if "seller_cancel_pending_transaction" not in views:
+        return fallback_path()
+    try:
+        return url_for("seller_cancel_pending_transaction", tx_id=eid)
+    except BuildError:
+        return fallback_path()
 
 
 def _normalize_payment_method_for_db(value) -> str:
@@ -434,7 +465,11 @@ def api_products():
 
 @app.route("/api/transacoes", methods=["POST"])
 def api_create_transaction():
-    """Registra uma venda concluída e baixa o estoque atomicamente."""
+    """Cria uma transação pendente (estoque ainda não baixado) e retorna o ``id``.
+
+    O estoque só é decrescido após o vendedor digitar e confirmar o AUT via
+    ``PATCH /api/transacoes/<id>/aut``.
+    """
     payload = request.get_json(silent=True) or {}
     items = payload.get("items") or payload.get("itens") or []
     client = payload.get("client") or {}
@@ -466,11 +501,11 @@ def api_create_transaction():
         if row is None or not row.get("active"):
             raise ValueError("Sessão de vendedor inválida ou inativa.")
         seller = {"id": int(row["id"]), "name": row["name"]}
-        
+
         # Busca o evento ativo do vendedor (se houver)
         active_event = get_active_event_for_seller(int(seller["id"]))
         event_id = int(active_event["id"]) if active_event else None
-        
+
         result = create_transaction(
             items,
             created_by=f"vendedor:{seller['name']}",
@@ -493,9 +528,103 @@ def api_create_transaction():
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception:
-        app.logger.exception("Falha ao registrar transação")
+        app.logger.exception("Falha ao criar transação pendente")
         return jsonify({"error": "Não foi possível registrar a transação."}), 500
-    return jsonify(result), 201
+
+    # Remove chaves internas (_normalized, _demand, _event_id, _created_by) da resposta.
+    public = {k: v for k, v in result.items() if not k.startswith("_")}
+    return jsonify(public), 201
+
+
+@app.route("/api/transacoes/<int:tx_id>", methods=["PATCH"])
+def api_update_pending_transaction(tx_id: int):
+    """Atualiza pedido pendente (ex.: retomada após alterar carrinho ou pagamento)."""
+    payload = request.get_json(silent=True) or {}
+    items = payload.get("items") or payload.get("itens") or []
+    client = payload.get("client") or {}
+    payment_method = _normalize_payment_method_for_db(
+        payload.get("payment_method") or client.get("payment_method"),
+    )
+
+    cro_uf = (client.get("cro_uf") or "").strip().upper()
+    cro_numero = (client.get("cro_numero") or "").strip()
+
+    try:
+        inst_raw = payload.get("installments")
+        if inst_raw is None:
+            inst_raw = client.get("installments")
+        card_installments = None
+        if inst_raw not in (None, ""):
+            try:
+                card_installments = int(inst_raw)
+            except (TypeError, ValueError):
+                raise ValueError("Número de parcelas inválido.") from None
+
+        auth = _seller_auth()
+        if not auth:
+            raise ValueError(
+                "É necessário estar logado como vendedor para atualizar o pedido."
+            )
+        row = get_seller(int(auth["seller_id"]))
+        if row is None or not row.get("active"):
+            raise ValueError("Sessão de vendedor inválida ou inativa.")
+
+        result = update_pending_transaction(
+            int(tx_id),
+            seller_id=int(row["id"]),
+            items=items,
+            client_name=client.get("name"),
+            client_cpf=client.get("cpf"),
+            client_zipcode=client.get("zipcode"),
+            client_address=client.get("address"),
+            client_number=client.get("number"),
+            client_complement=client.get("complement"),
+            client_city=client.get("city"),
+            client_state=client.get("state"),
+            payment_method=payment_method,
+            card_installments=card_installments,
+            client_cro_uf=cro_uf or None,
+            client_cro_numero=cro_numero or None,
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        app.logger.exception("Falha ao atualizar transação pendente")
+        return jsonify({"error": "Não foi possível atualizar o pedido."}), 500
+
+    return jsonify(result), 200
+
+
+@app.route("/api/transacoes/<int:tx_id>/aut", methods=["PATCH"])
+def api_confirm_transaction_aut(tx_id: int):
+    """Salva o AUT, confirma a transação e baixa o estoque.
+
+    Body JSON: ``{"aut": "123456"}``
+    """
+    payload = request.get_json(silent=True) or {}
+    aut = (payload.get("aut") or "").strip()
+
+    try:
+        auth = _seller_auth()
+        if not auth:
+            raise ValueError(
+                "É necessário estar logado como vendedor para confirmar a venda."
+            )
+        row = get_seller(int(auth["seller_id"]))
+        if row is None or not row.get("active"):
+            raise ValueError("Sessão de vendedor inválida ou inativa.")
+        seller_name = row["name"]
+
+        result = confirm_transaction_with_aut(
+            tx_id, aut, created_by=f"vendedor:{seller_name}"
+        )
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        app.logger.exception("Falha ao confirmar transação com AUT")
+        return jsonify({"error": "Não foi possível confirmar a transação."}), 500
+
+    return jsonify(result), 200
 
 
 # ---------------------------------------------------------------------------
@@ -606,6 +735,7 @@ def _seller_shell_context(**extra):
         "seller_email": auth.get("seller_email", ""),
         "now": datetime.now(),
         "seller_event": seller_event,
+        "seller_pending_cancel_url": _seller_pending_cancel_url,
     }
     ctx.update(extra)
     venda_url = _url_if_registered("seller_sale", fallback="/vendedor/venda")
@@ -643,6 +773,7 @@ def _seller_payment_page_context() -> dict:
         "payment_catalog_url": _url_if_registered(
             "seller_sale", fallback="/vendedor/venda"),
         "payment_home_url": url_for("seller_dashboard"),
+        "resume_pending_aut": None,
     }
 
 
@@ -690,7 +821,54 @@ def seller_payment():
 @app.route("/vendedor/pagamento/aguardando", endpoint="seller_payment_waiting")
 @seller_required
 def seller_payment_waiting():
-    return render_template("payment_waiting.html", **_seller_payment_page_context())
+    ctx = dict(_seller_payment_page_context())
+    resume = None
+    raw = (request.args.get("pendente") or "").strip()
+    if raw.isdigit():
+        sid = _current_seller_id()
+        row = get_pending_transaction_if_owned(int(raw), sid)
+        if row:
+            resume = {
+                "transaction_id": row["id"],
+                "order_number": row["order_number"],
+            }
+    ctx["resume_pending_aut"] = resume
+    return render_template("payment_waiting.html", **ctx)
+
+
+@app.route("/vendedor/pedido/<int:tx_id>/refazer-checkout", endpoint="seller_restore_pending_checkout")
+@seller_required
+def seller_restore_pending_checkout(tx_id: int):
+    """Restaura carrinho + formulário do cliente e envia à tela de pagamento (pedido pendente de AUT)."""
+    sid = _current_seller_id()
+    payload = get_pending_transaction_restore_payload(tx_id, sid)
+    if not payload or not payload.get("cart_items"):
+        flash(
+            "Não foi possível restaurar este pedido. Verifique se está pendente de AUT e se os produtos ainda existem.",
+            "error",
+        )
+        return redirect(url_for("seller_dashboard"))
+    return render_template(
+        "seller/restore_checkout.html",
+        restore_payload=payload,
+        payment_url=url_for("seller_payment"),
+    )
+
+
+@app.route(
+    "/vendedor/pedido/<int:tx_id>/cancelar-pendente",
+    methods=["POST"],
+    endpoint="seller_cancel_pending_transaction",
+)
+@seller_required
+def seller_cancel_pending_transaction(tx_id: int):
+    """Descarta pedido pendente (marca como cancelado); não altera estoque nem faturamento."""
+    try:
+        cancel_pending_transaction_for_seller(tx_id, _current_seller_id())
+        flash("Pedido pendente descartado.", "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("seller_dashboard"))
 
 
 @app.route("/vendedor/dashboard")
@@ -730,7 +908,7 @@ def seller_stock():
     seller_ev = _get_seller_event()
     if seller_ev:
         ev_id = seller_ev["id"]
-        products = list_event_products_for_client(ev_id)
+        products, filters, pagination = _seller_event_stock_page_view(ev_id)
         ev_stats = get_event_stock_stats(ev_id)
         stock = {
             "products_count": ev_stats["products_count"],
@@ -740,21 +918,18 @@ def seller_stock():
             "below_min": ev_stats["below_min"],
             "out_of_stock": ev_stats["sem_estoque"],
         }
-        total = len(products)
-        pagination = {
-            "page": 1, "per_page": total or 1, "total": total,
-            "total_pages": 1, "has_prev": False, "has_next": False,
-            "showing_from": 1 if total else 0,
-            "showing_to": total,
-        }
-        categories = sorted({p["categoria"] for p in products if p.get("categoria")})
-        filters = {"q": "", "categoria": "todos", "status": "todos", "per_page": total or 1}
-        stock_api_url = url_for("seller_api_event_stock")
+        stock_api_url = url_for(
+            "seller_api_event_stock",
+            q=filters["q"],
+            status=filters["status"],
+            per_page=filters["per_page"],
+            page=pagination["page"],
+        )
         return render_template(
             "seller/stock.html",
             products=products,
             stock=stock,
-            categories=categories,
+            categories=[],
             filters=filters,
             pagination=pagination,
             allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
@@ -791,22 +966,35 @@ def seller_movements():
     q_search = q or None
 
     seller_ev = _get_seller_event()
+    movement_filter_sellers: list = []
+
     if seller_ev:
         ev_id = seller_ev["id"]
+        movement_filter_sellers = list_event_sellers(ev_id)
+        event_seller_ids = {int(s["id"]) for s in movement_filter_sellers}
+        seller_raw = _parse_int(request.args.get("vendedor"), 0)
+        seller_filter = seller_raw if seller_raw > 0 and seller_raw in event_seller_ids else None
+        if seller_raw > 0 and seller_filter is None:
+            seller_raw = 0
+
         movements = list_event_stock_movements(
             ev_id,
             product_id=None,
             product_search=q_search,
             movement_type=movement_type or None,
+            reference=pedido or None,
+            seller_id=seller_filter,
             limit=500,
         )
         return render_template(
             "seller/movements.html",
             movements=movements,
+            movement_filter_sellers=movement_filter_sellers,
             filters={
                 "tipo": movement_type or "todos",
                 "q": q,
                 "pedido": pedido,
+                "vendedor": seller_raw,
             },
             **_seller_shell_context(active_section="movimentacoes"),
         )
@@ -820,12 +1008,98 @@ def seller_movements():
     return render_template(
         "seller/movements.html",
         movements=movements,
+        movement_filter_sellers=movement_filter_sellers,
         filters={
             "tipo": movement_type or "todos",
             "q": q,
             "pedido": pedido,
+            "vendedor": 0,
         },
         **_seller_shell_context(active_section="movimentacoes"),
+    )
+
+
+@app.route("/vendedor/transacoes")
+@seller_required
+def seller_transactions():
+    seller_id = _current_seller_id()
+    seller_ev = _get_seller_event()
+
+    pedido = (request.args.get("pedido") or "").strip()
+    status_raw = (request.args.get("status") or "").strip().lower()
+    valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado"})
+    status_norm = status_raw if status_raw in valid_status else "todos"
+
+    per_page = _parse_int(request.args.get("per_page"), DEFAULT_ADMIN_MOVEMENTS_PER_PAGE)
+    if per_page not in ALLOWED_ADMIN_STOCK_PER_PAGE:
+        per_page = DEFAULT_ADMIN_MOVEMENTS_PER_PAGE
+    page = max(1, _parse_int(request.args.get("page"), 1))
+
+    status_api = None if status_norm == "todos" else status_norm
+
+    if seller_ev:
+        ev_id = int(seller_ev["id"])
+        total = count_transactions_for_event(
+            ev_id,
+            seller_id=seller_id,
+            order_search=pedido or None,
+            status=status_api,
+        )
+    else:
+        total = count_transactions_for_seller(
+            seller_id,
+            order_search=pedido or None,
+            status=status_api,
+        )
+
+    total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
+    page = min(page, total_pages)
+    offset = (page - 1) * per_page
+
+    if seller_ev:
+        transactions = list_transactions_for_event(
+            int(seller_ev["id"]),
+            seller_id=seller_id,
+            order_search=pedido or None,
+            status=status_api,
+            limit=per_page,
+            offset=offset,
+        )
+    else:
+        transactions = list_transactions_for_seller(
+            seller_id,
+            order_search=pedido or None,
+            status=status_api,
+            limit=per_page,
+            offset=offset,
+        )
+
+    showing_from = offset + 1 if total > 0 else 0
+    showing_to = min(offset + len(transactions), total) if total > 0 else 0
+
+    filters = {
+        "pedido": pedido,
+        "status": status_norm,
+        "per_page": per_page,
+    }
+    pagination = {
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "showing_from": showing_from,
+        "showing_to": showing_to,
+    }
+
+    return render_template(
+        "seller/transactions.html",
+        transactions=transactions,
+        filters=filters,
+        pagination=pagination,
+        allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
+        **_seller_shell_context(active_section="transacoes"),
     )
 
 
@@ -849,6 +1123,7 @@ def _seller_transaction_api(tx: dict) -> dict:
             tx.get("payment_method"),
             tx.get("card_installments"),
         ),
+        "aut": tx.get("aut") or None,
         "items": [
             {
                 "product_name": it.get("product_name") or "",
@@ -910,7 +1185,7 @@ def seller_api_event_stock():
     if seller_ev is None:
         return jsonify({"error": "Não associado a nenhum evento ativo."}), 404
     ev_id = seller_ev["id"]
-    products = list_event_products_for_client(ev_id)
+    products, _filters, pagination = _seller_event_stock_page_view(ev_id)
     ev_stats = get_event_stock_stats(ev_id)
     stock = {
         "products_count": ev_stats["products_count"],
@@ -922,7 +1197,12 @@ def seller_api_event_stock():
     }
     return jsonify({
         "stock": stock,
-        "pagination": {"page": 1, "per_page": len(products), "total": len(products), "total_pages": 1},
+        "pagination": {
+            "page": pagination["page"],
+            "per_page": pagination["per_page"],
+            "total": pagination["total"],
+            "total_pages": pagination["total_pages"],
+        },
         "products": [{**p, "status": _event_product_status({
             "stock": p["estoque"], "min_stock": p["estoque_minimo"], "product_active": p["ativo"],
         })} for p in products],
@@ -986,12 +1266,10 @@ def seller_api_dashboard():
 def admin_dashboard():
     stats = get_stats()
     stock = get_products_library_stats()
-    transactions = list_transactions(limit=300)
     return render_template(
         "admin/dashboard.html",
         stats=stats,
         stock=stock,
-        transactions=transactions,
         admin_user=_current_admin_user(),
         now=datetime.now(),
         active_section="dashboard",
@@ -1342,6 +1620,7 @@ def _admin_shell_context(**extra):
 
 ALLOWED_ADMIN_STOCK_PER_PAGE = (10, 25, 50, 100)
 DEFAULT_ADMIN_STOCK_PER_PAGE = 25
+DEFAULT_ADMIN_MOVEMENTS_PER_PAGE = 25
 
 
 def _admin_stock_list_query_params():
@@ -1381,6 +1660,48 @@ def _admin_stock_page_view(*, ignore_status_filter: bool = False):
     filters = {
         "q": q_display,
         "categoria": cat_norm,
+        "status": stat_norm,
+        "per_page": per_page,
+    }
+    pagination = {
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "showing_from": showing_from,
+        "showing_to": showing_to,
+    }
+    return products, filters, pagination
+
+
+def _seller_event_stock_page_view(event_id: int):
+    """Lista paginada do estoque do evento no painel do vendedor (busca + situação, sem categoria)."""
+    q_display, _category, status, per_page, page = _admin_stock_list_query_params()
+    q_lower = q_display.lower() if q_display else ""
+    q_filter = q_lower or None
+    stat_norm = (status or "todos").strip().lower()
+    if stat_norm not in {"todos", "ok", "baixo", "sem_estoque", "inativo"}:
+        stat_norm = "todos"
+
+    total = count_event_products_filtered(event_id, q_filter, "todos", stat_norm)
+    total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
+    page = min(page, total_pages)
+    offset = (page - 1) * per_page
+    products = list_event_products_filtered_for_client(
+        event_id,
+        q_filter,
+        stat_norm,
+        limit=per_page,
+        offset=offset,
+    )
+
+    showing_from = offset + 1 if total > 0 else 0
+    showing_to = min(offset + len(products), total) if total > 0 else 0
+
+    filters = {
+        "q": q_display,
         "status": stat_norm,
         "per_page": per_page,
     }
@@ -1635,7 +1956,6 @@ def _cro_pedido_fields(row: dict | None) -> dict[str, str] | None:
 def _movement_payload(movement: dict) -> dict:
     reference = movement.get("reference")
     movement_type = movement.get("movement_type")
-    tx_id = movement.get("transaction_id")
     ev_bg, ev_fg = event_badge_style_pairs(movement.get("event_badge_color"))
     try:
         d_raw = int(movement.get("delta") or 0)
@@ -1662,8 +1982,6 @@ def _movement_payload(movement: dict) -> dict:
             if movement_type == "venda" and reference
             else None
         ),
-        "has_customer_details": movement_type == "venda" and bool(tx_id),
-        "cro_pedido": _cro_pedido_fields(movement),
     }
 
 
@@ -1785,69 +2103,6 @@ def admin_api_stock_product_legacy(product_id: int):
         return jsonify({"error": str(exc)}), 404
 
 
-@app.route("/admin/api/movimentacoes")
-@admin_required
-def admin_api_movements():
-    movement_type = (request.args.get("tipo") or "").strip()
-    q = (request.args.get("q") or "").strip()
-    pedido = (request.args.get("pedido") or "").strip()
-    seller_raw = _parse_int(request.args.get("vendedor"), 0)
-    seller_filter = seller_raw if seller_raw > 0 else None
-    if seller_filter is not None:
-        known = {int(s["id"]) for s in list_sellers()}
-        if seller_filter not in known:
-            seller_filter = None
-
-    movements = list_stock_movements(
-        product_search=q or None,
-        movement_type=movement_type or None,
-        reference=pedido or None,
-        seller_id=seller_filter,
-        limit=500,
-    )
-    return jsonify({
-        "movements": [_movement_payload(m) for m in movements],
-        "latest_id": max([int(m["id"]) for m in movements], default=0),
-    })
-
-
-@app.route("/admin/movimentacoes")
-@admin_required
-def admin_movements():
-    movement_type = (request.args.get("tipo") or "").strip()
-    q = (request.args.get("q") or "").strip()
-    # Código do pedido (``reference`` nas movimentações de venda do totem, ex.: OM260422-1234)
-    pedido = (request.args.get("pedido") or "").strip()
-    seller_raw = _parse_int(request.args.get("vendedor"), 0)
-    seller_filter = seller_raw if seller_raw > 0 else None
-    if seller_filter is not None:
-        known = {int(s["id"]) for s in list_sellers()}
-        if seller_filter not in known:
-            seller_filter = None
-            seller_raw = 0
-
-    movements = list_stock_movements(
-        product_search=q or None,
-        movement_type=movement_type or None,
-        reference=pedido or None,
-        seller_id=seller_filter,
-        limit=500,
-    )
-    movement_filter_sellers = list_sellers()
-    return render_template(
-        "admin/stock_movements.html",
-        movements=movements,
-        movement_filter_sellers=movement_filter_sellers,
-        filters={
-            "tipo": movement_type or "todos",
-            "q": q,
-            "pedido": pedido,
-            "vendedor": seller_raw,
-        },
-        **_admin_shell_context(active_section="movimentacoes"),
-    )
-
-
 _EXPORT_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -1921,31 +2176,6 @@ def _movement_export_table(movements: list[dict]) -> tuple[list[str], list[list]
     return header, rows
 
 
-@app.route("/admin/movimentacoes/export.csv")
-@admin_required
-def admin_movements_export_csv():
-    movement_type = (request.args.get("tipo") or "").strip()
-    q = (request.args.get("q") or "").strip()
-    pedido = (request.args.get("pedido") or "").strip()
-    seller_raw = _parse_int(request.args.get("vendedor"), 0)
-    seller_filter = seller_raw if seller_raw > 0 else None
-    if seller_filter is not None:
-        known = {int(s["id"]) for s in list_sellers()}
-        if seller_filter not in known:
-            seller_filter = None
-
-    movements = list_stock_movements(
-        product_search=q or None,
-        movement_type=movement_type or None,
-        reference=pedido or None,
-        seller_id=seller_filter,
-        limit=EXPORT_MOVEMENTS_CSV_CAP,
-    )
-    header, rows = _movement_export_table(movements)
-    fname = f"movimentacoes_admin_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    return _csv_attachment_response(fname, header, rows)
-
-
 @app.route("/admin/eventos/<int:event_id>/movimentacoes/export.csv")
 @admin_required
 def admin_event_movements_export_csv(event_id: int):
@@ -1955,6 +2185,7 @@ def admin_event_movements_export_csv(event_id: int):
 
     movement_type = (request.args.get("tipo") or "").strip()
     q = (request.args.get("q") or "").strip()
+    pedido = (request.args.get("pedido") or "").strip()
     event_sellers_rows = list_event_sellers(event_id)
     event_seller_ids = {int(s["id"]) for s in event_sellers_rows}
     seller_raw = _parse_int(request.args.get("vendedor"), 0)
@@ -1965,6 +2196,7 @@ def admin_event_movements_export_csv(event_id: int):
         product_id=None,
         product_search=q or None,
         movement_type=movement_type or None,
+        reference=pedido or None,
         seller_id=seller_filter,
         limit=EXPORT_MOVEMENTS_CSV_CAP,
     )
@@ -2141,7 +2373,6 @@ def _event_movement_payload(movement: dict, *, event_id: int) -> dict:
     """Serializa uma movimentação de evento para JSON (polling / live forms)."""
     reference = movement.get("reference")
     movement_type = movement.get("movement_type")
-    tx_id = movement.get("transaction_id")
     ev_bg, ev_fg = event_badge_style_pairs(movement.get("event_badge_color"))
     try:
         d_raw = int(movement.get("delta") or 0)
@@ -2168,8 +2399,6 @@ def _event_movement_payload(movement: dict, *, event_id: int) -> dict:
             if movement_type == "venda" and reference
             else None
         ),
-        "has_customer_details": movement_type == "venda" and bool(tx_id),
-        "cro_pedido": _cro_pedido_fields(movement),
     }
 
 
@@ -2481,6 +2710,7 @@ def admin_event_movements(event_id: int):
         return redirect(url_for("admin_events"))
     movement_type = (request.args.get("tipo") or "").strip()
     q = (request.args.get("q") or "").strip()
+    pedido = (request.args.get("pedido") or "").strip()
     event_sellers_rows = list_event_sellers(event_id)
     event_seller_ids = {int(s["id"]) for s in event_sellers_rows}
     seller_raw = _parse_int(request.args.get("vendedor"), 0)
@@ -2493,6 +2723,7 @@ def admin_event_movements(event_id: int):
         product_id=None,
         product_search=q or None,
         movement_type=movement_type or None,
+        reference=pedido or None,
         seller_id=seller_filter,
         limit=300,
     )
@@ -2506,6 +2737,7 @@ def admin_event_movements(event_id: int):
         filters={
             "tipo": movement_type or "todos",
             "q": q,
+            "pedido": pedido,
             "vendedor": seller_raw,
         },
         active_event_tab="movimentacoes",
@@ -2518,6 +2750,7 @@ def admin_event_movements(event_id: int):
 def admin_api_event_movements(event_id: int):
     movement_type = (request.args.get("tipo") or "").strip()
     q = (request.args.get("q") or "").strip()
+    pedido = (request.args.get("pedido") or "").strip()
     event_seller_ids = {int(s["id"]) for s in list_event_sellers(event_id)}
     seller_raw = _parse_int(request.args.get("vendedor"), 0)
     seller_filter = seller_raw if seller_raw > 0 and seller_raw in event_seller_ids else None
@@ -2527,6 +2760,7 @@ def admin_api_event_movements(event_id: int):
         product_id=None,
         product_search=q or None,
         movement_type=movement_type or None,
+        reference=pedido or None,
         seller_id=seller_filter,
         limit=300,
     )
@@ -2537,51 +2771,85 @@ def admin_api_event_movements(event_id: int):
 
 
 # ---------------------------------------------------------------------------
-# Eventos — sub-página Vendedores
+# Eventos — sub-página Transações
 # ---------------------------------------------------------------------------
 
-@app.route("/admin/eventos/<int:event_id>/vendedores")
+@app.route("/admin/eventos/<int:event_id>/transacoes")
 @admin_required
-def admin_event_sellers(event_id: int):
+def admin_event_transactions(event_id: int):
     event = _event_or_404(event_id)
     if event is None:
         return redirect(url_for("admin_events"))
-    sellers = list_event_sellers(event_id)
-    available = list_sellers_not_in_event(event_id)
-    stats = get_event_stock_stats(event_id)
-    return render_template(
-        "admin/event_sellers.html",
-        event=event,
-        sellers=sellers,
-        available_sellers=available,
-        stats=stats,
-        active_event_tab="vendedores",
-        **_admin_shell_context(active_section="eventos"),
+
+    pedido = (request.args.get("pedido") or "").strip()
+    status_raw = (request.args.get("status") or "").strip().lower()
+    valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado"})
+    status_norm = status_raw if status_raw in valid_status else "todos"
+
+    event_sellers_rows = list_event_sellers(event_id)
+    event_seller_ids = {int(s["id"]) for s in event_sellers_rows}
+    seller_raw = _parse_int(request.args.get("vendedor"), 0)
+    seller_filter = seller_raw if seller_raw > 0 and seller_raw in event_seller_ids else None
+    if seller_raw > 0 and seller_filter is None:
+        seller_raw = 0
+
+    per_page = _parse_int(request.args.get("per_page"), DEFAULT_ADMIN_MOVEMENTS_PER_PAGE)
+    if per_page not in ALLOWED_ADMIN_STOCK_PER_PAGE:
+        per_page = DEFAULT_ADMIN_MOVEMENTS_PER_PAGE
+    page = max(1, _parse_int(request.args.get("page"), 1))
+
+    status_api = None if status_norm == "todos" else status_norm
+
+    total = count_transactions_for_event(
+        event_id,
+        seller_id=seller_filter,
+        order_search=pedido or None,
+        status=status_api,
+    )
+    total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
+    page = min(page, total_pages)
+    offset = (page - 1) * per_page
+
+    transactions = list_transactions_for_event(
+        event_id,
+        seller_id=seller_filter,
+        order_search=pedido or None,
+        status=status_api,
+        limit=per_page,
+        offset=offset,
     )
 
+    showing_from = offset + 1 if total > 0 else 0
+    showing_to = min(offset + len(transactions), total) if total > 0 else 0
 
-@app.route("/admin/eventos/<int:event_id>/vendedores/adicionar", methods=["POST"])
-@admin_required
-def admin_event_add_seller(event_id: int):
-    if _event_or_404(event_id) is None:
-        return redirect(url_for("admin_events"))
-    seller_id = _parse_int(request.form.get("seller_id"), 0)
-    if not seller_id:
-        flash("Selecione um vendedor.", "error")
-        return redirect(url_for("admin_event_sellers", event_id=event_id))
-    add_seller_to_event(event_id, seller_id)
-    flash("Vendedor adicionado ao evento.", "success")
-    return redirect(url_for("admin_event_sellers", event_id=event_id))
+    filters = {
+        "pedido": pedido,
+        "status": status_norm,
+        "vendedor": seller_raw,
+        "per_page": per_page,
+    }
+    pagination = {
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "showing_from": showing_from,
+        "showing_to": showing_to,
+    }
 
-
-@app.route("/admin/eventos/<int:event_id>/vendedores/<int:seller_id>/remover", methods=["POST"])
-@admin_required
-def admin_event_remove_seller(event_id: int, seller_id: int):
-    if _event_or_404(event_id) is None:
-        return redirect(url_for("admin_events"))
-    remove_seller_from_event(event_id, seller_id)
-    flash("Vendedor removido do evento.", "success")
-    return redirect(url_for("admin_event_sellers", event_id=event_id))
+    return render_template(
+        "admin/event_transactions.html",
+        event=event,
+        transactions=transactions,
+        movement_filter_sellers=event_sellers_rows,
+        filters=filters,
+        pagination=pagination,
+        allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
+        active_event_tab="transacoes",
+        **_admin_shell_context(active_section="eventos"),
+    )
 
 
 # ---------------------------------------------------------------------------

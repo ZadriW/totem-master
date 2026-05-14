@@ -2,12 +2,15 @@
     'use strict';
 
     const POLL_MS = 2000;
-    /** Alinhado ao ``limit`` da API de movimentações (evita crescer sem limite ao ir inserindo linhas). */
-    const MAX_MOVEMENT_ROWS = 500;
     const table =
         document.querySelector('[data-admin-movements]') ||
         document.querySelector('.admin-table');
-    const scope = table || document;
+    /** Limite de linhas após inserções ao vivo (página 1): por página + margem. */
+    const trimCap = Math.max(
+        50,
+        Math.max(10, parseInt(table?.dataset.perPage || '25', 10) || 25) + 40,
+    );
+    const disablePoll = table?.dataset.disablePoll === 'true';
     let latestId = Number(
         (table && table.querySelector('[data-movement-id]') || {}).dataset?.movementId || 0
     );
@@ -20,99 +23,6 @@
             '"': '&quot;',
             "'": '&#39;',
         }[char]));
-    }
-
-    function paymentMethodLabel(raw, installments) {
-        const v = String(raw || '').toLowerCase();
-        if (v === 'pix') return 'PIX';
-        const n = parseInt(String(installments ?? ''), 10);
-        if (Number.isFinite(n) && n > 1) return `Cartão em ${n}x`;
-        if (v === 'cartao') return 'Cartão';
-        return '—';
-    }
-
-    function normalizeCroPedido(movement) {
-        let c = movement.cro_pedido;
-        const looksGood =
-            c !== null &&
-            c !== undefined &&
-            typeof c === 'object' &&
-            !Array.isArray(c) &&
-            (String(c.uf || '').trim() || String(c.numero_registro || '').trim());
-        if (looksGood) {
-            return c;
-        }
-        const uf = String(movement.client_cro_uf ?? '').trim();
-        const numero_registro = String(movement.client_cro_numero ?? '').trim();
-        if (!uf && !numero_registro) {
-            return null;
-        }
-        return { uf, numero_registro };
-    }
-
-    function croPedidoHtml(movement) {
-        const c = normalizeCroPedido(movement);
-        if (!c) return '';
-        let html = '';
-        if (c.uf) {
-            html += `<div class="admin-mov__details-item"><dt>UF (CRO)</dt><dd>${escapeHtml(c.uf)}</dd></div>`;
-        }
-        if (c.numero_registro) {
-            html += `<div class="admin-mov__details-item"><dt>Número do registro (CRO)</dt><dd>${escapeHtml(c.numero_registro)}</dd></div>`;
-        }
-        return html;
-    }
-
-    function closeAllDetails() {
-        scope.querySelectorAll('.admin-mov__details').forEach(panel => {
-            panel.hidden = true;
-        });
-        scope.querySelectorAll('.admin-mov__toggle').forEach(b => {
-            b.setAttribute('aria-expanded', 'false');
-            const i = b.querySelector('i');
-            if (i) i.className = 'fa-solid fa-chevron-down';
-        });
-    }
-
-    function customerDetails(movement) {
-        if (!movement.has_customer_details) return '';
-        const address = movement.client_address || movement.client_number || movement.client_city
-            ? `${escapeHtml(movement.client_address || '—')}${movement.client_number ? `, ${escapeHtml(movement.client_number)}` : ''}${movement.client_complement ? ` — ${escapeHtml(movement.client_complement)}` : ''}<br>${escapeHtml(movement.client_city || '—')}${movement.client_state ? ` — ${escapeHtml(movement.client_state)}` : ''}`
-            : '—';
-
-        return `
-            <div class="admin-mov__details" id="details-${escapeHtml(movement.id)}" hidden>
-                <div class="admin-mov__details-content">
-                    <h4 class="admin-mov__details-title">
-                        <i class="fa-solid fa-user" aria-hidden="true"></i>
-                        Dados do cliente (pedido)
-                    </h4>
-                    <dl class="admin-mov__details-list">
-                        <div class="admin-mov__details-item">
-                            <dt>Nome</dt>
-                            <dd>${escapeHtml(movement.client_name || '—')}</dd>
-                        </div>
-                        <div class="admin-mov__details-item">
-                            <dt>CPF</dt>
-                            <dd>${escapeHtml(movement.client_cpf || '—')}</dd>
-                        </div>
-                        <div class="admin-mov__details-item">
-                            <dt>Forma de pagamento</dt>
-                            <dd>${escapeHtml(paymentMethodLabel(movement.payment_method, movement.card_installments))}</dd>
-                        </div>
-                        <div class="admin-mov__details-item">
-                            <dt>CEP</dt>
-                            <dd>${escapeHtml(movement.client_zipcode || '—')}</dd>
-                        </div>
-                        <div class="admin-mov__details-item admin-mov__details-item--wide">
-                            <dt>Endereço</dt>
-                            <dd>${address}</dd>
-                        </div>
-                        ${croPedidoHtml(movement)}
-                    </dl>
-                </div>
-            </div>
-        `;
     }
 
     function eventBadgeInline(movement) {
@@ -142,17 +52,15 @@
     }
 
     function renderMovement(movement) {
-        const toggle = movement.has_customer_details
-            ? `<button type="button" class="admin-mov__toggle" data-toggle="${escapeHtml(movement.id)}" aria-expanded="false" aria-controls="details-${escapeHtml(movement.id)}" aria-label="Exibir ou ocultar dados do cliente">
-                    <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-               </button>`
-            : '';
         const receipt = movement.receipt_url
             ? `<a href="${escapeHtml(movement.receipt_url)}" target="_blank" rel="noopener noreferrer" class="admin-mov__note-btn" title="Abrir nota de retirada (${escapeHtml(movement.reference)})" aria-label="Abrir nota de retirada do pedido ${escapeHtml(movement.reference)}">
                     <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
                </a>`
             : '';
         const reason = `${movement.reference ? `<code>${escapeHtml(movement.reference)}</code>` : ''} ${escapeHtml(movement.reason || '-')}`;
+        const skuMeta = movement.product_sku
+            ? ` &middot; <code class="admin-mov__sku">${escapeHtml(movement.product_sku)}</code>`
+            : '';
 
         return `
             <div class="admin-mov__wrapper" data-movement-id="${escapeHtml(movement.id)}">
@@ -160,13 +68,12 @@
                     <span>${escapeHtml(movement.created_at_display)}</span>
                     <span class="admin-mov__product">
                         <a href="${escapeHtml(movement.product_url)}">${escapeHtml(movement.product_name || '—')}</a>
-                        <small>#${escapeHtml(movement.product_id)} &middot; ${escapeHtml(movement.product_category || '-')}</small>
+                        <small>#${escapeHtml(movement.product_id)}${skuMeta} &middot; ${escapeHtml(movement.product_category || '-')}</small>
                     </span>
                     <span class="admin-mov__type-cell">
                         <span class="admin-badge admin-mov__badge admin-mov__badge--${escapeHtml(movement.movement_type)}">
                             ${escapeHtml(movement.movement_label)}
                         </span>
-                        ${toggle}
                     </span>
                     ${eventCell(movement)}
                     <span class="admin-table__col--num admin-mov__delta admin-mov__delta--${escapeHtml(movement.delta_kind)}">
@@ -179,14 +86,13 @@
                         ${receipt}
                     </span>
                 </div>
-                ${customerDetails(movement)}
             </div>
         `;
     }
 
     function trimExcessMovementRows() {
         if (!table) return;
-        while (table.querySelectorAll('.admin-mov__wrapper').length > MAX_MOVEMENT_ROWS) {
+        while (table.querySelectorAll('.admin-mov__wrapper').length > trimCap) {
             const wrappers = table.querySelectorAll('.admin-mov__wrapper');
             wrappers[wrappers.length - 1].remove();
         }
@@ -194,7 +100,6 @@
 
     /**
      * Incorpora só movimentações novas (id maior que o último conhecido), sem recriar a tabela.
-     * Preserva linhas atuais, painéis abertos e scroll.
      */
     function mergeNewMovements(movements, nextLatest) {
         if (!table) {
@@ -252,30 +157,7 @@
         mergeNewMovements(data.movements || [], nextLatest);
     }
 
-    scope.addEventListener('click', event => {
-        const btn = event.target.closest('.admin-mov__toggle');
-        if (!btn) return;
-        const movId = btn.dataset.toggle;
-        const details = document.getElementById(`details-${movId}`);
-        const icon = btn.querySelector('i');
-
-        if (!details) return;
-
-        const willOpen = details.hidden;
-
-        if (willOpen) {
-            closeAllDetails();
-            details.hidden = false;
-            if (icon) icon.className = 'fa-solid fa-chevron-up';
-            btn.setAttribute('aria-expanded', 'true');
-        } else {
-            details.hidden = true;
-            if (icon) icon.className = 'fa-solid fa-chevron-down';
-            btn.setAttribute('aria-expanded', 'false');
-        }
-    });
-
-    if (table && table.dataset.apiUrl) {
+    if (table && table.dataset.apiUrl && !disablePoll) {
         setInterval(refreshMovements, POLL_MS);
     }
 })();

@@ -2,7 +2,7 @@
 
 {#
     Layout compartilhado do painel administrativo (dashboard, produtos,
-    movimentações). Fornece topbar + menu + container de flash messages.
+    eventos, vendedores). Fornece topbar + menu + container de flash messages.
     Páginas devem sobrescrever {% block admin_body %}.
 #}
 
@@ -29,11 +29,6 @@
                href="{{ url_for('admin_products') }}">
                 <i class="fa-solid fa-tags" aria-hidden="true"></i>
                 Produtos
-            </a>
-            <a class="admin-nav__item {% if active_section == 'movimentacoes' %}is-active{% endif %}"
-               href="{{ url_for('admin_movements') }}">
-                <i class="fa-solid fa-right-left" aria-hidden="true"></i>
-                Movimentações
             </a>
             <a class="admin-nav__item {% if active_section == 'eventos' %}is-active{% endif %}"
                href="{{ url_for('admin_events') }}">

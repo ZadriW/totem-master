@@ -29,7 +29,7 @@
             <a class="admin-nav__item {% if active_section == 'venda' %}is-active{% endif %}"
                href="{{ seller_venda_url|default('/vendedor/venda', true) }}">
                 <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
-                Venda
+                Catálogo
             </a>
             <a class="admin-nav__item {% if active_section == 'estoque' %}is-active{% endif %}"
                href="{{ url_for('seller_stock') }}">
@@ -40,6 +40,11 @@
                href="{{ url_for('seller_movements') }}">
                 <i class="fa-solid fa-right-left" aria-hidden="true"></i>
                 Movimentações
+            </a>
+            <a class="admin-nav__item {% if active_section == 'transacoes' %}is-active{% endif %}"
+               href="{{ url_for('seller_transactions') }}">
+                <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
+                Transações
             </a>
         </nav>
 

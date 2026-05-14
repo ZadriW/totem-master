@@ -229,6 +229,19 @@ def _ensure_transactions_card_installments(conn: sqlite3.Connection) -> None:
     conn.execute("ALTER TABLE transactions ADD COLUMN card_installments INTEGER")
 
 
+def _ensure_transactions_aut(conn: sqlite3.Connection) -> None:
+    if "aut" in _table_columns(conn, "transactions"):
+        return
+    conn.execute("ALTER TABLE transactions ADD COLUMN aut TEXT")
+
+
+def _ensure_transactions_event_id(conn: sqlite3.Connection) -> None:
+    """Adiciona event_id em transactions para rastrear vendas de eventos."""
+    if "event_id" in _table_columns(conn, "transactions"):
+        return
+    conn.execute("ALTER TABLE transactions ADD COLUMN event_id INTEGER")
+
+
 def _ensure_transactions_client_columns(conn: sqlite3.Connection) -> None:
     """Adiciona colunas de dados do cliente/vendedor em transactions."""
     cols = _table_columns(conn, "transactions")
@@ -361,6 +374,41 @@ def _ensure_event_extensions(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (seller_id) REFERENCES sellers(id) ON DELETE CASCADE
         );
     """)
+    _ensure_event_sellers_one_event_per_seller(conn)
+
+
+def _ensure_event_sellers_one_event_per_seller(conn: sqlite3.Connection) -> None:
+    """Remove vínculos duplicados por vendedor e garante índice único em ``seller_id``.
+
+    Regra de negócio: cada vendedor pode estar associado a no máximo um evento.
+    Em caso de histórico inconsistente, mantém o vínculo mais recente (``added_at``).
+    """
+    dup_rows = conn.execute(
+        """
+        SELECT seller_id FROM event_sellers GROUP BY seller_id HAVING COUNT(*) > 1
+        """
+    ).fetchall()
+    for row in dup_rows:
+        sid = int(row["seller_id"])
+        keep = conn.execute(
+            """
+            SELECT rowid FROM event_sellers
+             WHERE seller_id = ?
+             ORDER BY datetime(added_at) DESC, event_id DESC
+             LIMIT 1
+            """,
+            (sid,),
+        ).fetchone()
+        if not keep:
+            continue
+        conn.execute(
+            "DELETE FROM event_sellers WHERE seller_id = ? AND rowid != ?",
+            (sid, int(keep["rowid"])),
+        )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_event_sellers_seller_unique "
+        "ON event_sellers(seller_id)"
+    )
 
 
 def _ensure_sellers_columns(conn: sqlite3.Connection) -> None:
@@ -428,6 +476,8 @@ def init_db() -> None:
         _ensure_transactions_cro_columns(conn)
         _ensure_transactions_payment_method(conn)
         _ensure_transactions_card_installments(conn)
+        _ensure_transactions_aut(conn)
+        _ensure_transactions_event_id(conn)
         _ensure_sellers_columns(conn)
         _ensure_events_tables(conn)
         _ensure_events_badge_color(conn)
@@ -672,17 +722,30 @@ def _admin_products_library_filter_clause(
     categoria: str,
     status: str,
 ) -> Tuple[str, List]:
-    """Filtros da biblioteca de produtos (saldos agregados em todos os eventos)."""
+    """Filtros da biblioteca de produtos (saldos agregados em todos os eventos).
+
+    Com texto em ``q``: nome, descrição, SKU (LIKE) e, se o trecho for só dígitos (opc. ``#``), ID do produto.
+    """
     parts: List[str] = ["1=1"]
     params: List = []
     ev = "COALESCE(ev_agg.ev_stock_total, 0)"
     if q:
-        like = f"%{q.lower()}%"
-        parts.append(
-            "(LOWER(p.name) LIKE ? OR LOWER(COALESCE(p.description, '')) LIKE ? "
-            "OR LOWER(COALESCE(p.sku, '')) LIKE ?)"
-        )
-        params.extend([like, like, like])
+        qs = q.strip()
+        like = f"%{qs.lower()}%"
+        or_parts = [
+            "LOWER(p.name) LIKE ?",
+            "LOWER(COALESCE(p.description, '')) LIKE ?",
+            "LOWER(COALESCE(p.sku, '')) LIKE ?",
+        ]
+        or_params: List = [like, like, like]
+        id_part = qs.lstrip("#").strip()
+        if id_part.isdigit():
+            or_parts.append("p.id = ?")
+            or_params.append(int(id_part))
+            or_parts.append("INSTR(CAST(p.id AS TEXT), ?) > 0")
+            or_params.append(id_part)
+        parts.append("(" + " OR ".join(or_parts) + ")")
+        params.extend(or_params)
     if categoria and categoria.lower() != "todos":
         parts.append("LOWER(p.category) = LOWER(?)")
         params.append(categoria)
@@ -1283,38 +1346,17 @@ def _stock_movements_product_search_sql(product_search: Optional[str]) -> Tuple[
     return " AND (" + " OR ".join(or_parts) + ")", or_params
 
 
-def list_stock_movements(
+def _stock_movements_filter_sql(
     *,
     product_id: Optional[int] = None,
     product_search: Optional[str] = None,
     movement_type: Optional[str] = None,
     reference: Optional[str] = None,
     seller_id: Optional[int] = None,
-    limit: int = 200,
-) -> List[Dict]:
-    """Lista movimentações. ``reference`` filtra pelo código do pedido (vendas no totem).
-
-    ``product_search`` restringe por nome, descrição, SKU ou ID numérico do produto
-    (subtexto em texto; para trechos só com dígitos também casa ``product_id``).
-
-    ``seller_id`` (quando > 0): mantém entradas/saídas/ajustes/inicial visíveis e restringe
-    apenas **vendas** (`movement_type = 'venda'`) à transação cujo ``seller_id`` coincide
-    (via JOIN ``transactions``).
-    """
-    sql = (
-        "SELECT m.*, p.name AS product_name, p.category AS product_category, "
-        "evt.name AS event_name, "
-        "evt.badge_color AS event_badge_color, "
-        "t.client_name, t.client_cpf, t.client_zipcode, t.client_address, "
-        "t.client_number, t.client_complement, t.client_city, t.client_state, "
-        "t.payment_method, t.card_installments, "
-        "t.client_cro_uf, t.client_cro_numero "
-        "FROM stock_movements m "
-        "LEFT JOIN products p ON p.id = m.product_id "
-        "LEFT JOIN events evt ON evt.id = m.event_id "
-        "LEFT JOIN transactions t ON t.id = m.transaction_id "
-        "WHERE 1=1"
-    )
+    event_id: Optional[int] = None,
+) -> Tuple[str, List]:
+    """Trecho ``AND ...`` + parâmetros compartilhado por list/count/max das movimentações."""
+    sql = ""
     params: List = []
     if product_id is not None:
         sql += " AND m.product_id = ?"
@@ -1327,8 +1369,6 @@ def list_stock_movements(
         params.append(movement_type)
     ref_norm = _normalize_order_reference(reference)
     if ref_norm:
-        # Vendas do totem gravam o nº em ``reference`` (ex.: OM260422-1234).
-        # ``INSTR`` faz busca por subtexto sem tratar ``%``/``_`` como curingas.
         sql += (
             " AND m.reference IS NOT NULL "
             "AND INSTR(LOWER(m.reference), LOWER(?)) > 0"
@@ -1336,12 +1376,122 @@ def list_stock_movements(
         params.append(ref_norm)
     if seller_id is not None and int(seller_id) > 0:
         sql += (
-            " AND (m.movement_type != 'venda' OR "
-            "(m.movement_type = 'venda' AND COALESCE(t.seller_id, -1) = ?))"
+            " AND m.movement_type = 'venda' "
+            "AND COALESCE(t.seller_id, -1) = ?"
         )
         params.append(int(seller_id))
-    sql += " ORDER BY datetime(m.created_at) DESC, m.id DESC LIMIT ?"
-    params.append(int(limit))
+    if event_id is not None and int(event_id) > 0:
+        sql += " AND m.event_id = ?"
+        params.append(int(event_id))
+    return sql, params
+
+
+def count_stock_movements(
+    *,
+    product_id: Optional[int] = None,
+    product_search: Optional[str] = None,
+    movement_type: Optional[str] = None,
+    reference: Optional[str] = None,
+    seller_id: Optional[int] = None,
+    event_id: Optional[int] = None,
+) -> int:
+    filt_sql, filt_params = _stock_movements_filter_sql(
+        product_id=product_id,
+        product_search=product_search,
+        movement_type=movement_type,
+        reference=reference,
+        seller_id=seller_id,
+        event_id=event_id,
+    )
+    sql = (
+        "SELECT COUNT(*) AS c FROM stock_movements m "
+        "LEFT JOIN products p ON p.id = m.product_id "
+        "LEFT JOIN transactions t ON t.id = m.transaction_id "
+        "WHERE 1=1" + filt_sql
+    )
+    with get_conn() as conn:
+        row = conn.execute(sql, filt_params).fetchone()
+    return int(row["c"] if row else 0)
+
+
+def max_stock_movement_id_filtered(
+    *,
+    product_id: Optional[int] = None,
+    product_search: Optional[str] = None,
+    movement_type: Optional[str] = None,
+    reference: Optional[str] = None,
+    seller_id: Optional[int] = None,
+    event_id: Optional[int] = None,
+) -> int:
+    """Maior ``m.id`` entre movimentações que passam pelos mesmos filtros da listagem."""
+    filt_sql, filt_params = _stock_movements_filter_sql(
+        product_id=product_id,
+        product_search=product_search,
+        movement_type=movement_type,
+        reference=reference,
+        seller_id=seller_id,
+        event_id=event_id,
+    )
+    sql = (
+        "SELECT MAX(m.id) AS mx FROM stock_movements m "
+        "LEFT JOIN products p ON p.id = m.product_id "
+        "LEFT JOIN transactions t ON t.id = m.transaction_id "
+        "WHERE 1=1" + filt_sql
+    )
+    with get_conn() as conn:
+        row = conn.execute(sql, filt_params).fetchone()
+    return int(row["mx"] if row and row["mx"] is not None else 0)
+
+
+def list_stock_movements(
+    *,
+    product_id: Optional[int] = None,
+    product_search: Optional[str] = None,
+    movement_type: Optional[str] = None,
+    reference: Optional[str] = None,
+    seller_id: Optional[int] = None,
+    event_id: Optional[int] = None,
+    limit: int = 200,
+    offset: int = 0,
+) -> List[Dict]:
+    """Lista movimentações. ``reference`` filtra pelo código do pedido (vendas no totem).
+
+    ``product_search`` restringe por nome, descrição, SKU ou ID numérico do produto
+    (subtexto em texto; para trechos só com dígitos também casa ``product_id``).
+
+    ``seller_id`` (quando > 0): apenas linhas de **venda** (`movement_type = 'venda'`)
+    cuja transação tem ``seller_id`` igual ao informado (via JOIN ``transactions``).
+    Demais tipos de movimentação ficam de fora da lista enquanto o filtro estiver ativo.
+
+    ``event_id`` (quando > 0): apenas linhas com ``stock_movements.event_id`` igual ao informado.
+
+    ``offset``: deslocamento para paginação (ordenado por data decrescente).
+    """
+    filt_sql, filt_params = _stock_movements_filter_sql(
+        product_id=product_id,
+        product_search=product_search,
+        movement_type=movement_type,
+        reference=reference,
+        seller_id=seller_id,
+        event_id=event_id,
+    )
+    sql = (
+        "SELECT m.*, p.name AS product_name, p.category AS product_category, "
+        "p.sku AS product_sku, "
+        "evt.name AS event_name, "
+        "evt.badge_color AS event_badge_color, "
+        "t.client_name, t.client_cpf, t.client_zipcode, t.client_address, "
+        "t.client_number, t.client_complement, t.client_city, t.client_state, "
+        "t.payment_method, t.card_installments, t.aut, "
+        "t.client_cro_uf, t.client_cro_numero "
+        "FROM stock_movements m "
+        "LEFT JOIN products p ON p.id = m.product_id "
+        "LEFT JOIN events evt ON evt.id = m.event_id "
+        "LEFT JOIN transactions t ON t.id = m.transaction_id "
+        "WHERE 1=1" + filt_sql
+        + " ORDER BY datetime(m.created_at) DESC, m.id DESC LIMIT ? OFFSET ?"
+    )
+    params = filt_params + [int(limit), max(0, int(offset))]
 
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
@@ -1651,15 +1801,15 @@ def create_transaction(
                  client_number, client_complement, client_city, client_state,
                  seller_id, seller_name, payment_method, card_installments,
                  client_cro_uf, client_cro_numero, client_cro_categoria,
-                 client_cro_validated, client_cro_validation_data)
-            VALUES (?, ?, ?, ?, 'confirmado', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL)
+                 client_cro_validated, client_cro_validation_data, aut, event_id)
+            VALUES (?, ?, ?, ?, 'pendente', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, NULL, NULL, ?)
             """,
             (
                 order_number, created_at, total, items_count,
                 client_name, client_cpf, client_zipcode, client_address,
                 client_number, client_complement, client_city, client_state,
                 seller_id, seller_name, payment_method, card_installments_store,
-                client_cro_uf, client_cro_numero,
+                client_cro_uf, client_cro_numero, event_id,
             ),
         )
         tx_id = cur.lastrowid
@@ -1686,8 +1836,428 @@ def create_transaction(
             ],
         )
 
-        # Registra a saída de estoque para cada produto (agrupado).
-        # Se em evento, usa event_products; senão usa products global.
+        # Guarda normalized/demand/event_id no contexto de retorno para uso posterior.
+        # O estoque só é baixado em confirm_transaction_with_aut().
+
+    return {
+        "id": tx_id,
+        "order_number": order_number,
+        "total": total,
+        "items_count": items_count,
+        "created_at": created_at,
+        "seller_id": seller_id,
+        "seller_name": seller_name,
+        "payment_method": payment_method,
+        "card_installments": card_installments_store,
+        "status": "pendente",
+        # Metadados internos necessários para confirm_transaction_with_aut().
+        "_normalized": normalized,
+        "_demand": demand,
+        "_event_id": event_id,
+        "_created_by": created_by,
+    }
+
+
+def _pending_tx_merge_client_field(
+    incoming: Optional[str],
+    existing: Optional[str],
+) -> Optional[str]:
+    """PATCH de pedido pendente: preserva texto já gravado quando o payload omite o campo.
+
+    Evita apagar dados do cliente quando o front envia ``client: {}`` (ex.: ``sessionStorage``
+    vazio na tela de AUT retomada ou em outra aba).
+    """
+    if incoming is None:
+        return existing
+    stripped = str(incoming).strip()
+    if not stripped:
+        return existing
+    return stripped
+
+
+def update_pending_transaction(
+    tx_id: int,
+    *,
+    seller_id: int,
+    items: Iterable[Dict],
+    client_name: Optional[str] = None,
+    client_cpf: Optional[str] = None,
+    client_zipcode: Optional[str] = None,
+    client_address: Optional[str] = None,
+    client_number: Optional[str] = None,
+    client_complement: Optional[str] = None,
+    client_city: Optional[str] = None,
+    client_state: Optional[str] = None,
+    payment_method: Optional[str] = None,
+    card_installments: Optional[int] = None,
+    client_cro_uf: Optional[str] = None,
+    client_cro_numero: Optional[str] = None,
+) -> Dict:
+    """Atualiza um pedido **pendente** (itens, totais, cliente e pagamento) sem baixar estoque.
+
+    Mantém ``order_number``, ``created_at``, ``seller_*`` e ``event_id`` da transação original.
+    Usado ao retomar o checkout após alterações no carrinho ou na forma de pagamento.
+
+    Campos ``client_*`` e CRO: valores omitidos ou em branco no PATCH **não apagam** dados já
+    gravados (merge com a linha atual), para suportar fluxos sem ``sessionStorage`` na tela de AUT.
+    """
+    normalized: List[Dict] = []
+    for raw in items or []:
+        try:
+            qty = int(raw.get("quantidade", 0) or 0)
+        except (TypeError, ValueError):
+            qty = 0
+        if qty <= 0:
+            continue
+        try:
+            price = float(raw.get("preco", 0) or 0)
+        except (TypeError, ValueError):
+            price = 0.0
+
+        pid_raw = raw.get("id")
+        try:
+            product_id = int(pid_raw) if pid_raw is not None else None
+        except (TypeError, ValueError):
+            product_id = None
+
+        sku_in = raw.get("sku")
+        product_sku: Optional[str] = None
+        if sku_in is not None and str(sku_in).strip():
+            product_sku = str(sku_in).strip()
+
+        name = str(raw.get("nome") or "Produto sem nome")
+        normalized.append(
+            {
+                "product_id": product_id,
+                "product_id_str": str(pid_raw) if pid_raw is not None else None,
+                "product_name": name,
+                "product_sku": product_sku,
+                "category": raw.get("categoria"),
+                "unit_price": price,
+                "quantity": qty,
+                "subtotal": round(price * qty, 2),
+            }
+        )
+
+    if not normalized:
+        raise ValueError("Nenhum item válido na transação.")
+
+    total = round(sum(i["subtotal"] for i in normalized), 2)
+    items_count = sum(i["quantity"] for i in normalized)
+    card_installments_store = _normalize_card_installments_for_db(
+        payment_method,
+        total,
+        card_installments if card_installments is not None else 1,
+    )
+
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM transactions WHERE id = ?", (int(tx_id),)
+        ).fetchone()
+        if row is None:
+            raise ValueError("Transação não encontrada.")
+        tx_row = dict(row)
+        if str(tx_row.get("status") or "").lower() != "pendente":
+            raise ValueError("Somente pedidos pendentes podem ser atualizados.")
+        if int(tx_row.get("seller_id") or 0) != int(seller_id):
+            raise ValueError("Você não pode alterar esta transação.")
+
+        ev_raw = tx_row.get("event_id")
+        try:
+            event_id = int(ev_raw) if ev_raw is not None else None
+        except (TypeError, ValueError):
+            event_id = None
+        if event_id is not None and event_id <= 0:
+            event_id = None
+
+        pids = {i["product_id"] for i in normalized if i["product_id"] is not None}
+        sku_by_id: Dict[int, str] = {}
+        if pids:
+            placeholders = ",".join("?" * len(pids))
+            for r in conn.execute(
+                f"SELECT id, sku FROM products WHERE id IN ({placeholders})",
+                list(pids),
+            ).fetchall():
+                sku_by_id[int(r["id"])] = (r["sku"] or "").strip() or _default_sku_for_id(
+                    int(r["id"])
+                )
+        for i in normalized:
+            if i["product_id"] is not None and not (i.get("product_sku") or "").strip():
+                i["product_sku"] = sku_by_id.get(i["product_id"])
+            elif (i.get("product_sku") or "").strip():
+                i["product_sku"] = str(i["product_sku"]).strip()
+
+        demand: Dict[int, int] = {}
+        for i in normalized:
+            if i["product_id"] is None:
+                continue
+            demand[i["product_id"]] = demand.get(i["product_id"], 0) + i["quantity"]
+
+        if event_id is not None:
+            for pid, qty in demand.items():
+                ep = conn.execute(
+                    """
+                    SELECT p.name, ep.stock
+                      FROM event_products ep
+                      JOIN products p ON p.id = ep.product_id
+                     WHERE ep.event_id = ? AND ep.product_id = ?
+                    """,
+                    (int(event_id), pid),
+                ).fetchone()
+                if ep is None:
+                    raise ValueError(
+                        f"Produto {pid} não está disponível neste evento."
+                    )
+                if int(ep["stock"] or 0) < qty:
+                    raise ValueError(
+                        f"Estoque insuficiente para '{ep['name']}' no evento: "
+                        f"disponível {int(ep['stock'] or 0)}, pedido {qty}."
+                    )
+        else:
+            for pid, qty in demand.items():
+                pr = conn.execute(
+                    "SELECT name, stock FROM products WHERE id = ?", (pid,)
+                ).fetchone()
+                if pr is None:
+                    raise ValueError(f"Produto {pid} não encontrado no catálogo.")
+                if int(pr["stock"] or 0) < qty:
+                    raise ValueError(
+                        f"Estoque insuficiente para '{pr['name']}': "
+                        f"disponível {int(pr['stock'] or 0)}, pedido {qty}."
+                    )
+
+        chk = conn.execute(
+            """
+            SELECT 1 FROM transactions
+             WHERE id = ? AND status = 'pendente' AND seller_id = ?
+            """,
+            (int(tx_id), int(seller_id)),
+        ).fetchone()
+        if chk is None:
+            raise ValueError("Não foi possível atualizar o pedido.")
+
+        merged_name = _pending_tx_merge_client_field(client_name, tx_row.get("client_name"))
+        merged_cpf = _pending_tx_merge_client_field(client_cpf, tx_row.get("client_cpf"))
+        merged_zip = _pending_tx_merge_client_field(client_zipcode, tx_row.get("client_zipcode"))
+        merged_addr = _pending_tx_merge_client_field(client_address, tx_row.get("client_address"))
+        merged_num = _pending_tx_merge_client_field(client_number, tx_row.get("client_number"))
+        merged_comp = _pending_tx_merge_client_field(client_complement, tx_row.get("client_complement"))
+        merged_city = _pending_tx_merge_client_field(client_city, tx_row.get("client_city"))
+        merged_state = _pending_tx_merge_client_field(client_state, tx_row.get("client_state"))
+        merged_cro_n = _pending_tx_merge_client_field(
+            client_cro_numero,
+            tx_row.get("client_cro_numero"),
+        )
+        merged_cro_uf_raw = _pending_tx_merge_client_field(
+            client_cro_uf,
+            tx_row.get("client_cro_uf"),
+        )
+        merged_cro_uf = merged_cro_uf_raw.strip().upper() if merged_cro_uf_raw else None
+
+        conn.execute(
+            """
+            UPDATE transactions
+               SET total = ?, items_count = ?,
+                   client_name = ?, client_cpf = ?, client_zipcode = ?, client_address = ?,
+                   client_number = ?, client_complement = ?, client_city = ?, client_state = ?,
+                   payment_method = ?, card_installments = ?,
+                   client_cro_uf = ?, client_cro_numero = ?
+             WHERE id = ? AND status = 'pendente' AND seller_id = ?
+            """,
+            (
+                total,
+                items_count,
+                merged_name,
+                merged_cpf,
+                merged_zip,
+                merged_addr,
+                merged_num,
+                merged_comp,
+                merged_city,
+                merged_state,
+                payment_method,
+                card_installments_store,
+                merged_cro_uf,
+                merged_cro_n,
+                int(tx_id),
+                int(seller_id),
+            ),
+        )
+
+        conn.execute(
+            "DELETE FROM transaction_items WHERE transaction_id = ?",
+            (int(tx_id),),
+        )
+        conn.executemany(
+            """
+            INSERT INTO transaction_items
+                (transaction_id, product_id, product_name, category,
+                 unit_price, quantity, subtotal, product_sku)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    int(tx_id),
+                    i["product_id_str"],
+                    i["product_name"],
+                    i["category"],
+                    i["unit_price"],
+                    i["quantity"],
+                    i["subtotal"],
+                    i.get("product_sku"),
+                )
+                for i in normalized
+            ],
+        )
+
+    return {
+        "id": int(tx_id),
+        "order_number": tx_row["order_number"],
+        "total": total,
+        "items_count": items_count,
+        "created_at": tx_row["created_at"],
+        "seller_id": int(seller_id),
+        "seller_name": tx_row.get("seller_name"),
+        "payment_method": payment_method,
+        "card_installments": card_installments_store,
+        "status": "pendente",
+    }
+
+
+def _event_id_for_aut_confirmation(
+    conn: sqlite3.Connection,
+    tx_row: Dict,
+    demand: Dict[int, int],
+) -> Optional[int]:
+    """Define qual saldo usar na confirmação (evento vs catálogo global).
+
+    Usa ``transactions.event_id`` quando válido. Se estiver ausente/nulo mas o
+    pedido só contém produtos ligados ao **evento ativo do vendedor**, infere o
+    evento — cenário típico de linhas antigas ou falha pontual na persistência,
+    que antes faziam o AUT validar ``products.stock`` enquanto o totem exibia
+    ``event_products.stock``.
+    """
+    raw = tx_row.get("event_id")
+    try:
+        eid = int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        eid = None
+    if eid is not None and eid <= 0:
+        eid = None
+    if eid is not None or not demand:
+        return eid
+
+    sid_raw = tx_row.get("seller_id")
+    if sid_raw is None:
+        return None
+    try:
+        sid = int(sid_raw)
+    except (TypeError, ValueError):
+        return None
+
+    ev_row = conn.execute(
+        """
+        SELECT e.id
+          FROM event_sellers es
+          JOIN events e ON e.id = es.event_id
+         WHERE es.seller_id = ? AND e.active = 1
+         ORDER BY es.added_at DESC
+         LIMIT 1
+        """,
+        (sid,),
+    ).fetchone()
+    if ev_row is None:
+        return None
+
+    candidate = int(ev_row["id"])
+    for pid in demand:
+        hit = conn.execute(
+            "SELECT 1 FROM event_products WHERE event_id = ? AND product_id = ?",
+            (candidate, int(pid)),
+        ).fetchone()
+        if hit is None:
+            return None
+    return candidate
+
+
+def confirm_transaction_with_aut(tx_id: int, aut: str, *, created_by: str = "totem") -> Dict:
+    """Confirma uma transação pendente: salva o AUT, baixa o estoque e muda status.
+
+    Deve ser chamada com o ``tx_id`` retornado por ``create_transaction``.
+    Levanta ``ValueError`` se a transação não existir, já estiver confirmada/cancelada
+    ou o AUT for inválido.
+    """
+    aut_clean = (aut or "").strip()
+    if not aut_clean:
+        raise ValueError("O código AUT não pode estar vazio.")
+
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM transactions WHERE id = ?", (tx_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError("Transação não encontrada.")
+        if row["status"] != "pendente":
+            raise ValueError("Esta transação já foi processada e não pode ser alterada.")
+
+        tx_row = dict(row)
+
+        # Reconstrói demand a partir dos itens gravados.
+        items_rows = conn.execute(
+            "SELECT product_id, quantity FROM transaction_items WHERE transaction_id = ?",
+            (tx_id,),
+        ).fetchall()
+        demand: Dict[int, int] = {}
+        for it in items_rows:
+            pid_raw = it["product_id"]
+            try:
+                pid = int(pid_raw)
+            except (TypeError, ValueError):
+                continue
+            demand[pid] = demand.get(pid, 0) + int(it["quantity"] or 0)
+
+        event_id = _event_id_for_aut_confirmation(conn, tx_row, demand)
+        if event_id is not None and tx_row.get("event_id") is None:
+            conn.execute(
+                "UPDATE transactions SET event_id = ? WHERE id = ?",
+                (int(event_id), int(tx_id)),
+            )
+
+        order_number = row["order_number"]
+
+        # Verifica estoque antes de baixar (pode ter mudado desde o prepare).
+        if event_id is not None:
+            for pid, qty in demand.items():
+                ep = conn.execute(
+                    """
+                    SELECT p.name, ep.stock
+                      FROM event_products ep
+                      JOIN products p ON p.id = ep.product_id
+                     WHERE ep.event_id = ? AND ep.product_id = ?
+                    """,
+                    (int(event_id), pid),
+                ).fetchone()
+                if ep is None:
+                    raise ValueError(f"Produto {pid} não está disponível neste evento.")
+                if int(ep["stock"] or 0) < qty:
+                    raise ValueError(
+                        f"Estoque insuficiente para '{ep['name']}' no evento: "
+                        f"disponível {int(ep['stock'] or 0)}, pedido {qty}."
+                    )
+        else:
+            for pid, qty in demand.items():
+                pr = conn.execute(
+                    "SELECT name, stock FROM products WHERE id = ?", (pid,)
+                ).fetchone()
+                if pr is None:
+                    raise ValueError(f"Produto {pid} não encontrado no catálogo.")
+                if int(pr["stock"] or 0) < qty:
+                    raise ValueError(
+                        f"Estoque insuficiente para '{pr['name']}': "
+                        f"disponível {int(pr['stock'] or 0)}, pedido {qty}."
+                    )
+
+        # Baixa estoque e registra movimentações.
         if event_id is not None:
             for pid, qty in demand.items():
                 _apply_event_movement(
@@ -1714,17 +2284,143 @@ def create_transaction(
                     created_by=created_by,
                 )
 
+        conn.execute(
+            "UPDATE transactions SET status = 'confirmado', aut = ? WHERE id = ?",
+            (aut_clean, tx_id),
+        )
+
     return {
         "id": tx_id,
         "order_number": order_number,
-        "total": total,
-        "items_count": items_count,
-        "created_at": created_at,
-        "seller_id": seller_id,
-        "seller_name": seller_name,
-        "payment_method": payment_method,
-        "card_installments": card_installments_store,
+        "aut": aut_clean,
+        "status": "confirmado",
     }
+
+
+def get_pending_transaction_if_owned(transaction_id: int, seller_id: int) -> Optional[Dict]:
+    """Retorna a linha mínima da transação **pendente** se pertencer ao vendedor."""
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT id, order_number, status, seller_id
+              FROM transactions
+             WHERE id = ? AND seller_id = ? AND status = 'pendente'
+            """,
+            (int(transaction_id), int(seller_id)),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_pending_transaction_restore_payload(tx_id: int, seller_id: int) -> Optional[Dict]:
+    """Monta carrinho + dados de cliente (sessionStorage) para retomar checkout de um pedido pendente."""
+    tx = get_transaction(int(tx_id))
+    if not tx:
+        return None
+    if int(tx.get("seller_id") or 0) != int(seller_id):
+        return None
+    if str(tx.get("status") or "").lower() != "pendente":
+        return None
+
+    event_raw = tx.get("event_id")
+    event_id = int(event_raw) if event_raw is not None else None
+
+    cart_items: List[Dict] = []
+    with get_conn() as conn:
+        for it in tx.get("items") or []:
+            pid_raw = it.get("product_id")
+            try:
+                pid = int(pid_raw)
+            except (TypeError, ValueError):
+                continue
+            pr = conn.execute(
+                """
+                SELECT id, sku, name, category, price, image, stock, active
+                  FROM products
+                 WHERE id = ?
+                """,
+                (pid,),
+            ).fetchone()
+            if pr is None:
+                continue
+            qty = int(it.get("quantity") or 0)
+            if qty <= 0:
+                continue
+            imagem = pr["image"] or ""
+            if event_id is not None:
+                ep = conn.execute(
+                    """
+                    SELECT stock FROM event_products
+                     WHERE event_id = ? AND product_id = ?
+                    """,
+                    (int(event_id), pid),
+                ).fetchone()
+                estoque = int(ep["stock"] or 0) if ep else 0
+            else:
+                estoque = int(pr["stock"] or 0)
+
+            cart_items.append(
+                {
+                    "id": pid,
+                    "sku": (pr["sku"] or "").strip(),
+                    "nome": pr["name"],
+                    "categoria": pr["category"] or "",
+                    "preco": float(pr["price"] or 0),
+                    "imagem": imagem,
+                    "estoque": estoque,
+                    "quantidade": qty,
+                }
+            )
+
+    pm = (tx.get("payment_method") or "cartao").strip().lower()
+    if pm not in ("pix", "cartao"):
+        pm = "cartao"
+    installments_raw = tx.get("card_installments")
+    try:
+        installments = max(1, int(installments_raw))
+    except (TypeError, ValueError):
+        installments = 1
+
+    client_payload = {
+        "name": (tx.get("client_name") or "").strip(),
+        "cpf": (tx.get("client_cpf") or "").strip(),
+        "cro_uf": (tx.get("client_cro_uf") or "").strip(),
+        "cro_numero": (tx.get("client_cro_numero") or "").strip(),
+        "zipcode": (tx.get("client_zipcode") or "").strip(),
+        "address": (tx.get("client_address") or "").strip(),
+        "number": (tx.get("client_number") or "").strip(),
+        "complement": (tx.get("client_complement") or "").strip(),
+        "city": (tx.get("client_city") or "").strip(),
+        "state": (tx.get("client_state") or "").strip(),
+        "payment_method": pm,
+        "installments": installments,
+    }
+
+    return {
+        "transaction_id": int(tx["id"]),
+        "order_number": tx.get("order_number"),
+        "cart_items": cart_items,
+        "client_data": client_payload,
+    }
+
+
+def cancel_pending_transaction_for_seller(tx_id: int, seller_id: int) -> Dict:
+    """Marca uma transação **pendente** como ``cancelado`` (somente o vendedor dono)."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, seller_id, status FROM transactions WHERE id = ?",
+            (int(tx_id),),
+        ).fetchone()
+        if row is None:
+            raise ValueError("Transação não encontrada.")
+        if int(row["seller_id"] or 0) != int(seller_id):
+            raise ValueError("Você não pode alterar esta transação.")
+        if str(row["status"] or "").lower() != "pendente":
+            raise ValueError("Somente pedidos pendentes podem ser descartados.")
+        conn.execute(
+            "UPDATE transactions SET status = 'cancelado' WHERE id = ?",
+            (int(tx_id),),
+        )
+    return {"id": int(tx_id), "status": "cancelado"}
 
 
 def _items_for(conn: sqlite3.Connection, tx_id: int) -> List[Dict]:
@@ -1753,7 +2449,10 @@ def list_transactions(limit: int = 200, seller_id: Optional[int] = None) -> List
         tx_rows = conn.execute(
             f"""
             SELECT id, order_number, created_at, total, items_count, status,
-                   seller_id, seller_name, payment_method, card_installments
+                   seller_id, seller_name, payment_method, card_installments, aut,
+                   client_name, client_cpf, client_zipcode, client_address,
+                   client_number, client_complement, client_city, client_state,
+                   client_cro_uf, client_cro_numero
               FROM transactions
              {where}
              ORDER BY datetime(created_at) DESC, id DESC
@@ -1761,6 +2460,170 @@ def list_transactions(limit: int = 200, seller_id: Optional[int] = None) -> List
             """,
             params,
         ).fetchall()
+        results: List[Dict] = []
+        for tx in tx_rows:
+            tx_dict = dict(tx)
+            tx_dict["items"] = _items_for(conn, tx["id"])
+            results.append(tx_dict)
+        return results
+
+
+def _transactions_event_filter_sql_params(
+    event_id: int,
+    *,
+    seller_id: Optional[int] = None,
+    order_search: Optional[str] = None,
+    status: Optional[str] = None,
+) -> Tuple[str, List]:
+    """Trecho ``WHERE ...`` (sem a palavra-chave) + parâmetros para transações do evento."""
+    parts = ["t.event_id = ?"]
+    params: List = [int(event_id)]
+    if seller_id is not None and int(seller_id) > 0:
+        parts.append("COALESCE(t.seller_id, -1) = ?")
+        params.append(int(seller_id))
+    ref = _normalize_order_reference(order_search)
+    if ref:
+        parts.append(
+            "(t.order_number IS NOT NULL AND INSTR(LOWER(t.order_number), LOWER(?)) > 0)"
+        )
+        params.append(ref)
+    st = (status or "").strip().lower()
+    if st and st != "todos" and st in ("confirmado", "pendente", "cancelado"):
+        parts.append("LOWER(TRIM(COALESCE(t.status, ''))) = ?")
+        params.append(st)
+    return " AND ".join(parts), params
+
+
+def count_transactions_for_event(
+    event_id: int,
+    *,
+    seller_id: Optional[int] = None,
+    order_search: Optional[str] = None,
+    status: Optional[str] = None,
+) -> int:
+    """Conta transações ligadas ao ``event_id`` (coluna ``transactions.event_id``)."""
+    wh, params = _transactions_event_filter_sql_params(
+        event_id,
+        seller_id=seller_id,
+        order_search=order_search,
+        status=status,
+    )
+    sql = f"SELECT COUNT(*) AS c FROM transactions t WHERE {wh}"
+    with get_conn() as conn:
+        row = conn.execute(sql, params).fetchone()
+    return int(row["c"] if row else 0)
+
+
+def list_transactions_for_event(
+    event_id: int,
+    *,
+    seller_id: Optional[int] = None,
+    order_search: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 25,
+    offset: int = 0,
+) -> List[Dict]:
+    """Lista transações do evento com itens (mesmo formato que ``list_transactions``)."""
+    wh, params = _transactions_event_filter_sql_params(
+        event_id,
+        seller_id=seller_id,
+        order_search=order_search,
+        status=status,
+    )
+    lim = max(1, int(limit))
+    off = max(0, int(offset))
+    sql = f"""
+        SELECT id, order_number, created_at, total, items_count, status,
+               seller_id, seller_name, payment_method, card_installments, aut,
+               client_name, client_cpf, client_zipcode, client_address,
+               client_number, client_complement, client_city, client_state,
+               client_cro_uf, client_cro_numero
+          FROM transactions t
+         WHERE {wh}
+         ORDER BY datetime(t.created_at) DESC, t.id DESC
+         LIMIT ? OFFSET ?
+    """
+    qparams = params + [lim, off]
+    with get_conn() as conn:
+        tx_rows = conn.execute(sql, qparams).fetchall()
+        results: List[Dict] = []
+        for tx in tx_rows:
+            tx_dict = dict(tx)
+            tx_dict["items"] = _items_for(conn, tx["id"])
+            results.append(tx_dict)
+        return results
+
+
+def _transactions_seller_scope_filter_sql_params(
+    seller_id: int,
+    *,
+    order_search: Optional[str] = None,
+    status: Optional[str] = None,
+) -> Tuple[str, List]:
+    """Trecho ``WHERE ...`` para transações de um único vendedor (qualquer ``event_id``)."""
+    parts = ["t.seller_id = ?"]
+    params: List = [int(seller_id)]
+    ref = _normalize_order_reference(order_search)
+    if ref:
+        parts.append(
+            "(t.order_number IS NOT NULL AND INSTR(LOWER(t.order_number), LOWER(?)) > 0)"
+        )
+        params.append(ref)
+    st = (status or "").strip().lower()
+    if st and st != "todos" and st in ("confirmado", "pendente", "cancelado"):
+        parts.append("LOWER(TRIM(COALESCE(t.status, ''))) = ?")
+        params.append(st)
+    return " AND ".join(parts), params
+
+
+def count_transactions_for_seller(
+    seller_id: int,
+    *,
+    order_search: Optional[str] = None,
+    status: Optional[str] = None,
+) -> int:
+    """Conta transações em que ``seller_id`` coincide (catálogo global / sem filtro de evento)."""
+    wh, params = _transactions_seller_scope_filter_sql_params(
+        int(seller_id),
+        order_search=order_search,
+        status=status,
+    )
+    sql = f"SELECT COUNT(*) AS c FROM transactions t WHERE {wh}"
+    with get_conn() as conn:
+        row = conn.execute(sql, params).fetchone()
+    return int(row["c"] if row else 0)
+
+
+def list_transactions_for_seller(
+    seller_id: int,
+    *,
+    order_search: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 25,
+    offset: int = 0,
+) -> List[Dict]:
+    """Lista transações do vendedor com itens (mesmo formato que ``list_transactions_for_event``)."""
+    wh, params = _transactions_seller_scope_filter_sql_params(
+        int(seller_id),
+        order_search=order_search,
+        status=status,
+    )
+    lim = max(1, int(limit))
+    off = max(0, int(offset))
+    sql = f"""
+        SELECT id, order_number, created_at, total, items_count, status,
+               seller_id, seller_name, payment_method, card_installments, aut,
+               client_name, client_cpf, client_zipcode, client_address,
+               client_number, client_complement, client_city, client_state,
+               client_cro_uf, client_cro_numero
+          FROM transactions t
+         WHERE {wh}
+         ORDER BY datetime(t.created_at) DESC, t.id DESC
+         LIMIT ? OFFSET ?
+    """
+    qparams = params + [lim, off]
+    with get_conn() as conn:
+        tx_rows = conn.execute(sql, qparams).fetchall()
         results: List[Dict] = []
         for tx in tx_rows:
             tx_dict = dict(tx)
@@ -2185,12 +3048,22 @@ def _event_products_admin_filter_clause(
     parts: List[str] = []
     params: List = []
     if q:
-        like = f"%{q.lower()}%"
-        parts.append(
-            "(LOWER(p.name) LIKE ? OR LOWER(COALESCE(p.description, '')) LIKE ? "
-            "OR LOWER(COALESCE(p.sku, '')) LIKE ?)"
-        )
-        params.extend([like, like, like])
+        qs = q.strip()
+        like = f"%{qs.lower()}%"
+        or_parts = [
+            "LOWER(p.name) LIKE ?",
+            "LOWER(COALESCE(p.description, '')) LIKE ?",
+            "LOWER(COALESCE(p.sku, '')) LIKE ?",
+        ]
+        or_params: List = [like, like, like]
+        id_part = qs.lstrip("#").strip()
+        if id_part.isdigit():
+            or_parts.append("p.id = ?")
+            or_params.append(int(id_part))
+            or_parts.append("INSTR(CAST(p.id AS TEXT), ?) > 0")
+            or_params.append(id_part)
+        parts.append("(" + " OR ".join(or_parts) + ")")
+        params.extend(or_params)
     cat = (categoria or "todos").strip().lower()
     if cat != "todos":
         parts.append("LOWER(p.category) = LOWER(?)")
@@ -2250,6 +3123,7 @@ def list_event_products_slice(
                 p.name,
                 p.sku,
                 p.category,
+                p.description,
                 p.image,
                 p.price,
                 p.active         AS product_active
@@ -2264,6 +3138,51 @@ def list_event_products_slice(
             (event_id, *params, limit, offset),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+def _event_products_slice_row_to_client(row: Dict) -> Dict:
+    """Converte linha de ``list_event_products_slice`` para o formato do catálogo/vendedor."""
+    pid = int(row["product_id"])
+    sku_val = row.get("sku")
+    sku = (sku_val or "").strip() if sku_val is not None else ""
+    if not sku:
+        sku = _default_sku_for_id(pid)
+    estoque = int(row["stock"] or 0)
+    estoque_minimo = int(row["min_stock"] or 0)
+    return {
+        "id": pid,
+        "sku": sku,
+        "nome": row["name"],
+        "categoria": row["category"],
+        "descricao": (row.get("description") or ""),
+        "preco": float(row["price"] or 0),
+        "imagem": row["image"],
+        "estoque": estoque,
+        "estoque_minimo": estoque_minimo,
+        "ativo": bool(row["product_active"]),
+        "abaixo_minimo": estoque_minimo > 0 and estoque < estoque_minimo,
+        "sem_estoque": estoque <= 0,
+    }
+
+
+def list_event_products_filtered_for_client(
+    event_id: int,
+    q: Optional[str],
+    status: str,
+    *,
+    limit: int,
+    offset: int,
+) -> List[Dict]:
+    """Página de produtos do evento no formato cliente (painel vendedor)."""
+    rows = list_event_products_slice(
+        event_id,
+        q,
+        "todos",
+        status,
+        limit=int(limit),
+        offset=int(offset),
+    )
+    return [_event_products_slice_row_to_client(r) for r in rows]
 
 
 def get_event_stats(event_id: int) -> Dict:
@@ -2619,6 +3538,7 @@ def list_event_stock_movements(
     product_id: Optional[int] = None,
     product_search: Optional[str] = None,
     movement_type: Optional[str] = None,
+    reference: Optional[str] = None,
     seller_id: Optional[int] = None,
     limit: int = 300,
 ) -> List[Dict]:
@@ -2627,15 +3547,21 @@ def list_event_stock_movements(
     ``product_search`` filtra por nome, descrição, SKU ou ID do produto (mesma
     semântica que em ``list_stock_movements``).
 
-    ``seller_id`` (quando > 0): mesmo critério de ``list_stock_movements`` para vendas.
+    ``reference`` filtra pelo código do pedido (campo ``m.reference``, vendas no totem),
+    como em ``list_stock_movements``.
+
+    ``seller_id`` (quando > 0): apenas **vendas** do vendedor indicado
+    (``movement_type = 'venda'`` e ``transactions.seller_id`` coincidente).
+
     """
     sql = (
         "SELECT m.*, p.name AS product_name, p.category AS product_category, "
+        "p.sku AS product_sku, "
         "evt.name AS event_name, "
         "evt.badge_color AS event_badge_color, "
         "t.client_name, t.client_cpf, t.client_zipcode, t.client_address, "
         "t.client_number, t.client_complement, t.client_city, t.client_state, "
-        "t.payment_method, t.card_installments, "
+        "t.payment_method, t.card_installments, t.aut, "
         "t.client_cro_uf, t.client_cro_numero "
         "FROM stock_movements m "
         "LEFT JOIN products p ON p.id = m.product_id "
@@ -2653,10 +3579,17 @@ def list_event_stock_movements(
     frag, extra = _stock_movements_product_search_sql(product_search)
     sql += frag
     params.extend(extra)
+    ref_norm = _normalize_order_reference(reference)
+    if ref_norm:
+        sql += (
+            " AND m.reference IS NOT NULL "
+            "AND INSTR(LOWER(m.reference), LOWER(?)) > 0"
+        )
+        params.append(ref_norm)
     if seller_id is not None and int(seller_id) > 0:
         sql += (
-            " AND (m.movement_type != 'venda' OR "
-            "(m.movement_type = 'venda' AND COALESCE(t.seller_id, -1) = ?))"
+            " AND m.movement_type = 'venda' "
+            "AND COALESCE(t.seller_id, -1) = ?"
         )
         params.append(int(seller_id))
     sql += " ORDER BY datetime(m.created_at) DESC, m.id DESC LIMIT ?"
@@ -2688,7 +3621,7 @@ def list_transactions_summary_for_event_period(
         "SELECT t.id, t.order_number, t.created_at, t.total, t.items_count, t.status, "
         "t.client_name, t.client_cpf, t.client_zipcode, t.client_address, "
         "t.client_number, t.client_complement, t.client_city, t.client_state, "
-        "t.seller_id, t.seller_name, t.payment_method, t.card_installments, "
+        "t.seller_id, t.seller_name, t.payment_method, t.card_installments, t.aut, "
         "t.client_cro_uf, t.client_cro_numero "
         "FROM transactions t "
         "WHERE EXISTS ("
@@ -2721,7 +3654,7 @@ def list_transaction_items_for_event_period(
     cap = max(1, min(int(limit), EXPORT_SALES_ITEMS_CSV_CAP))
     sql = (
         "SELECT ti.id AS item_id, t.id AS transaction_id, t.order_number, t.created_at, "
-        "t.seller_id, t.seller_name, t.payment_method, t.card_installments, "
+        "t.seller_id, t.seller_name, t.payment_method, t.card_installments, t.aut, "
         "ti.product_id, ti.product_name, ti.category, ti.product_sku, "
         "ti.quantity, ti.unit_price, ti.subtotal "
         "FROM transaction_items ti "
@@ -2777,47 +3710,40 @@ def list_event_sellers(event_id: int) -> List[Dict]:
         return [dict(r) for r in rows]
 
 
-def list_sellers_not_in_event(event_id: int) -> List[Dict]:
-    """Retorna vendedores ainda não associados ao evento."""
-    with get_conn() as conn:
-        rows = conn.execute(
-            """
-            SELECT id, name, email, active
-              FROM sellers
-             WHERE active = 1
-               AND id NOT IN (
-                   SELECT seller_id FROM event_sellers WHERE event_id = ?
-               )
-             ORDER BY LOWER(name)
-            """,
-            (int(event_id),),
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-
 def add_seller_to_event(event_id: int, seller_id: int) -> None:
-    """Associa um vendedor ao evento."""
+    """Associa um vendedor ao evento. Falha se o vendedor já estiver em outro evento."""
     now = _now_iso()
+    eid = int(event_id)
+    sid = int(seller_id)
     with get_conn() as conn:
-        existing = conn.execute(
+        existing_same = conn.execute(
             "SELECT 1 FROM event_sellers WHERE event_id = ? AND seller_id = ?",
-            (int(event_id), int(seller_id)),
+            (eid, sid),
         ).fetchone()
-        if existing:
+        if existing_same:
             return
-        conn.execute(
-            "INSERT INTO event_sellers (event_id, seller_id, added_at) VALUES (?, ?, ?)",
-            (int(event_id), int(seller_id), now),
-        )
-
-
-def remove_seller_from_event(event_id: int, seller_id: int) -> None:
-    """Remove a associação de um vendedor com um evento."""
-    with get_conn() as conn:
-        conn.execute(
-            "DELETE FROM event_sellers WHERE event_id = ? AND seller_id = ?",
-            (int(event_id), int(seller_id)),
-        )
+        other = conn.execute(
+            "SELECT event_id FROM event_sellers WHERE seller_id = ? LIMIT 1",
+            (sid,),
+        ).fetchone()
+        if other is not None and int(other["event_id"]) != eid:
+            raise ValueError(
+                "Este vendedor já está associado a outro evento. "
+                "Remova-o desse evento ou altere a designação na ficha do vendedor."
+            )
+        try:
+            conn.execute(
+                "INSERT INTO event_sellers (event_id, seller_id, added_at) VALUES (?, ?, ?)",
+                (eid, sid, now),
+            )
+        except sqlite3.IntegrityError as exc:
+            err = str(exc).lower()
+            if "unique" in err and "seller_id" in err:
+                raise ValueError(
+                    "Este vendedor já está associado a outro evento. "
+                    "Remova-o desse evento ou altere a designação na ficha do vendedor."
+                ) from exc
+            raise
 
 
 def get_seller_admin_event_selection_id(seller_id: int) -> Optional[int]:

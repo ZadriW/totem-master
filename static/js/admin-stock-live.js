@@ -37,123 +37,10 @@
         setTimeout(() => el.remove(), 4500);
     }
 
-    function customerDetails(movement) {
-        if (!movement.has_customer_details) return '';
-        const address = movement.client_address || movement.client_number || movement.client_city
-            ? `${escapeHtml(movement.client_address || '—')}${movement.client_number ? `, ${escapeHtml(movement.client_number)}` : ''}${movement.client_complement ? ` — ${escapeHtml(movement.client_complement)}` : ''}<br>${escapeHtml(movement.client_city || '—')}${movement.client_state ? ` — ${escapeHtml(movement.client_state)}` : ''}`
-            : '—';
-
-        const payLabel = (() => {
-            const v = String(movement.payment_method || '').toLowerCase();
-            if (v === 'pix') return 'PIX';
-            const n = parseInt(String(movement.card_installments ?? ''), 10);
-            if (Number.isFinite(n) && n > 1) return `Cartão em ${n}x`;
-            if (v === 'cartao') return 'Cartão';
-            return '—';
-        })();
-
-        function normalizeCroPedidoLocal(mov) {
-            let c = mov.cro_pedido;
-            const looksGood =
-                c !== null &&
-                c !== undefined &&
-                typeof c === 'object' &&
-                !Array.isArray(c) &&
-                (String(c.uf || '').trim() || String(c.numero_registro || '').trim());
-            if (looksGood) {
-                return c;
-            }
-            const uf = String(mov.client_cro_uf ?? '').trim();
-            const numero_registro = String(mov.client_cro_numero ?? '').trim();
-            if (!uf && !numero_registro) {
-                return null;
-            }
-            return { uf, numero_registro };
-        }
-
-        function croPedidoHtmlLocal(mov) {
-            const c = normalizeCroPedidoLocal(mov);
-            if (!c) return '';
-            let html = '';
-            if (c.uf) {
-                html += `<div class="admin-mov__details-item"><dt>UF (CRO)</dt><dd>${escapeHtml(c.uf)}</dd></div>`;
-            }
-            if (c.numero_registro) {
-                html += `<div class="admin-mov__details-item"><dt>Número do registro (CRO)</dt><dd>${escapeHtml(c.numero_registro)}</dd></div>`;
-            }
-            return html;
-        }
-
-        return `
-            <div class="admin-mov__details" id="details-${escapeHtml(movement.id)}" hidden>
-                <div class="admin-mov__details-content">
-                    <h4 class="admin-mov__details-title">
-                        <i class="fa-solid fa-user" aria-hidden="true"></i>
-                        Dados do cliente (pedido)
-                    </h4>
-                    <dl class="admin-mov__details-list">
-                        <div class="admin-mov__details-item">
-                            <dt>Nome</dt>
-                            <dd>${escapeHtml(movement.client_name || '—')}</dd>
-                        </div>
-                        <div class="admin-mov__details-item">
-                            <dt>CPF</dt>
-                            <dd>${escapeHtml(movement.client_cpf || '—')}</dd>
-                        </div>
-                        <div class="admin-mov__details-item">
-                            <dt>Forma de pagamento</dt>
-                            <dd>${escapeHtml(payLabel)}</dd>
-                        </div>
-                        <div class="admin-mov__details-item">
-                            <dt>CEP</dt>
-                            <dd>${escapeHtml(movement.client_zipcode || '—')}</dd>
-                        </div>
-                        <div class="admin-mov__details-item admin-mov__details-item--wide">
-                            <dt>Endereço</dt>
-                            <dd>${address}</dd>
-                        </div>
-                        ${croPedidoHtmlLocal(movement)}
-                    </dl>
-                </div>
-            </div>
-        `;
-    }
-
-    /** IDs das movimentações com painel de cliente aberto (preserva estado entre polls). */
-    function getExpandedMovementIds(table) {
-        const ids = [];
-        table.querySelectorAll('.admin-mov__details').forEach(panel => {
-            if (!panel.hidden && panel.id && panel.id.startsWith('details-')) {
-                ids.push(panel.id.slice('details-'.length));
-            }
-        });
-        return ids;
-    }
-
-    function applyExpandedMovementIds(table, ids) {
-        if (!ids || !ids.length) return;
-        const idSet = new Set(ids.map(String));
-        idSet.forEach(movId => {
-            const details = document.getElementById(`details-${movId}`);
-            const btn = table.querySelector(`button.admin-mov__toggle[data-toggle="${movId}"]`);
-            if (!details || !btn) return;
-            details.hidden = false;
-            btn.setAttribute('aria-expanded', 'true');
-            const icon = btn.querySelector('i');
-            if (icon) icon.className = 'fa-solid fa-chevron-up';
-        });
-    }
-
     function renderProductMovementRow(movement) {
         const reasonParts = [];
         if (movement.reference) reasonParts.push(`<code>${escapeHtml(movement.reference)}</code>`);
         reasonParts.push(escapeHtml(movement.reason || '-'));
-
-        const toggle = movement.has_customer_details
-            ? `<button type="button" class="admin-mov__toggle" data-toggle="${escapeHtml(movement.id)}" aria-expanded="false" aria-controls="details-${escapeHtml(movement.id)}" aria-label="Exibir ou ocultar dados do cliente">
-                    <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-               </button>`
-            : '';
 
         const receipt = movement.receipt_url
             ? `<a href="${escapeHtml(movement.receipt_url)}" target="_blank" rel="noopener noreferrer" class="admin-mov__note-btn" title="Abrir nota de retirada (${escapeHtml(movement.reference)})" aria-label="Abrir nota de retirada do pedido ${escapeHtml(movement.reference)}">
@@ -169,7 +56,6 @@
                         <span class="admin-badge admin-mov__badge admin-mov__badge--${escapeHtml(movement.movement_type)}">
                             ${escapeHtml(movement.movement_label)}
                         </span>
-                        ${toggle}
                     </span>
                     <span class="admin-table__col--num admin-mov__delta admin-mov__delta--${escapeHtml(movement.delta_kind)}">
                         ${escapeHtml(movement.delta_display)}
@@ -181,13 +67,11 @@
                         ${receipt}
                     </span>
                 </div>
-                ${customerDetails(movement)}
             </div>
         `;
     }
 
     function renderProductMovements(table, movements) {
-        const expandedIds = getExpandedMovementIds(table);
         Array.from(table.children).forEach(child => {
             if (!child.classList.contains('admin-table__head')) child.remove();
         });
@@ -201,45 +85,6 @@
             return;
         }
         table.insertAdjacentHTML('beforeend', movements.map(renderProductMovementRow).join(''));
-        applyExpandedMovementIds(table, expandedIds);
-    }
-
-    function setupProductMovementToggles() {
-        const table = document.querySelector('[data-product-movements]');
-        if (!table || table.dataset.toggleBound === '1') return;
-        table.dataset.toggleBound = '1';
-
-        function closeAllDetails() {
-            table.querySelectorAll('.admin-mov__details').forEach(panel => {
-                panel.hidden = true;
-            });
-            table.querySelectorAll('.admin-mov__toggle').forEach(b => {
-                b.setAttribute('aria-expanded', 'false');
-                const i = b.querySelector('i');
-                if (i) i.className = 'fa-solid fa-chevron-down';
-            });
-        }
-
-        table.addEventListener('click', event => {
-            const btn = event.target.closest('.admin-mov__toggle');
-            if (!btn || !table.contains(btn)) return;
-            const movId = btn.dataset.toggle;
-            const details = document.getElementById(`details-${movId}`);
-            const icon = btn.querySelector('i');
-            if (!details) return;
-
-            const willOpen = details.hidden;
-            if (willOpen) {
-                closeAllDetails();
-                details.hidden = false;
-                if (icon) icon.className = 'fa-solid fa-chevron-up';
-                btn.setAttribute('aria-expanded', 'true');
-            } else {
-                details.hidden = true;
-                if (icon) icon.className = 'fa-solid fa-chevron-down';
-                btn.setAttribute('aria-expanded', 'false');
-            }
-        });
     }
 
     function isEditingLiveStockForm(root) {
@@ -392,7 +237,6 @@
         setInterval(refreshStockList, POLL_MS);
     }
 
-    setupProductMovementToggles();
     setupProductForms();
     setupStockList();
 })();

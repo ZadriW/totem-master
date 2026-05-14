@@ -1,4 +1,6 @@
 {% extends "seller/_layout.html" %}
+{% from "macros/admin_tx_client.html" import admin_tx_client_section %}
+{% from "macros/admin_tx_order_cell.html" import admin_tx_order_cell %}
 
 {% block title %}Dashboard do vendedor - Vendedor | Dental Odonto Master{% endblock %}
 
@@ -120,26 +122,54 @@
         {% if transactions %}
             {% for tx in transactions %}
             <div class="admin-tx" data-tx-id="{{ tx.id }}">
-                <button
-                    type="button"
+                <div
                     class="admin-tx__row"
+                    role="button"
+                    tabindex="0"
                     aria-expanded="false"
                     aria-controls="seller-tx-details-{{ tx.id }}"
                 >
                     <span class="admin-table__col admin-table__col--toggle">
                         <i class="fa-solid fa-chevron-right admin-tx__chevron" aria-hidden="true"></i>
                     </span>
-                    <span class="admin-table__col admin-tx__order"><strong>#{{ tx.order_number }}</strong></span>
+                    {{ admin_tx_order_cell(tx.order_number) }}
                     <span class="admin-table__col">{{ tx.created_at | datahora }}</span>
                     <span class="admin-table__col admin-table__col--num">{{ tx.items_count }}</span>
                     <span class="admin-table__col admin-table__col--num"><strong>{{ tx.total | brl }}</strong></span>
                     <span class="admin-table__col">{{ tx.payment_method | paymethod(tx.card_installments) }}</span>
                     <span class="admin-table__col admin-table__col--num admin-tx__status">
-                        <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else 'neutral' }}">
-                            {{ tx.status }}
+                        <span class="admin-tx__status-stack">
+                            <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else ('warn' if tx.status == 'pendente' else ('danger' if tx.status == 'cancelado' else 'neutral')) }}">
+                                {{ tx.status }}
+                            </span>
+                            {% if tx.status == 'pendente' %}
+                            <a
+                                href="{{ url_for('seller_restore_pending_checkout', tx_id=tx.id) }}"
+                                class="admin-tx__restore-cart"
+                                aria-label="Refazer carrinho e retomar o pagamento deste pedido"
+                                title="Refazer carrinho"
+                            >
+                                <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
+                            </a>
+                            <form
+                                method="post"
+                                action="{{ seller_pending_cancel_url(tx.id) }}"
+                                class="admin-tx__discard-form"
+                                data-confirm="Descartar este pedido pendente? O carrinho não poderá ser refeito por aqui."
+                            >
+                                <button
+                                    type="submit"
+                                    class="admin-tx__discard-cart"
+                                    aria-label="Apagar carrinho e descartar pedido pendente"
+                                    title="Apagar carrinho"
+                                >
+                                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                                </button>
+                            </form>
+                            {% endif %}
                         </span>
                     </span>
-                </button>
+                </div>
 
                 <div class="admin-tx__details" id="seller-tx-details-{{ tx.id }}" hidden>
                     <div class="admin-tx__details-inner">
@@ -170,6 +200,7 @@
                             </div>
                             {% endfor %}
                         </div>
+                        {{ admin_tx_client_section(tx) }}
                         <div class="admin-tx__summary">
                             <div class="admin-tx__summary-row">
                                 <span>Forma de pagamento</span>
@@ -180,6 +211,12 @@
                             <div class="admin-tx__summary-row">
                                 <span>Valor das parcelas</span>
                                 <strong>{{ parcelas_txt }}</strong>
+                            </div>
+                            {% endif %}
+                            {% if tx.aut %}
+                            <div class="admin-tx__summary-row">
+                                <span>AUT</span>
+                                <strong><code class="admin-mov__aut">{{ tx.aut }}</code></strong>
                             </div>
                             {% endif %}
                         </div>

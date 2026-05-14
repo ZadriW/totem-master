@@ -74,7 +74,7 @@
                 {% if not events_for_seller_form %}
                 <p class="admin-field__hint" role="status">Não há eventos cadastrados. <a href="{{ url_for('admin_events') }}">Crie um evento</a> antes de associar vendedores.</p>
                 {% else %}
-                <p class="admin-field__hint">O vendedor passa a operar neste evento (estoque e vendas). Você pode gerenciar vínculos depois na página do evento.</p>
+                <p class="admin-field__hint">O vendedor passa a operar neste evento (estoque e vendas). Cada conta pode estar em <strong>um único</strong> evento; vínculos extras precisam ser removidos antes.</p>
                 {% endif %}
             </div>
             <div class="admin-field">

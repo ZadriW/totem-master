@@ -1,4 +1,6 @@
 {% extends "admin/_layout.html" %}
+{% from "macros/admin_tx_client.html" import admin_tx_client_section %}
+{% from "macros/admin_tx_order_cell.html" import admin_tx_order_cell %}
 
 {% block title %}{{ seller.name }} - Vendedores - Admin | Dental Odonto Master{% endblock %}
 
@@ -152,6 +154,7 @@
                 </select>
                 <p class="admin-field__hint">
                     Define qual evento o vendedor enxerga no painel (vendas, catálogo e estoque do evento).
+                    Cada vendedor pode estar em <strong>no máximo um</strong> evento; alterar aqui substitui vínculos anteriores.
                 </p>
                 {% if fe.event_id %}<p class="admin-field__error" id="detail-seller-event-err">{{ fe.event_id }}</p>{% endif %}
             </div>
@@ -224,13 +227,13 @@
                     <span class="admin-table__col admin-table__col--toggle">
                         <i class="fa-solid fa-chevron-right admin-tx__chevron" aria-hidden="true"></i>
                     </span>
-                    <span class="admin-table__col admin-tx__order"><strong>#{{ tx.order_number }}</strong></span>
+                    {{ admin_tx_order_cell(tx.order_number) }}
                     <span class="admin-table__col">{{ tx.created_at | datahora }}</span>
                     <span class="admin-table__col admin-table__col--num">{{ tx.items_count }}</span>
                     <span class="admin-table__col admin-table__col--num"><strong>{{ tx.total | brl }}</strong></span>
                     <span class="admin-table__col">{{ tx.payment_method | paymethod(tx.card_installments) }}</span>
                     <span class="admin-table__col admin-table__col--num admin-tx__status">
-                        <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else 'neutral' }}">
+                        <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else ('warn' if tx.status == 'pendente' else ('danger' if tx.status == 'cancelado' else 'neutral')) }}">
                             {{ tx.status }}
                         </span>
                     </span>
@@ -265,6 +268,7 @@
                             </div>
                             {% endfor %}
                         </div>
+                        {{ admin_tx_client_section(tx) }}
                         <div class="admin-tx__summary">
                             <div class="admin-tx__summary-row">
                                 <span>Forma de pagamento</span>
@@ -275,6 +279,12 @@
                             <div class="admin-tx__summary-row">
                                 <span>Valor das parcelas</span>
                                 <strong>{{ parcelas_txt }}</strong>
+                            </div>
+                            {% endif %}
+                            {% if tx.aut %}
+                            <div class="admin-tx__summary-row">
+                                <span>AUT</span>
+                                <strong><code class="admin-mov__aut">{{ tx.aut }}</code></strong>
                             </div>
                             {% endif %}
                             <div class="admin-tx__summary-row admin-tx__summary-row--total">

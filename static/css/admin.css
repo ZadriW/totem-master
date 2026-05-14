@@ -248,15 +248,6 @@
     border-bottom: none;
 }
 
-/* Tabela de vendedores na página do evento (sem coluna Evento) */
-.admin-sellers.admin-sellers--event-detail .admin-sellers__row {
-    grid-template-columns: minmax(200px, 1.55fr) 0.62fr 0.52fr 0.72fr 0.85fr 0.52fr;
-}
-
-.admin-sellers.admin-sellers--event-detail .admin-table__head.admin-sellers__row {
-    grid-template-columns: minmax(200px, 1.55fr) 0.62fr 0.52fr 0.72fr 0.85fr 0.52fr;
-}
-
 .admin-sellers__person {
     display: flex;
     flex-direction: column;
@@ -904,6 +895,147 @@
     letter-spacing: 0.02em;
 }
 
+.admin-tx__order-inner {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+}
+
+.admin-tx__copy-order {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition:
+        color var(--transition),
+        background var(--transition),
+        transform 0.12s ease;
+}
+
+.admin-tx__copy-order:hover {
+    color: var(--color-primary);
+    background: rgba(14, 22, 122, 0.08);
+}
+
+.admin-tx__copy-order:active {
+    transform: scale(0.94);
+}
+
+.admin-tx__copy-order:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.admin-tx__copy-order i {
+    font-size: 12px;
+    line-height: 1;
+}
+
+.admin-tx__copy-order.is-done {
+    color: #0c8a4d;
+    background: rgba(15, 157, 88, 0.12);
+}
+
+.admin-tx__status-stack {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-width: 100%;
+}
+
+.admin-tx__restore-cart {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    color: var(--color-primary);
+    background: rgba(14, 22, 122, 0.07);
+    text-decoration: none;
+    transition: background var(--transition), color var(--transition),
+        transform var(--transition);
+}
+
+.admin-tx__restore-cart:hover {
+    background: rgba(14, 22, 122, 0.13);
+    color: var(--color-primary-dark);
+}
+
+.admin-tx__restore-cart:active {
+    transform: scale(0.96);
+}
+
+.admin-tx__restore-cart:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.admin-tx__restore-cart i {
+    font-size: 13px;
+}
+
+.admin-tx__discard-form {
+    display: inline-flex;
+    margin: 0;
+    padding: 0;
+}
+
+.admin-tx__discard-cart {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    font: inherit;
+    color: #c62828;
+    background: rgba(198, 40, 40, 0.08);
+    transition: background var(--transition), color var(--transition),
+        transform var(--transition);
+}
+
+.admin-tx__discard-cart:hover {
+    background: rgba(198, 40, 40, 0.14);
+    color: #b71c1c;
+}
+
+.admin-tx__discard-cart:active {
+    transform: scale(0.96);
+}
+
+.admin-tx__discard-cart:focus-visible {
+    outline: 2px solid #c62828;
+    outline-offset: 2px;
+}
+
+.admin-tx__discard-cart i {
+    font-size: 13px;
+}
+
+.admin-tx__row[role="button"]:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
 .admin-badge { 
     display: inline-block;
     padding: 4px 10px;
@@ -990,6 +1122,54 @@
     color: var(--color-text);
 }
 
+.admin-tx__items + .admin-tx__details-title {
+    margin-top: 22px;
+}
+
+.admin-tx__client {
+    background: var(--color-surface);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    padding: 14px 16px;
+}
+
+.admin-tx__client-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px 22px;
+    margin: 0;
+}
+
+.admin-tx__client-item {
+    margin: 0;
+}
+
+.admin-tx__client-item dt {
+    margin: 0 0 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+}
+
+.admin-tx__client-item dd {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text);
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.admin-tx__client-item--wide {
+    grid-column: 1 / -1;
+}
+
+.admin-tx__client-cro-num {
+    font-variant-numeric: tabular-nums;
+}
+
 .admin-tx__summary {
     margin-top: 14px;
     display: flex;
@@ -1025,6 +1205,20 @@
     font-weight: 800;
     color: var(--color-primary);
     font-variant-numeric: tabular-nums;
+}
+
+/* AUT — código de autorização da maquininha */
+.admin-mov__aut {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 2px 7px;
+    color: var(--color-text);
+    user-select: all;
 }
 
 .admin-empty {
@@ -1989,6 +2183,15 @@
     font-size: 11px;
 }
 
+.admin-mov__product small code.admin-mov__sku {
+    font-size: inherit;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(14, 22, 122, 0.07);
+    color: var(--color-text);
+}
+
 .admin-mov__reason {
     color: var(--color-text-muted);
     font-size: 13px;
@@ -2531,13 +2734,6 @@
         font-size: 13px;
     }
 
-    .admin-mov__wrapper .admin-mov__details {
-        border-top: 1px solid var(--color-border);
-    }
-    .admin-mov__wrapper .admin-mov__details-content {
-        padding: 12px 14px 14px;
-    }
-
     /* Página do produto: 6 colunas dentro do wrapper (mesmo grid que linha direta) */
     .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) {
         margin-bottom: 0;
@@ -2997,6 +3193,9 @@
     }
 
     .admin-tx__details-inner { padding: 16px; }
+    .admin-tx__client-grid {
+        grid-template-columns: 1fr;
+    }
     .admin-tx__items-head { display: none; }
     .admin-tx__items-row {
         grid-template-columns: 1fr auto;
@@ -3015,41 +3214,8 @@
     .admin-tx__items-row > :nth-child(6) { grid-column: 2; }
 }
 
-/* ========================================================================
-   Detalhes do cliente em movimentações de venda
-   ======================================================================== */
 .admin-mov__wrapper {
     position: relative;
-}
-
-.admin-mov__toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    margin-left: 8px;
-    border: none;
-    border-radius: var(--radius-md);
-    background: transparent;
-    color: var(--color-primary);
-    font-size: 12px;
-    cursor: pointer;
-    transition: background 0.12s, transform 0.1s;
-    vertical-align: middle;
-}
-
-.admin-mov__toggle:hover {
-    background: rgba(14, 22, 122, 0.08);
-}
-
-.admin-mov__toggle:active {
-    transform: scale(0.95);
-}
-
-.admin-mov__toggle i {
-    transition: transform 0.2s ease;
 }
 
 .admin-mov__user-cell {
@@ -3083,91 +3249,6 @@
 
 .admin-mov__note-btn:active {
     transform: scale(0.95);
-}
-
-.admin-mov__details {
-    margin-top: 0;
-    padding: 0;
-    overflow-x: auto;
-    overflow-y: visible;
-}
-
-.admin-mov__details[hidden] {
-    display: none;
-}
-
-.admin-mov__details-content {
-    padding: 20px 24px;
-    background: rgba(14, 22, 122, 0.02);
-    border-top: 1px solid var(--color-border);
-}
-
-.admin-mov__details-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--color-text);
-    margin-bottom: 16px;
-}
-
-.admin-mov__details-title i {
-    color: var(--color-primary);
-}
-
-.admin-mov__details-list {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: stretch;
-    gap: 16px 24px;
-    margin: 0;
-}
-
-.admin-mov__details-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex: 1 1 160px;
-    min-width: min(140px, 100%);
-    max-width: 100%;
-}
-
-.admin-mov__details-item--wide {
-    flex: 1 1 100%;
-    min-width: 100%;
-}
-
-.admin-mov__details-item dt {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--color-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-}
-
-.admin-mov__details-item dd {
-    margin: 0;
-    font-size: 14px;
-    color: var(--color-text);
-    line-height: 1.5;
-}
-
-@media (max-width: 900px) {
-    .admin-mov__details-content {
-        padding: 16px;
-    }
-    .admin-mov__details-list {
-        flex-direction: column;
-        gap: 14px;
-    }
-    .admin-mov__details-item,
-    .admin-mov__details-item--wide {
-        flex: 1 1 auto;
-        min-width: 0;
-        width: 100%;
-    }
 }
 
 /* ======================================================================
@@ -3257,35 +3338,6 @@
         color: var(--color-text-muted);
     }
     .admin-sellers__row > :nth-child(7) {
-        grid-area: action;
-        justify-self: end;
-    }
-
-    /* Vendedores do evento: 6 colunas no desktop; no mobile sem linha “eventos” */
-    .admin-sellers.admin-sellers--event-detail .admin-sellers__row {
-        grid-template-areas:
-            "person status"
-            "sales revenue"
-            "login action";
-    }
-    .admin-sellers.admin-sellers--event-detail .admin-sellers__row > :nth-child(2) {
-        grid-area: status;
-        justify-self: end;
-    }
-    .admin-sellers.admin-sellers--event-detail .admin-sellers__row > :nth-child(3) {
-        grid-area: sales;
-        justify-self: start;
-    }
-    .admin-sellers.admin-sellers--event-detail .admin-sellers__row > :nth-child(4) {
-        grid-area: revenue;
-        justify-self: end;
-    }
-    .admin-sellers.admin-sellers--event-detail .admin-sellers__row > :nth-child(5) {
-        grid-area: login;
-        font-size: 12px;
-        color: var(--color-text-muted);
-    }
-    .admin-sellers.admin-sellers--event-detail .admin-sellers__row > :nth-child(6) {
         grid-area: action;
         justify-self: end;
     }

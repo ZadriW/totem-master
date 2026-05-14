@@ -11,7 +11,7 @@
     <header class="payment__topbar">
         <button type="button" class="payment__back" id="waitingBack">
             <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
-            Voltar ao resumo
+            <span id="waitingBackLabel">Voltar ao resumo</span>
         </button>
         <a class="payment__brand" href="{{ payment_home_url }}" aria-label="Odonto Master">
             <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
@@ -59,6 +59,41 @@
         </div>
     </main>
 
+    {# Tela de AUT — exibida após clicar em "Pagamento realizado" #}
+    <section class="payment-aut" id="autSection" hidden aria-hidden="true">
+        <div class="payment-aut__card">
+            <div class="payment-aut__icon" aria-hidden="true">
+                <i class="fa-solid fa-key"></i>
+            </div>
+            <h2 class="payment-aut__title">Digite o código AUT</h2>
+            <p class="payment-aut__resume-hint" id="autResumeOrderHint" hidden></p>
+            <p class="payment-aut__lead">
+                Informe o código de autorização (<strong>AUT</strong>) exibido na
+                maquininha após a aprovação do pagamento.
+            </p>
+            <div class="payment-aut__field">
+                <label class="payment-aut__label" for="autInput">Código AUT</label>
+                <input
+                    type="text"
+                    id="autInput"
+                    class="payment-aut__input"
+                    inputmode="text"
+                    autocomplete="off"
+                    maxlength="60"
+                    placeholder="Ex.: 123456"
+                    aria-describedby="autError"
+                >
+                <p class="payment-aut__error" id="autError" role="alert" hidden></p>
+            </div>
+            <div class="payment-aut__actions">
+                <button type="button" class="payment__btn payment__btn--primary" id="autSave">
+                    <i class="fa-solid fa-check" aria-hidden="true"></i>
+                    Salvar AUT
+                </button>
+            </div>
+        </div>
+    </section>
+
     <section class="payment__success" id="paymentSuccess" hidden aria-hidden="true">
         <div class="payment__success-card">
             <div class="payment__success-icon">
@@ -88,6 +123,7 @@
 {% block scripts %}
 <script>
 window.__TOTEM_FLOW__ = {{ (totem_flow or {}) | tojson }};
+window.__PENDING_AUT_RESUME__ = {{ resume_pending_aut | tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
 <script src="{{ url_for('static', filename='js/payment-form.js') }}"></script>

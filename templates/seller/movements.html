@@ -1,5 +1,4 @@
 {% extends "seller/_layout.html" %}
-{% from "macros/admin_mov_cro.html" import admin_mov_cro_details %}
 
 {% block title %}Movimentações{% if seller_event %} — {{ seller_event.name }}{% endif %} - Vendedor | Dental Odonto Master{% endblock %}
 
@@ -58,7 +57,20 @@
             </span>
         </label>
 
-        {% if not seller_event %}
+        {% if seller_event %}
+        <label class="admin-filter">
+            <span class="admin-filter__label">Venda por vendedor</span>
+            <select name="vendedor" class="admin-filter__input">
+                <option value="0" {% if filters.vendedor == 0 %}selected{% endif %}>Todos</option>
+                {% for s in movement_filter_sellers %}
+                <option value="{{ s.id }}" {% if filters.vendedor == s.id %}selected{% endif %}>
+                    {{ s.name }}{% if not s.active %} (inativo){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+        {% endif %}
+
         <label class="admin-filter admin-filter--wide">
             <span class="admin-filter__label">Código do pedido</span>
             <span class="admin-filter__wrap">
@@ -71,10 +83,15 @@
                     placeholder="Ex.: OM260422-1234 ou parte do número"
                     autocomplete="off"
                     inputmode="search"
+                    {% if seller_event %}aria-describedby="hint-filtro-pedido-evento-vendedor"{% endif %}
                 >
             </span>
+            {% if seller_event %}
+            <span id="hint-filtro-pedido-evento-vendedor" class="admin-filter__hint">
+                Filtra movimentações cuja referência (nota do pedido) contém o texto informado — útil para localizar vendas do evento.
+            </span>
+            {% endif %}
         </label>
-        {% endif %}
 
         <div class="admin-filters__actions">
             <button type="submit" class="admin-btn admin-btn--primary">
@@ -106,17 +123,12 @@
                     <span>{{ m.created_at | datahora }}</span>
                     <span class="admin-mov__product">
                         <span>{{ m.product_name or '—' }}</span>
-                        <small>#{{ m.product_id }} &middot; {{ m.product_category or '-' }}</small>
+                        <small>#{{ m.product_id }}{% if m.product_sku %} &middot; <code class="admin-mov__sku">{{ m.product_sku }}</code>{% endif %} &middot; {{ m.product_category or '-' }}</small>
                     </span>
                     <span class="admin-mov__type-cell">
                         <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
                             {{ m.movement_type | movlabel }}
                         </span>
-                        {% if m.movement_type == 'venda' and m.transaction_id %}
-                            <button type="button" class="admin-mov__toggle" data-toggle="{{ m.id }}" aria-expanded="false" aria-controls="details-{{ m.id }}" aria-label="Exibir ou ocultar dados do cliente">
-                                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-                            </button>
-                        {% endif %}
                     </span>
                     {% if not seller_event %}
                     <span class="admin-mov__event-cell">
@@ -157,42 +169,6 @@
                         {% endif %}
                     </span>
                 </div>
-                {% if m.movement_type == 'venda' and m.transaction_id %}
-                <div class="admin-mov__details" id="details-{{ m.id }}" hidden>
-                    <div class="admin-mov__details-content">
-                        <h4 class="admin-mov__details-title">
-                            <i class="fa-solid fa-user" aria-hidden="true"></i>
-                            Dados do cliente (pedido)
-                        </h4>
-                        <dl class="admin-mov__details-list">
-                            <div class="admin-mov__details-item">
-                                <dt>Nome</dt>
-                                <dd>{{ m.client_name or '—' }}</dd>
-                            </div>
-                            <div class="admin-mov__details-item">
-                                <dt>CPF</dt>
-                                <dd>{{ m.client_cpf or '—' }}</dd>
-                            </div>
-                            <div class="admin-mov__details-item">
-                                <dt>CEP</dt>
-                                <dd>{{ m.client_zipcode or '—' }}</dd>
-                            </div>
-                            <div class="admin-mov__details-item admin-mov__details-item--wide">
-                                <dt>Endereço</dt>
-                                <dd>
-                                    {% if m.client_address or m.client_number or m.client_city %}
-                                        {{ m.client_address or '—' }}{% if m.client_number %}, {{ m.client_number }}{% endif %}{% if m.client_complement %} — {{ m.client_complement }}{% endif %}<br>
-                                        {{ m.client_city or '—' }}{% if m.client_state %} — {{ m.client_state }}{% endif %}
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                </dd>
-                            </div>
-                            {{ admin_mov_cro_details(m) }}
-                        </dl>
-                    </div>
-                </div>
-                {% endif %}
             </div>
             {% endfor %}
         {% else %}
@@ -203,8 +179,4 @@
         {% endif %}
     </div>
 </section>
-{% endblock %}
-
-{% block seller_scripts %}
-<script src="{{ url_for('static', filename='js/admin-movements.js') }}"></script>
 {% endblock %}

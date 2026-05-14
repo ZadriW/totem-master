@@ -311,7 +311,7 @@
                 <a href="{{ url_for('admin_product_detail', product_id=m.product_id) }}">
                     {{ m.product_name or '—' }}
                 </a>
-                <small>#{{ m.product_id }} &middot; {{ m.product_category or '-' }}</small>
+                <small>#{{ m.product_id }}{% if m.product_sku %} &middot; <code class="admin-mov__sku">{{ m.product_sku }}</code>{% endif %} &middot; {{ m.product_category or '-' }}</small>
             </span>
             <span>
                 <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
@@ -346,9 +346,9 @@
             <h2 class="admin-section__title">Vendedores no evento</h2>
             <p class="admin-section__subtitle">{{ sellers | length }} vendedor(es) associado(s).</p>
         </div>
-        <a class="admin-btn admin-btn--ghost" href="{{ url_for('admin_event_sellers', event_id=event.id) }}">
+        <a class="admin-btn admin-btn--ghost" href="{{ url_for('admin_sellers') }}">
             <i class="fa-solid fa-users" aria-hidden="true"></i>
-            Gerenciar vendedores
+            Painel de vendedores
         </a>
     </header>
     {% if sellers %}
@@ -363,7 +363,7 @@
     {% else %}
     <p class="admin-section__subtitle" style="padding:8px 0;">
         Nenhum vendedor associado.
-        <a href="{{ url_for('admin_event_sellers', event_id=event.id) }}">Adicionar vendedores</a>.
+        <a href="{{ url_for('admin_sellers') }}">Associar na lista de vendedores</a>.
     </p>
     {% endif %}
 </section>

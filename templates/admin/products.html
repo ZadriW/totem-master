@@ -12,9 +12,10 @@
                 {{ stock.units_in_stock }} unidades nos eventos
             </p>
         </div>
-        <a class="admin-btn admin-btn--ghost" href="{{ url_for('admin_movements') }}">
+        <a class="admin-btn admin-btn--ghost" href="{{ url_for('admin_events') }}"
+           title="Abrir lista de eventos; em cada evento use a aba Movimentações">
             <i class="fa-solid fa-right-left" aria-hidden="true"></i>
-            Ver movimentações
+            Movimentações por evento
         </a>
     </header>
 
@@ -27,8 +28,10 @@
                     type="search"
                     name="q"
                     value="{{ filters.q }}"
-                    placeholder="Nome ou descrição..."
+                    placeholder="Nome, SKU ou ID do produto..."
                     class="admin-filter__input"
+                    autocomplete="off"
+                    inputmode="search"
                 >
             </span>
         </label>

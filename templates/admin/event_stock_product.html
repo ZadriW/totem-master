@@ -1,5 +1,4 @@
 {% extends "admin/_layout.html" %}
-{% from "macros/admin_mov_cro.html" import admin_mov_cro_details %}
 
 {% block title %}{{ product.nome }} — Estoque — {{ event.name }} | Dental Odonto Master{% endblock %}
 
@@ -224,11 +223,6 @@
                         <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
                             {{ m.movement_type | movlabel }}
                         </span>
-                        {% if m.movement_type == 'venda' and m.transaction_id %}
-                            <button type="button" class="admin-mov__toggle" data-toggle="{{ m.id }}" aria-expanded="false" aria-controls="details-{{ m.id }}" aria-label="Exibir ou ocultar dados do cliente">
-                                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
-                            </button>
-                        {% endif %}
                     </span>
                     <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% elif m.delta < 0 %}negative{% else %}neutral{% endif %}">
                         {{ m.delta | signed }}
@@ -254,46 +248,6 @@
                         {% endif %}
                     </span>
                 </div>
-                {% if m.movement_type == 'venda' and m.transaction_id %}
-                <div class="admin-mov__details" id="details-{{ m.id }}" hidden>
-                    <div class="admin-mov__details-content">
-                        <h4 class="admin-mov__details-title">
-                            <i class="fa-solid fa-user" aria-hidden="true"></i>
-                            Dados do cliente (pedido)
-                        </h4>
-                        <dl class="admin-mov__details-list">
-                            <div class="admin-mov__details-item">
-                                <dt>Nome</dt>
-                                <dd>{{ m.client_name or '—' }}</dd>
-                            </div>
-                        <div class="admin-mov__details-item">
-                            <dt>CPF</dt>
-                            <dd>{{ m.client_cpf or '—' }}</dd>
-                        </div>
-                        <div class="admin-mov__details-item">
-                            <dt>Forma de pagamento</dt>
-                            <dd>{{ m.payment_method | paymethod(m.card_installments) }}</dd>
-                        </div>
-                        <div class="admin-mov__details-item">
-                            <dt>CEP</dt>
-                                <dd>{{ m.client_zipcode or '—' }}</dd>
-                            </div>
-                            <div class="admin-mov__details-item admin-mov__details-item--wide">
-                                <dt>Endereço</dt>
-                                <dd>
-                                    {% if m.client_address or m.client_number or m.client_city %}
-                                        {{ m.client_address or '—' }}{% if m.client_number %}, {{ m.client_number }}{% endif %}{% if m.client_complement %} — {{ m.client_complement }}{% endif %}<br>
-                                        {{ m.client_city or '—' }}{% if m.client_state %} — {{ m.client_state }}{% endif %}
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                </dd>
-                            </div>
-                            {{ admin_mov_cro_details(m) }}
-                        </dl>
-                    </div>
-                </div>
-                {% endif %}
             </div>
             {% endfor %}
         {% else %}

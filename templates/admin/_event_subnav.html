@@ -18,9 +18,9 @@
         <i class="fa-solid fa-right-left" aria-hidden="true"></i>
         <span>Movimentações</span>
     </a>
-    <a class="admin-event-subnav__item {% if active_event_tab == 'vendedores' %}is-active{% endif %}"
-       href="{{ url_for('admin_event_sellers', event_id=event.id) }}">
-        <i class="fa-solid fa-users" aria-hidden="true"></i>
-        <span>Vendedores</span>
+    <a class="admin-event-subnav__item {% if active_event_tab == 'transacoes' %}is-active{% endif %}"
+       href="{{ url_for('admin_event_transactions', event_id=event.id) }}">
+        <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
+        <span>Transações</span>
     </a>
 </nav>

@@ -319,16 +319,28 @@
 
     const stored = load();
     if (stored) {
-        if (stored.name) form.name.value = stored.name;
-        if (stored.cpf) form.cpf.value = stored.cpf;
-        if (stored.cro_uf) form.cro_uf.value = stored.cro_uf;
-        if (stored.cro_numero) form.cro_numero.value = maskCRO(String(stored.cro_numero));
-        if (stored.zipcode) form.zipcode.value = stored.zipcode;
-        if (stored.address) form.address.value = stored.address;
-        if (stored.number) form.number.value = stored.number;
-        if (stored.complement) form.complement.value = stored.complement;
-        if (stored.city) form.city.value = stored.city;
-        if (stored.state) form.state.value = stored.state;
+        const nameEl = form.querySelector('[name="name"]');
+        if (stored.name && nameEl) nameEl.value = stored.name;
+        const cpfEl = form.querySelector('[name="cpf"]');
+        if (stored.cpf && cpfEl) cpfEl.value = stored.cpf;
+        const croUfEl = form.querySelector('[name="cro_uf"]');
+        if (stored.cro_uf && croUfEl) croUfEl.value = stored.cro_uf;
+        const croNumEl = form.querySelector('[name="cro_numero"]');
+        if (stored.cro_numero && croNumEl) {
+            croNumEl.value = maskCRO(String(stored.cro_numero));
+        }
+        const zipEl = form.querySelector('[name="zipcode"]');
+        if (stored.zipcode && zipEl) zipEl.value = stored.zipcode;
+        const addrEl = form.querySelector('[name="address"]');
+        if (stored.address && addrEl) addrEl.value = stored.address;
+        const numEl = form.querySelector('[name="number"]');
+        if (stored.number && numEl) numEl.value = stored.number;
+        const compEl = form.querySelector('[name="complement"]');
+        if (stored.complement && compEl) compEl.value = stored.complement;
+        const cityEl = form.querySelector('[name="city"]');
+        if (stored.city && cityEl) cityEl.value = stored.city;
+        const stateEl = form.querySelector('[name="state"]');
+        if (stored.state && stateEl) stateEl.value = stored.state;
         const pm = (stored.payment_method || 'cartao').toLowerCase();
         const pmVal = pm === 'pix' ? 'pix' : 'cartao';
         const pmRadio = document.querySelector(
