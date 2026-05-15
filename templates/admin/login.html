@@ -9,6 +9,7 @@
 {% block body %}
 <main class="admin-login">
     <form class="admin-login__card" method="post" autocomplete="off">
+        {% include 'partials/csrf_field.html' %}
         <div class="admin-login__brand">
             <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
         </div>

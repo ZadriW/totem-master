@@ -20,6 +20,9 @@
     const STOCK_API = typeof window.__CATALOG_STOCK_API__ === 'string'
         ? window.__CATALOG_STOCK_API__
         : '';
+    const PROMO_REFRESH_API = typeof window.__CATALOG_PROMO_REFRESH_API__ === 'string'
+        ? window.__CATALOG_PROMO_REFRESH_API__
+        : '';
     const productsById = new Map();
     (window.__PRODUCTS__ || []).forEach(p => {
         productsById.set(String(p.id), p);
@@ -33,6 +36,9 @@
     };
 
     let searchTimer;
+
+    let stockStaleNotice = false;
+    let promoStaleNotice = false;
 
     function closeAllCategoryDropdowns() {
         categoryDropdownRoots.forEach(drop => {
@@ -209,12 +215,103 @@
         if (p) p.estoque = n;
     }
 
+    function escapeCatalogHtml(value) {
+        const d = document.createElement('div');
+        d.textContent = value == null ? '' : String(value);
+        return d.innerHTML;
+    }
+
+    function formatCatalogPriceBRL(n) {
+        const x = Number(n);
+        if (!Number.isFinite(x)) return 'R$ 0,00';
+        return `R$ ${x.toFixed(2).replace('.', ',')}`;
+    }
+
+    function renderPromoBadgeMarkup(product) {
+        if (!product.em_promocao || !product.promo_badge) return '';
+        return `<div class="product-card__promo-badge"><i class="fa-solid fa-tag" aria-hidden="true"></i> ${escapeCatalogHtml(product.promo_badge)}</div>`;
+    }
+
+    function renderPricingBlockMarkup(product) {
+        const em = !!product.em_promocao;
+        const po = Number(product.preco_original);
+        const pp = Number(product.preco);
+        if (em && Number.isFinite(po) && po !== pp) {
+            return `<div class="product-card__price-wrap"><span class="product-card__price-original">${formatCatalogPriceBRL(po)}</span><p class="product-card__price product-card__price--promo">${formatCatalogPriceBRL(pp)}</p></div>`;
+        }
+        if (em && product.promo_tipo === 'bogo') {
+            const nome = escapeCatalogHtml(product.promo_nome || '');
+            return `<div class="product-card__price-wrap"><p class="product-card__price">${formatCatalogPriceBRL(pp)}</p><span class="product-card__promo-name">${nome}</span></div>`;
+        }
+        return `<p class="product-card__price">${formatCatalogPriceBRL(pp)}</p>`;
+    }
+
+    function applyCatalogSnapshotToCard(card, p) {
+        productsById.set(String(p.id), { ...p });
+
+        const minRaw = Math.max(0, Math.floor(Number(p.estoque_minimo)) || 0);
+        card.dataset.estoqueMin = String(minRaw);
+
+        applyStockToCard(card, p.estoque);
+
+        card.dataset.preco = String(Number(p.preco) || 0);
+
+        card.classList.toggle('product-card--promo', !!p.em_promocao);
+
+        const badgeRoot = card.querySelector('[data-promo-badge-root]');
+        if (badgeRoot) badgeRoot.innerHTML = renderPromoBadgeMarkup(p);
+
+        const priceRoot = card.querySelector('[data-catalog-pricing]');
+        if (priceRoot) priceRoot.innerHTML = renderPricingBlockMarkup(p);
+    }
+
+    async function fetchCatalogPromoRefresh() {
+        if (!PROMO_REFRESH_API) return;
+        try {
+            const res = await fetch(PROMO_REFRESH_API, { credentials: 'same-origin' });
+            const T = window.TotemApiErrors;
+            const data = T ? await T.parseJsonSafe(res) : await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(
+                    T ? T.messageFromBadResponse(res, data) : 'Não foi possível atualizar preços e promoções.',
+                );
+            }
+            const list = data.products;
+            if (!Array.isArray(list)) return;
+            const byId = new Map(list.map(row => [String(row.id), row]));
+            cards.forEach(card => {
+                const row = byId.get(String(card.dataset.id));
+                if (!row) return;
+                applyCatalogSnapshotToCard(card, row);
+            });
+            if (Cart && typeof Cart.syncPricesFromProductMap === 'function') {
+                Cart.syncPricesFromProductMap(productsById);
+            }
+        } catch (err) {
+            const T = window.TotemApiErrors;
+            const msg = T ? T.formatCatchMessage(err) : String(err.message || err);
+            if (!promoStaleNotice && resultsInfo && T) {
+                promoStaleNotice = true;
+                const hint = document.createElement('span');
+                hint.className = 'catalog-stock-sync-warning';
+                hint.textContent = ' • Preços/promoções ao vivo indisponíveis';
+                hint.title = msg.replace(/\n\n/g, ' ');
+                resultsInfo.appendChild(hint);
+            }
+        }
+    }
+
     async function fetchCatalogStock() {
         if (!STOCK_API) return;
         try {
             const res = await fetch(STOCK_API, { credentials: 'same-origin' });
-            if (!res.ok) return;
-            const data = await res.json();
+            const T = window.TotemApiErrors;
+            const data = T ? await T.parseJsonSafe(res) : await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(
+                    T ? T.messageFromBadResponse(res, data) : 'Não foi possível atualizar o estoque ao vivo.',
+                );
+            }
             const list = data.products;
             if (!Array.isArray(list)) return;
             const byId = new Map(
@@ -225,8 +322,17 @@
                 if (!byId.has(id)) return;
                 applyStockToCard(card, byId.get(id));
             });
-        } catch (_) {
-            /* rede / JSON: ignorar até o próximo intervalo */
+        } catch (err) {
+            const T = window.TotemApiErrors;
+            const msg = T ? T.formatCatchMessage(err) : String(err.message || err);
+            if (!stockStaleNotice && resultsInfo && T) {
+                stockStaleNotice = true;
+                const hint = document.createElement('span');
+                hint.className = 'catalog-stock-sync-warning';
+                hint.textContent = ' • Estoque ao vivo indisponível';
+                hint.title = msg.replace(/\n\n/g, ' ');
+                resultsInfo.appendChild(hint);
+            }
         }
     }
 
@@ -516,7 +622,10 @@
     applyFilters();
     updateCartBadge();
 
-    if (STOCK_API) {
+    if (PROMO_REFRESH_API) {
+        fetchCatalogPromoRefresh();
+        setInterval(fetchCatalogPromoRefresh, 30000);
+    } else if (STOCK_API) {
         fetchCatalogStock();
         setInterval(fetchCatalogStock, 30000);
     }

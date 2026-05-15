@@ -58,6 +58,7 @@
                 {{ now.strftime('%d/%m/%Y %H:%M') }}
             </span>
             <form method="post" action="{{ url_for('seller_logout') }}" class="admin-topbar__logout-form">
+                {% include 'partials/csrf_field.html' %}
                 <button
                     type="submit"
                     class="admin-topbar__logout"
@@ -91,6 +92,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/totem-api-errors.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 {% block seller_scripts %}{% endblock %}
 {% endblock %}

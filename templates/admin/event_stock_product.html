@@ -65,6 +65,7 @@
                   action="{{ url_for('admin_event_stock_min', event_id=event.id, product_id=product.id) }}"
                   class="admin-product__inline-form"
                   data-live-stock-form>
+                {% include 'partials/csrf_field.html' %}
                 <label class="admin-field__label" for="min_stock">Novo estoque mínimo</label>
                 <div class="admin-product__inline-wrap">
                     <input id="min_stock" type="number" name="min_stock" min="0" step="1"
@@ -76,6 +77,7 @@
             <form method="post"
                   action="{{ url_for('admin_product_toggle_active', product_id=product.id) }}"
                   class="admin-product__toggle">
+                {% include 'partials/csrf_field.html' %}
                 {% if product.ativo %}
                     <input type="hidden" name="active" value="0">
                     <button type="submit" class="admin-btn admin-btn--ghost admin-btn--danger"
@@ -94,27 +96,34 @@
         </aside>
 
         <div class="admin-product__forms">
-            <article class="admin-card admin-card--entrada">
-                <header class="admin-card__header">
+            <article class="admin-card admin-card--entrada admin-card--collapsible">
+                <button
+                    type="button"
+                    class="admin-card__header admin-card__header--toggle"
+                    id="stock-card-entrada-trigger"
+                    aria-expanded="false"
+                    aria-controls="stock-card-entrada-panel"
+                    data-stock-card-toggle
+                >
                     <i class="fa-solid fa-down-long admin-card__icon admin-card__icon--positive" aria-hidden="true"></i>
                     <div>
                         <h2 class="admin-card__title">Entrada de estoque</h2>
                         <p class="admin-card__subtitle">Compra, reposição ou recebimento do fornecedor (somente neste evento).</p>
                     </div>
-                </header>
+                    <span class="admin-card__toggle-chevron" aria-hidden="true">
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </span>
+                </button>
+                <div class="admin-card__collapsible-panel" id="stock-card-entrada-panel" role="region" aria-labelledby="stock-card-entrada-trigger" hidden>
                 <form method="post"
                       action="{{ url_for('admin_event_stock_entry', event_id=event.id, product_id=product.id) }}"
                       class="admin-card__form"
                       data-live-stock-form>
+                    {% include 'partials/csrf_field.html' %}
                     <div class="admin-field">
                         <label class="admin-field__label" for="entrada-qty">Quantidade</label>
                         <input id="entrada-qty" type="number" name="quantity" min="1" step="1"
                                class="admin-field__input" required>
-                    </div>
-                    <div class="admin-field">
-                        <label class="admin-field__label" for="entrada-cost">Custo unitário (opcional)</label>
-                        <input id="entrada-cost" type="number" name="unit_cost" min="0" step="0.01"
-                               class="admin-field__input" placeholder="Ex.: 12,50">
                     </div>
                     <div class="admin-field admin-field--wide">
                         <label class="admin-field__label" for="entrada-reason">Observação</label>
@@ -126,21 +135,34 @@
                         Registrar entrada
                     </button>
                 </form>
+                </div>
             </article>
 
-            <article class="admin-card admin-card--saida">
-                <header class="admin-card__header">
+            <article class="admin-card admin-card--saida admin-card--collapsible">
+                <button
+                    type="button"
+                    class="admin-card__header admin-card__header--toggle"
+                    id="stock-card-saida-trigger"
+                    aria-expanded="false"
+                    aria-controls="stock-card-saida-panel"
+                    data-stock-card-toggle
+                >
                     <i class="fa-solid fa-up-long admin-card__icon admin-card__icon--negative" aria-hidden="true"></i>
                     <div>
                         <h2 class="admin-card__title">Saída de estoque</h2>
                         <p class="admin-card__subtitle">Perda, quebra, vencimento, devolução ao fornecedor.</p>
                     </div>
-                </header>
+                    <span class="admin-card__toggle-chevron" aria-hidden="true">
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </span>
+                </button>
+                <div class="admin-card__collapsible-panel" id="stock-card-saida-panel" role="region" aria-labelledby="stock-card-saida-trigger" hidden>
                 <form method="post"
                       action="{{ url_for('admin_event_stock_exit', event_id=event.id, product_id=product.id) }}"
                       class="admin-card__form"
                       data-confirm="Confirmar saída manual de estoque?"
                       data-live-stock-form>
+                    {% include 'partials/csrf_field.html' %}
                     <div class="admin-field">
                         <label class="admin-field__label" for="saida-qty">Quantidade</label>
                         <input id="saida-qty" type="number" name="quantity" min="1" step="1"
@@ -159,21 +181,34 @@
                         Registrar saída
                     </button>
                 </form>
+                </div>
             </article>
 
-            <article class="admin-card admin-card--ajuste">
-                <header class="admin-card__header">
+            <article class="admin-card admin-card--ajuste admin-card--collapsible">
+                <button
+                    type="button"
+                    class="admin-card__header admin-card__header--toggle"
+                    id="stock-card-ajuste-trigger"
+                    aria-expanded="false"
+                    aria-controls="stock-card-ajuste-panel"
+                    data-stock-card-toggle
+                >
                     <i class="fa-solid fa-scale-balanced admin-card__icon" aria-hidden="true"></i>
                     <div>
                         <h2 class="admin-card__title">Ajuste de inventário</h2>
                         <p class="admin-card__subtitle">Conferência física: informe o saldo correto no evento.</p>
                     </div>
-                </header>
+                    <span class="admin-card__toggle-chevron" aria-hidden="true">
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </span>
+                </button>
+                <div class="admin-card__collapsible-panel" id="stock-card-ajuste-panel" role="region" aria-labelledby="stock-card-ajuste-trigger" hidden>
                 <form method="post"
                       action="{{ url_for('admin_event_stock_adjust', event_id=event.id, product_id=product.id) }}"
                       class="admin-card__form"
                       data-confirm="Ajustar o estoque para o valor informado?"
                       data-live-stock-form>
+                    {% include 'partials/csrf_field.html' %}
                     <div class="admin-field">
                         <label class="admin-field__label" for="ajuste-stock">Novo saldo</label>
                         <input id="ajuste-stock" type="number" name="new_stock" min="0" step="1"
@@ -191,6 +226,7 @@
                         Aplicar ajuste
                     </button>
                 </form>
+                </div>
             </article>
         </div>
     </div>
@@ -234,18 +270,6 @@
                     </span>
                     <span class="admin-mov__user-cell">
                         {{ m.created_by | display_created_by or '-' }}
-                        {% if m.movement_type == 'venda' and m.reference %}
-                            <a
-                                href="{{ url_for('receipt', order_number=m.reference) }}"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="admin-mov__note-btn"
-                                title="Abrir nota de retirada ({{ m.reference }})"
-                                aria-label="Abrir nota de retirada do pedido {{ m.reference }}"
-                            >
-                                <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
-                            </a>
-                        {% endif %}
                     </span>
                 </div>
             </div>
@@ -262,4 +286,21 @@
 
 {% block admin_scripts %}
 <script src="{{ url_for('static', filename='js/admin-stock-live.js') }}"></script>
+<script>
+(function () {
+    document.querySelectorAll('[data-stock-card-toggle]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var panelId = btn.getAttribute('aria-controls');
+            var panel = panelId ? document.getElementById(panelId) : null;
+            var card = btn.closest('.admin-card--collapsible');
+            if (!panel || !card) return;
+            var open = btn.getAttribute('aria-expanded') === 'true';
+            var next = !open;
+            btn.setAttribute('aria-expanded', String(next));
+            panel.hidden = !next;
+            card.classList.toggle('is-expanded', next);
+        });
+    });
+})();
+</script>
 {% endblock %}

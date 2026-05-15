@@ -204,10 +204,34 @@
         const digits = cep.replace(/\D/g, '');
         if (digits.length !== 8) throw new Error('CEP incompleto');
 
-        const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-        if (data.erro) throw new Error('CEP não encontrado');
+        const T = window.TotemApiErrors;
+        let response;
+        try {
+            response = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
+        } catch (e) {
+            throw new Error(
+                T
+                    ? T.messageFromNetworkError(e)
+                    : 'Sem conexão para consultar o CEP. Verifique a internet.',
+            );
+        }
+        const data = T ? await T.parseJsonSafe(response) : await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(
+                T
+                    ? T.messageFromBadResponse(response, data)
+                    : `Não foi possível consultar o CEP (HTTP ${response.status}).`,
+            );
+        }
+        if (data.erro) {
+            throw new Error(
+                [
+                    'CEP não encontrado nos Correios.',
+                    'Confira os oito dígitos.',
+                    'Corrija e busque novamente ou preencha o endereço manualmente.',
+                ].join('\n\n'),
+            );
+        }
         return data;
     }
 

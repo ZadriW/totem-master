@@ -34,6 +34,7 @@
     <div id="form-novo-evento" class="admin-card admin-card--form" hidden>
         <h2 class="admin-card__title">Criar novo evento</h2>
         <form method="post" action="{{ url_for('admin_event_create') }}" class="admin-card__form">
+            {% include 'partials/csrf_field.html' %}
             <div class="admin-field">
                 <label class="admin-field__label" for="new-event-name">Nome do evento <span aria-hidden="true">*</span></label>
                 <input
@@ -192,6 +193,7 @@
                         <i class="fa-solid fa-eye" aria-hidden="true"></i>
                     </a>
                     <form method="post" action="{{ url_for('admin_event_restore', event_id=ev.id) }}" style="display:contents;">
+                        {% include 'partials/csrf_field.html' %}
                         <button type="submit" class="admin-btn admin-btn--ghost admin-btn--sm" title="Reativar evento" aria-label="Reativar {{ ev.name }}">
                             <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
                             Reativar

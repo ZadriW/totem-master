@@ -409,16 +409,26 @@
         body.append('initial_stock', stockIn.value || '0');
         body.append('min_stock',     minIn.value   || '0');
         body.append('link_note',     note);
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        if (csrfMeta && csrfMeta.content) {
+            body.append('csrf_token', csrfMeta.content);
+        }
 
         /* ── ETAPA 1: POST ───────────────────────────────────────────────── */
         let postOk      = false;
         let feedbackMsg = 'Não foi possível adicionar o produto.';
 
+        const postHeaders = window.TotemApiErrors && window.TotemApiErrors.csrfFetchHeaders
+            ? window.TotemApiErrors.csrfFetchHeaders('POST', {
+                Accept: 'application/json',
+                'X-Requested-With': 'fetch',
+            })
+            : { Accept: 'application/json', 'X-Requested-With': 'fetch' };
         const postRes = await fetch(currentAddUrl, {
             method: 'POST',
             body,
             credentials: 'same-origin',
-            headers: { Accept: 'application/json', 'X-Requested-With': 'fetch' },
+            headers: postHeaders,
         }).catch(() => null);
 
         if (postRes) {

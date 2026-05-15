@@ -102,6 +102,7 @@
         <form method="post"
               action="{{ url_for('admin_event_add_product', event_id=event.id) }}"
               class="admin-card__form">
+            {% include 'partials/csrf_field.html' %}
             {{ event_stock_preserved_filters(filters, pagination) }}
             <div class="admin-field">
                 <label class="admin-field__label" for="add-sku">SKU ou ID do produto</label>
@@ -113,8 +114,7 @@
                            aria-describedby="hint-add-sku">
                 </span>
                 <span id="hint-add-sku" class="admin-filter__hint">
-                    Digite o SKU (ex.: <code>OM-00042</code>) ou o ID numérico.
-                    O produto será adicionado com estoque zero; use Entrada para abastecer.
+                    O produto será adicionado com estoque zero; use Entrada ou Inventário para abastecer.
                 </span>
             </div>
             <div class="admin-card__actions">
@@ -194,6 +194,7 @@
                     <form method="post"
                           action="{{ url_for('admin_event_remove_product', event_id=event.id, product_id=p.product_id) }}"
                           style="display:contents;">
+                        {% include 'partials/csrf_field.html' %}
                         {{ event_stock_preserved_filters(filters, pagination) }}
                         <button type="submit"
                                 class="admin-btn admin-btn--ghost admin-btn--sm admin-btn--danger"

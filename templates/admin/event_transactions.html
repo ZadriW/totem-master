@@ -1,6 +1,7 @@
 {% extends "admin/_layout.html" %}
 {% from "macros/admin_tx_client.html" import admin_tx_client_section %}
 {% from "macros/admin_tx_order_cell.html" import admin_tx_order_cell %}
+{% from "macros/admin_tx_receipt_link.html" import admin_tx_receipt_link %}
 
 {% block title %}Transações — {{ event.name }} | Dental Odonto Master{% endblock %}
 
@@ -151,9 +152,10 @@
         {% if transactions %}
             {% for tx in transactions %}
             <div class="admin-tx" data-tx-id="{{ tx.id }}">
-                <button
-                    type="button"
+                <div
                     class="admin-tx__row"
+                    role="button"
+                    tabindex="0"
                     aria-expanded="false"
                     aria-controls="event-tx-details-{{ tx.id }}"
                 >
@@ -173,11 +175,14 @@
                         {{ tx.seller_name or '—' }}
                     </span>
                     <span class="admin-table__col admin-table__col--num admin-tx__status">
-                        <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else ('warn' if tx.status == 'pendente' else ('danger' if tx.status == 'cancelado' else 'neutral')) }}">
-                            {{ tx.status }}
+                        <span class="admin-tx__status-stack">
+                            <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else ('warn' if tx.status == 'pendente' else ('danger' if tx.status == 'cancelado' else 'neutral')) }}">
+                                {{ tx.status }}
+                            </span>
+                            {{ admin_tx_receipt_link(tx) }}
                         </span>
                     </span>
-                </button>
+                </div>
 
                 <div
                     class="admin-tx__details"

@@ -39,6 +39,7 @@
             </button>
             {% if event.active %}
             <form method="post" action="{{ url_for('admin_event_archive', event_id=event.id) }}" style="display:contents;">
+                {% include 'partials/csrf_field.html' %}
                 <button type="submit" class="admin-btn admin-btn--ghost"
                     onclick="return confirm('Arquivar o evento {{ event.name|e }}?');">
                     <i class="fa-solid fa-box-archive" aria-hidden="true"></i>
@@ -47,6 +48,7 @@
             </form>
             {% else %}
             <form method="post" action="{{ url_for('admin_event_restore', event_id=event.id) }}" style="display:contents;">
+                {% include 'partials/csrf_field.html' %}
                 <button type="submit" class="admin-btn admin-btn--ghost">
                     <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
                     Reativar
@@ -201,6 +203,7 @@
             </button>
         </header>
         <form method="post" action="{{ url_for('admin_event_edit', event_id=event.id) }}" class="admin-modal__body">
+            {% include 'partials/csrf_field.html' %}
             <div class="admin-field">
                 <label class="admin-field__label" for="event-modal-name">Nome do evento <span aria-hidden="true">*</span></label>
                 <input id="event-modal-name" type="text" name="name" class="admin-field__input"

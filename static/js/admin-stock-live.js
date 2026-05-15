@@ -18,6 +18,14 @@
         headers: { Accept: 'application/json' },
     };
 
+    function mergeHeadersForMethod(method, headers) {
+        var T = window.TotemApiErrors;
+        if (T && typeof T.csrfFetchHeaders === 'function') {
+            return T.csrfFetchHeaders(method, Object.assign({}, headers || {}));
+        }
+        return Object.assign({}, headers || {});
+    }
+
     function badge(status) {
         return `<span class="admin-badge admin-badge--${escapeHtml(status.kind)}">${escapeHtml(status.label)}</span>`;
     }
@@ -42,12 +50,6 @@
         if (movement.reference) reasonParts.push(`<code>${escapeHtml(movement.reference)}</code>`);
         reasonParts.push(escapeHtml(movement.reason || '-'));
 
-        const receipt = movement.receipt_url
-            ? `<a href="${escapeHtml(movement.receipt_url)}" target="_blank" rel="noopener noreferrer" class="admin-mov__note-btn" title="Abrir nota de retirada (${escapeHtml(movement.reference)})" aria-label="Abrir nota de retirada do pedido ${escapeHtml(movement.reference)}">
-                    <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
-               </a>`
-            : '';
-
         return `
             <div class="admin-mov__wrapper" data-movement-id="${escapeHtml(movement.id)}">
                 <div class="admin-mov__row" role="row">
@@ -64,7 +66,6 @@
                     <span class="admin-mov__reason">${reasonParts.join(' ')}</span>
                     <span class="admin-mov__user-cell">
                         ${escapeHtml(movement.created_by_display || movement.created_by || '-')}
-                        ${receipt}
                     </span>
                 </div>
             </div>
@@ -174,13 +175,22 @@
                     const response = await fetch(form.action, {
                         method: 'POST',
                         body: new FormData(form),
-                        headers: {
+                        headers: mergeHeadersForMethod('POST', {
                             Accept: 'application/json',
                             'X-Requested-With': 'fetch',
-                        },
+                        }),
                     });
-                    const data = await response.json();
-                    if (!response.ok) throw new Error(data.error || 'Não foi possível atualizar o estoque.');
+                    const TAE = window.TotemApiErrors;
+                    const data = TAE
+                        ? await TAE.parseJsonSafe(response)
+                        : await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        throw new Error(
+                            TAE
+                                ? TAE.messageFromBadResponse(response, data)
+                                : (data.error || 'Não foi possível atualizar o estoque.'),
+                        );
+                    }
                     updateProductView(data, { forceInputSync: true });
                     succeeded = true;
                     if (form.closest('.admin-card--entrada') || form.closest('.admin-card--saida')) {
@@ -188,7 +198,11 @@
                     }
                     flash(data.message || 'Estoque atualizado.');
                 } catch (err) {
-                    flash(err.message || 'Não foi possível atualizar o estoque.', 'error');
+                    const TAE = window.TotemApiErrors;
+                    flash(
+                        TAE ? TAE.formatCatchMessage(err) : (err.message || 'Não foi possível atualizar o estoque.'),
+                        'error',
+                    );
                 } finally {
                     if (submit && (!succeeded || !form.closest('.admin-card--saida'))) {
                         submit.disabled = originalDisabled;

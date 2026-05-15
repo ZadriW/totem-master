@@ -163,18 +163,6 @@
                     </span>
                     <span class="admin-mov__user-cell">
                         {{ m.created_by | display_created_by or '-' }}
-                        {% if m.movement_type == 'venda' and m.reference %}
-                            <a
-                                href="{{ url_for('receipt', order_number=m.reference) }}"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="admin-mov__note-btn"
-                                title="Abrir nota de retirada ({{ m.reference }})"
-                                aria-label="Abrir nota de retirada do pedido {{ m.reference }}"
-                            >
-                                <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
-                            </a>
-                        {% endif %}
                     </span>
                 </div>
             </div>

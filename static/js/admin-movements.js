@@ -52,11 +52,6 @@
     }
 
     function renderMovement(movement) {
-        const receipt = movement.receipt_url
-            ? `<a href="${escapeHtml(movement.receipt_url)}" target="_blank" rel="noopener noreferrer" class="admin-mov__note-btn" title="Abrir nota de retirada (${escapeHtml(movement.reference)})" aria-label="Abrir nota de retirada do pedido ${escapeHtml(movement.reference)}">
-                    <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
-               </a>`
-            : '';
         const reason = `${movement.reference ? `<code>${escapeHtml(movement.reference)}</code>` : ''} ${escapeHtml(movement.reason || '-')}`;
         const skuMeta = movement.product_sku
             ? ` &middot; <code class="admin-mov__sku">${escapeHtml(movement.product_sku)}</code>`
@@ -83,7 +78,6 @@
                     <span class="admin-mov__reason">${reason}</span>
                     <span class="admin-mov__user-cell">
                         ${escapeHtml(movement.created_by_display || movement.created_by || '-')}
-                        ${receipt}
                     </span>
                 </div>
             </div>

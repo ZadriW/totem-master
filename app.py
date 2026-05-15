@@ -32,6 +32,7 @@ from flask import (
     session,
     url_for,
 )
+from flask_wtf.csrf import CSRFError, CSRFProtect
 from itsdangerous import BadSignature, URLSafeSerializer
 from werkzeug.routing.exceptions import BuildError
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -39,6 +40,16 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from data.products import CATEGORIES
 from database import (
     EXPORT_MOVEMENTS_CSV_CAP,
+    RULE_TYPE_LABELS,
+    build_promo_display_map,
+    create_promotion,
+    delete_promotion,
+    enrich_product_with_promo,
+    get_active_promotions_for_event,
+    get_promotion,
+    list_promotions_for_event,
+    toggle_promotion_active,
+    update_promotion,
     add_product_to_event,
     add_seller_to_event,
     archive_event,
@@ -92,6 +103,7 @@ from database import (
     list_transactions,
     list_transactions_for_event,
     list_transactions_for_seller,
+    list_transactions_summary_for_event_period,
     normalize_event_badge_color,
     register_event_stock_adjustment,
     register_event_stock_entry,
@@ -119,6 +131,32 @@ app = Flask(__name__)
 # SECRET_KEY: usar variável de ambiente em produção.
 # Fallback para chave aleatória por processo (sessões não persistem entre restarts).
 app.secret_key = os.environ.get("TOTEM_SECRET_KEY") or secrets.token_hex(32)
+
+# CSRF (Flask-WTF): mesma chave da sessão; sem limite de tempo para o token na sessão atual.
+app.config.setdefault("WTF_CSRF_TIME_LIMIT", None)
+csrf = CSRFProtect(app)
+
+
+@app.errorhandler(CSRFError)
+def handle_csrf_error(_e):
+    accept = (request.headers.get("Accept") or "").lower()
+    wants_json = (
+        request.path.startswith("/api/")
+        or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        or "application/json" in accept
+    )
+    if wants_json:
+        return jsonify(
+            error=(
+                "Sessão expirada ou token de segurança inválido. "
+                "Recarregue a página e tente novamente."
+            ),
+        ), 400
+    flash(
+        "Sessão expirada ou token de segurança inválido. Recarregue a página e tente novamente.",
+        "error",
+    )
+    return redirect(request.referrer or url_for("welcome"))
 
 # Credenciais do admin — sobrescreva em produção via variável de ambiente.
 ADMIN_USERNAME = os.environ.get("TOTEM_ADMIN_USER", "adminmaster")
@@ -359,15 +397,27 @@ def _admin_auth() -> dict | None:
 
 def _seller_auth() -> dict | None:
     data = _load_auth_cookie(SELLER_AUTH_COOKIE, SELLER_AUTH_SALT)
-    if data and data.get("is_seller") and data.get("seller_id"):
-        return data
-    if session.get("is_seller") and session.get("seller_id"):
-        return {
-            "is_seller": True,
-            "seller_id": int(session["seller_id"]),
-            "seller_name": session.get("seller_name", "Vendedor"),
-            "seller_email": session.get("seller_email", ""),
-        }
+    if data and data.get("is_seller"):
+        try:
+            sid = int(data.get("seller_id"))
+        except (TypeError, ValueError):
+            sid = 0
+        if sid > 0:
+            out = dict(data)
+            out["seller_id"] = sid
+            return out
+    if session.get("is_seller"):
+        try:
+            sid = int(session.get("seller_id") or 0)
+        except (TypeError, ValueError):
+            sid = 0
+        if sid > 0:
+            return {
+                "is_seller": True,
+                "seller_id": sid,
+                "seller_name": session.get("seller_name", "Vendedor"),
+                "seller_email": session.get("seller_email", ""),
+            }
     return None
 
 
@@ -783,13 +833,22 @@ def seller_sale():
     seller_ev = _get_seller_event()
     if seller_ev:
         products = list_event_products_for_client(seller_ev["id"])
-        catalog_stock_api_url = url_for("seller_api_event_catalog_stock")
+        # Enriquece cada produto com dados de promoção ativa do evento.
+        promos = get_active_promotions_for_event(seller_ev["id"])
+        promo_map = build_promo_display_map(promos)
+        products = [enrich_product_with_promo(p, promo_map) for p in products]
+        # No modo evento, estoque + preços + promoções vêm do mesmo polling (30s).
+        catalog_stock_api_url = ""
+        catalog_promo_refresh_api_url = url_for(
+            "seller_api_event_catalog_promos_refresh",
+        )
     else:
         products = list_products_for_client()
         catalog_stock_api_url = _url_if_registered(
             "seller_api_catalog_stock",
             fallback="/vendedor/api/catalogo/estoque",
         )
+        catalog_promo_refresh_api_url = ""
     category_names_set = {
         str(p["categoria"]).strip()
         for p in products
@@ -808,6 +867,7 @@ def seller_sale():
         products=products,
         totem_flow=_seller_totem_flow(),
         catalog_stock_api_url=catalog_stock_api_url,
+        catalog_promo_refresh_api_url=catalog_promo_refresh_api_url,
         **_seller_shell_context(active_section="venda"),
     )
 
@@ -1227,6 +1287,29 @@ def seller_api_event_catalog_stock():
     if seller_ev is None:
         return jsonify({"products": list_active_product_stocks()})
     return jsonify({"products": list_active_event_product_stocks(seller_ev["id"])})
+
+
+@app.route(
+    "/vendedor/api/evento/catalogo/precos-promocoes",
+    endpoint="seller_api_event_catalog_promos_refresh",
+)
+@seller_required
+def seller_api_event_catalog_promos_refresh():
+    """Catálogo do evento com preços e promoções recalculados (polling ~30s no front).
+
+    Retorna o mesmo formato que ``list_event_products_for_client``, já enriquecido
+    com ``em_promocao``, ``preco_original``, ``promo_badge``, etc.
+    """
+    seller_ev = _get_seller_event()
+    if seller_ev is None:
+        return jsonify(
+            {"error": "Este endpoint só se aplica a vendedores associados a um evento."}
+        ), 404
+    products = list_event_products_for_client(seller_ev["id"])
+    promos = get_active_promotions_for_event(seller_ev["id"])
+    promo_map = build_promo_display_map(promos)
+    products = [enrich_product_with_promo(p, promo_map) for p in products]
+    return jsonify({"products": products})
 
 
 @app.route("/vendedor/api/dashboard")
@@ -1954,7 +2037,6 @@ def _cro_pedido_fields(row: dict | None) -> dict[str, str] | None:
 
 
 def _movement_payload(movement: dict) -> dict:
-    reference = movement.get("reference")
     movement_type = movement.get("movement_type")
     ev_bg, ev_fg = event_badge_style_pairs(movement.get("event_badge_color"))
     try:
@@ -1977,11 +2059,6 @@ def _movement_payload(movement: dict) -> dict:
         "delta_display": signed_filter(movement.get("delta")),
         "delta_kind": delta_kind,
         "product_url": url_for("admin_product_detail", product_id=movement["product_id"]),
-        "receipt_url": (
-            url_for("receipt", order_number=reference)
-            if movement_type == "venda" and reference
-            else None
-        ),
     }
 
 
@@ -2371,7 +2448,6 @@ def _event_subnav_context(event_id: int, active_tab: str) -> dict:
 
 def _event_movement_payload(movement: dict, *, event_id: int) -> dict:
     """Serializa uma movimentação de evento para JSON (polling / live forms)."""
-    reference = movement.get("reference")
     movement_type = movement.get("movement_type")
     ev_bg, ev_fg = event_badge_style_pairs(movement.get("event_badge_color"))
     try:
@@ -2394,11 +2470,6 @@ def _event_movement_payload(movement: dict, *, event_id: int) -> dict:
         "delta_display": signed_filter(movement.get("delta")),
         "delta_kind": delta_kind,
         "product_url": url_for("admin_product_detail", product_id=int(movement["product_id"])),
-        "receipt_url": (
-            url_for("receipt", order_number=reference)
-            if movement_type == "venda" and reference
-            else None
-        ),
     }
 
 
@@ -2696,6 +2767,135 @@ def _get_event_product_stock(event_id: int, product_id: int) -> int:
         if int(ep["product_id"]) == int(product_id):
             return int(ep["stock"] or 0)
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Eventos — sub-página Promoções
+# ---------------------------------------------------------------------------
+
+@app.route("/admin/eventos/<int:event_id>/promocoes")
+@admin_required
+def admin_event_promotions(event_id: int):
+    event = _event_or_404(event_id)
+    if event is None:
+        return redirect(url_for("admin_events"))
+    promotions = list_promotions_for_event(event_id)
+    event_products = list_event_products(event_id)
+    return render_template(
+        "admin/event_promotions.html",
+        event=event,
+        promotions=promotions,
+        event_products=event_products,
+        rule_type_labels=RULE_TYPE_LABELS,
+        active_event_tab="promocoes",
+        **_admin_shell_context(active_section="eventos"),
+    )
+
+
+@app.route("/admin/eventos/<int:event_id>/promocoes/nova", methods=["POST"])
+@admin_required
+def admin_event_promotion_create(event_id: int):
+    event = _event_or_404(event_id)
+    if event is None:
+        return redirect(url_for("admin_events"))
+    try:
+        name = (request.form.get("name") or "").strip()
+        rule_type = (request.form.get("rule_type") or "").strip()
+        rule_value = float(request.form.get("rule_value") or 0)
+        min_qty = int(request.form.get("min_qty") or 1)
+        free_qty = int(request.form.get("free_qty") or 0)
+        product_ids = [int(p) for p in request.form.getlist("product_ids") if p]
+        create_promotion(
+            event_id, name, rule_type,
+            rule_value=rule_value, min_qty=min_qty, free_qty=free_qty,
+            product_ids=product_ids,
+        )
+        flash("Promoção criada com sucesso.", "success")
+    except (ValueError, TypeError) as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("admin_event_promotions", event_id=event_id))
+
+
+@app.route("/admin/eventos/<int:event_id>/promocoes/<int:promo_id>")
+@admin_required
+def admin_event_promotion_detail(event_id: int, promo_id: int):
+    event = _event_or_404(event_id)
+    if event is None:
+        return redirect(url_for("admin_events"))
+    promo = get_promotion(promo_id)
+    if promo is None or int(promo["event_id"]) != event_id:
+        flash("Promoção não encontrada.", "error")
+        return redirect(url_for("admin_event_promotions", event_id=event_id))
+    event_products = list_event_products(event_id)
+    return render_template(
+        "admin/event_promotion_detail.html",
+        event=event,
+        promo=promo,
+        event_products=event_products,
+        rule_type_labels=RULE_TYPE_LABELS,
+        active_event_tab="promocoes",
+        **_admin_shell_context(active_section="eventos"),
+    )
+
+
+@app.route("/admin/eventos/<int:event_id>/promocoes/<int:promo_id>/editar", methods=["POST"])
+@admin_required
+def admin_event_promotion_edit(event_id: int, promo_id: int):
+    event = _event_or_404(event_id)
+    if event is None:
+        return redirect(url_for("admin_events"))
+    promo = get_promotion(promo_id)
+    if promo is None or int(promo["event_id"]) != event_id:
+        flash("Promoção não encontrada.", "error")
+        return redirect(url_for("admin_event_promotions", event_id=event_id))
+    try:
+        name = (request.form.get("name") or "").strip()
+        rule_type = (request.form.get("rule_type") or "").strip()
+        rule_value = float(request.form.get("rule_value") or 0)
+        min_qty = int(request.form.get("min_qty") or 1)
+        free_qty = int(request.form.get("free_qty") or 0)
+        active = request.form.get("active") == "1"
+        product_ids = [int(p) for p in request.form.getlist("product_ids") if p]
+        update_promotion(
+            promo_id, name, rule_type,
+            rule_value=rule_value, min_qty=min_qty, free_qty=free_qty,
+            active=active, product_ids=product_ids,
+        )
+        flash("Promoção atualizada.", "success")
+    except (ValueError, TypeError) as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("admin_event_promotion_detail", event_id=event_id, promo_id=promo_id))
+
+
+@app.route("/admin/eventos/<int:event_id>/promocoes/<int:promo_id>/ativar", methods=["POST"])
+@admin_required
+def admin_event_promotion_toggle(event_id: int, promo_id: int):
+    promo = get_promotion(promo_id)
+    if promo is None or int(promo["event_id"]) != event_id:
+        flash("Promoção não encontrada.", "error")
+        return redirect(url_for("admin_event_promotions", event_id=event_id))
+    try:
+        p = toggle_promotion_active(promo_id)
+        status = "ativada" if p["active"] else "desativada"
+        flash(f"Promoção «{p['name']}» {status}.", "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(request.referrer or url_for("admin_event_promotions", event_id=event_id))
+
+
+@app.route("/admin/eventos/<int:event_id>/promocoes/<int:promo_id>/excluir", methods=["POST"])
+@admin_required
+def admin_event_promotion_delete(event_id: int, promo_id: int):
+    promo = get_promotion(promo_id)
+    if promo is None or int(promo["event_id"]) != event_id:
+        flash("Promoção não encontrada.", "error")
+        return redirect(url_for("admin_event_promotions", event_id=event_id))
+    try:
+        delete_promotion(promo_id)
+        flash(f"Promoção «{promo['name']}» excluída.", "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(url_for("admin_event_promotions", event_id=event_id))
 
 
 # ---------------------------------------------------------------------------

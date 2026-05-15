@@ -121,6 +121,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/totem-api-errors.js') }}"></script>
 <script>
 window.__TOTEM_FLOW__ = {{ (totem_flow or {}) | tojson }};
 window.__PENDING_AUT_RESUME__ = {{ resume_pending_aut | tojson }};

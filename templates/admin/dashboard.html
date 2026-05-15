@@ -103,6 +103,7 @@
             </p>
         </div>
         <form method="POST" action="{{ url_for('admin_sync_wake') }}" id="wakeSyncForm">
+            {% include 'partials/csrf_field.html' %}
             <button type="submit" class="admin-btn admin-btn--wake" id="wakeSyncBtn">
                 <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
                 Sincronizar agora
@@ -147,6 +148,7 @@
                 class="admin-reset-form"
                 id="adminResetForm"
             >
+                {% include 'partials/csrf_field.html' %}
                 <label class="admin-reset-confirm">
                     <input type="checkbox" name="confirm_reset" value="1" id="adminResetConfirm">
                     <span>Entendo que esta operação é irreversível e desejo reiniciar o sistema.</span>

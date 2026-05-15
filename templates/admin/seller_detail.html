@@ -1,6 +1,7 @@
 {% extends "admin/_layout.html" %}
 {% from "macros/admin_tx_client.html" import admin_tx_client_section %}
 {% from "macros/admin_tx_order_cell.html" import admin_tx_order_cell %}
+{% from "macros/admin_tx_receipt_link.html" import admin_tx_receipt_link %}
 
 {% block title %}{{ seller.name }} - Vendedores - Admin | Dental Odonto Master{% endblock %}
 
@@ -99,6 +100,7 @@
             class="admin-card__form"
             novalidate
         >
+            {% include 'partials/csrf_field.html' %}
             <div class="admin-field">
                 <label class="admin-field__label" for="seller-name">Nome</label>
                 <input
@@ -218,9 +220,10 @@
         {% if transactions %}
             {% for tx in transactions %}
             <div class="admin-tx" data-tx-id="{{ tx.id }}">
-                <button
-                    type="button"
+                <div
                     class="admin-tx__row"
+                    role="button"
+                    tabindex="0"
                     aria-expanded="false"
                     aria-controls="seller-admin-tx-details-{{ tx.id }}"
                 >
@@ -233,11 +236,14 @@
                     <span class="admin-table__col admin-table__col--num"><strong>{{ tx.total | brl }}</strong></span>
                     <span class="admin-table__col">{{ tx.payment_method | paymethod(tx.card_installments) }}</span>
                     <span class="admin-table__col admin-table__col--num admin-tx__status">
-                        <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else ('warn' if tx.status == 'pendente' else ('danger' if tx.status == 'cancelado' else 'neutral')) }}">
-                            {{ tx.status }}
+                        <span class="admin-tx__status-stack">
+                            <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else ('warn' if tx.status == 'pendente' else ('danger' if tx.status == 'cancelado' else 'neutral')) }}">
+                                {{ tx.status }}
+                            </span>
+                            {{ admin_tx_receipt_link(tx) }}
                         </span>
                     </span>
-                </button>
+                </div>
 
                 <div class="admin-tx__details" id="seller-admin-tx-details-{{ tx.id }}" hidden>
                     <div class="admin-tx__details-inner">

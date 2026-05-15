@@ -1,6 +1,7 @@
 {% extends "seller/_layout.html" %}
 {% from "macros/admin_tx_client.html" import admin_tx_client_section %}
 {% from "macros/admin_tx_order_cell.html" import admin_tx_order_cell %}
+{% from "macros/admin_tx_receipt_link.html" import admin_tx_receipt_link %}
 
 {% block title %}Dashboard do vendedor - Vendedor | Dental Odonto Master{% endblock %}
 
@@ -142,6 +143,7 @@
                             <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else ('warn' if tx.status == 'pendente' else ('danger' if tx.status == 'cancelado' else 'neutral')) }}">
                                 {{ tx.status }}
                             </span>
+                            {{ admin_tx_receipt_link(tx) }}
                             {% if tx.status == 'pendente' %}
                             <a
                                 href="{{ url_for('seller_restore_pending_checkout', tx_id=tx.id) }}"
@@ -157,6 +159,7 @@
                                 class="admin-tx__discard-form"
                                 data-confirm="Descartar este pedido pendente? O carrinho não poderá ser refeito por aqui."
                             >
+                                {% include 'partials/csrf_field.html' %}
                                 <button
                                     type="submit"
                                     class="admin-tx__discard-cart"

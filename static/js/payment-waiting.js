@@ -126,17 +126,12 @@
                 ? clientData.payment_method
                 : 'cartao',
         };
-        const response = await fetch('/api/transacoes', {
+        const data = await window.TotemApiErrors.fetchJson('/api/transacoes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
             body: JSON.stringify(payload),
         });
-        let data;
-        try { data = await response.json(); } catch (_) { data = {}; }
-        if (!response.ok) {
-            throw new Error(data.error || 'Não foi possível criar o pedido.');
-        }
         return data.id;
     }
 
@@ -150,33 +145,22 @@
                 ? clientData.payment_method
                 : 'cartao',
         };
-        const response = await fetch(`/api/transacoes/${txId}`, {
+        return window.TotemApiErrors.fetchJson(`/api/transacoes/${txId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
             body: JSON.stringify(payload),
         });
-        let data;
-        try { data = await response.json(); } catch (_) { data = {}; }
-        if (!response.ok) {
-            throw new Error(data.error || 'Não foi possível atualizar o pedido.');
-        }
-        return data;
     }
 
     /** Etapa 2: confirma com AUT. Retorna order_number. */
     async function confirmWithAut(txId, aut) {
-        const response = await fetch(`/api/transacoes/${txId}/aut`, {
+        const data = await window.TotemApiErrors.fetchJson(`/api/transacoes/${txId}/aut`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
             body: JSON.stringify({ aut }),
         });
-        let data;
-        try { data = await response.json(); } catch (_) { data = {}; }
-        if (!response.ok) {
-            throw new Error(data.error || 'Não foi possível confirmar a venda.');
-        }
         return data.order_number;
     }
 

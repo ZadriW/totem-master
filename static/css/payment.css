@@ -534,6 +534,8 @@ button.payment__back {
     font-size: 13px;
     color: var(--color-danger, #c0392b);
     margin: 0;
+    white-space: pre-line;
+    line-height: 1.45;
 }
 
 .payment-aut__error[hidden] {

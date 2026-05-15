@@ -662,3 +662,9 @@
         transform: translateY(0);
     }
 }
+
+.catalog-stock-sync-warning {
+    font-weight: 600;
+    color: var(--color-text-muted, #6b7280);
+    cursor: help;
+}

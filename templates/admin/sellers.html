@@ -22,6 +22,7 @@
             </div>
         </header>
         <form method="post" action="{{ url_for('admin_sellers') }}" class="admin-card__form" novalidate>
+            {% include 'partials/csrf_field.html' %}
             <div class="admin-field">
                 <label class="admin-field__label" for="seller-name">Nome</label>
                 <input
@@ -183,6 +184,7 @@
                         class="admin-sellers__delete-form"
                         data-confirm="{{ ('Excluir permanentemente o vendedor ' ~ seller.name ~ '? As vendas confirmadas permanecem no histórico, sem vínculo a esta conta.') | e }}"
                     >
+                        {% include 'partials/csrf_field.html' %}
                         <button
                             type="submit"
                             class="admin-btn admin-btn--ghost admin-btn--sm admin-btn--danger"
