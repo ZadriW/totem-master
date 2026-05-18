@@ -42,6 +42,13 @@
         </label>
 
         <label class="admin-filter">
+            <span class="admin-filter__label">Data do pedido</span>
+            <input type="date" name="data" class="admin-filter__input"
+                   value="{{ filters.data }}"
+                   title="Filtrar pelo dia da transação (data de registro no sistema); deixe vazio para todos os dias">
+        </label>
+
+        <label class="admin-filter">
             <span class="admin-filter__label">Por página</span>
             <select name="per_page" class="admin-filter__input" title="Quantidade de transações por página">
                 {% for n in allowed_per_page %}
@@ -220,7 +227,7 @@
         <div class="admin-pagination__nav">
             {% if pagination.has_prev %}
             <a class="admin-btn admin-btn--ghost admin-btn--sm"
-               href="{{ url_for('seller_transactions', pedido=filters.pedido, status=filters.status, per_page=filters.per_page, page=pagination.page - 1) }}"
+               href="{{ url_for('seller_transactions', pedido=filters.pedido, status=filters.status, data=filters.data, per_page=filters.per_page, page=pagination.page - 1) }}"
                rel="prev">
                 <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
                 Anterior
@@ -233,7 +240,7 @@
             {% endif %}
             {% if pagination.has_next %}
             <a class="admin-btn admin-btn--ghost admin-btn--sm"
-               href="{{ url_for('seller_transactions', pedido=filters.pedido, status=filters.status, per_page=filters.per_page, page=pagination.page + 1) }}"
+               href="{{ url_for('seller_transactions', pedido=filters.pedido, status=filters.status, data=filters.data, per_page=filters.per_page, page=pagination.page + 1) }}"
                rel="next">
                 Próxima
                 <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>

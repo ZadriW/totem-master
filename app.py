@@ -19,6 +19,12 @@ from collections import defaultdict
 from functools import wraps
 from datetime import datetime
 
+try:
+    import xlrd as _xlrd  # .xls legacy (BIFF)
+    _XLRD_AVAILABLE = True
+except ImportError:
+    _XLRD_AVAILABLE = False
+
 from flask import (
     Flask,
     Response,
@@ -41,6 +47,7 @@ from data.products import CATEGORIES
 from database import (
     EXPORT_MOVEMENTS_CSV_CAP,
     RULE_TYPE_LABELS,
+    active_promotion_tooltip_by_product_id,
     build_promo_display_map,
     create_promotion,
     delete_promotion,
@@ -48,6 +55,7 @@ from database import (
     get_active_promotions_for_event,
     get_promotion,
     list_promotions_for_event,
+    product_ids_with_active_promotions_for_event,
     toggle_promotion_active,
     update_promotion,
     add_product_to_event,
@@ -985,6 +993,8 @@ def seller_stock():
             per_page=filters["per_page"],
             page=pagination["page"],
         )
+        promo_product_ids = product_ids_with_active_promotions_for_event(ev_id)
+        promo_tooltips = active_promotion_tooltip_by_product_id(ev_id)
         return render_template(
             "seller/stock.html",
             products=products,
@@ -994,6 +1004,8 @@ def seller_stock():
             pagination=pagination,
             allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
             stock_api_url=stock_api_url,
+            promo_product_ids=promo_product_ids,
+            promo_tooltips=promo_tooltips,
             **_seller_shell_context(active_section="estoque"),
         )
     products, filters, pagination = _admin_stock_page_view()
@@ -1009,6 +1021,8 @@ def seller_stock():
                               q=filters["q"], categoria=filters["categoria"],
                               status=filters["status"],
                               per_page=filters["per_page"], page=pagination["page"]),
+        promo_product_ids=frozenset(),
+        promo_tooltips={},
         **_seller_shell_context(active_section="estoque"),
     )
 
@@ -1090,6 +1104,10 @@ def seller_transactions():
     valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado"})
     status_norm = status_raw if status_raw in valid_status else "todos"
 
+    date_arg_raw = (request.args.get("data") or "").strip()
+    on_date = _parse_tx_filter_date_arg(date_arg_raw)
+    filter_date_display = on_date or ""
+
     per_page = _parse_int(request.args.get("per_page"), DEFAULT_ADMIN_MOVEMENTS_PER_PAGE)
     if per_page not in ALLOWED_ADMIN_STOCK_PER_PAGE:
         per_page = DEFAULT_ADMIN_MOVEMENTS_PER_PAGE
@@ -1104,12 +1122,14 @@ def seller_transactions():
             seller_id=seller_id,
             order_search=pedido or None,
             status=status_api,
+            on_date=on_date,
         )
     else:
         total = count_transactions_for_seller(
             seller_id,
             order_search=pedido or None,
             status=status_api,
+            on_date=on_date,
         )
 
     total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
@@ -1122,6 +1142,7 @@ def seller_transactions():
             seller_id=seller_id,
             order_search=pedido or None,
             status=status_api,
+            on_date=on_date,
             limit=per_page,
             offset=offset,
         )
@@ -1130,6 +1151,7 @@ def seller_transactions():
             seller_id,
             order_search=pedido or None,
             status=status_api,
+            on_date=on_date,
             limit=per_page,
             offset=offset,
         )
@@ -1141,6 +1163,7 @@ def seller_transactions():
         "pedido": pedido,
         "status": status_norm,
         "per_page": per_page,
+        "data": filter_date_display,
     }
     pagination = {
         "page": page,
@@ -1247,6 +1270,8 @@ def seller_api_event_stock():
     ev_id = seller_ev["id"]
     products, _filters, pagination = _seller_event_stock_page_view(ev_id)
     ev_stats = get_event_stock_stats(ev_id)
+    promo_ids = product_ids_with_active_promotions_for_event(ev_id)
+    promo_tooltips = active_promotion_tooltip_by_product_id(ev_id)
     stock = {
         "products_count": ev_stats["products_count"],
         "products_active": ev_stats["products_count"],
@@ -1263,9 +1288,19 @@ def seller_api_event_stock():
             "total": pagination["total"],
             "total_pages": pagination["total_pages"],
         },
-        "products": [{**p, "status": _event_product_status({
-            "stock": p["estoque"], "min_stock": p["estoque_minimo"], "product_active": p["ativo"],
-        })} for p in products],
+        "products": [
+            {
+                **p,
+                "status": _event_product_status({
+                    "stock": p["estoque"],
+                    "min_stock": p["estoque_minimo"],
+                    "product_active": p["ativo"],
+                }),
+                "active_promo": int(p["id"]) in promo_ids,
+                "promo_tooltip": promo_tooltips.get(int(p["id"]), ""),
+            }
+            for p in products
+        ],
     })
 
 
@@ -1704,6 +1739,7 @@ def _admin_shell_context(**extra):
 ALLOWED_ADMIN_STOCK_PER_PAGE = (10, 25, 50, 100)
 DEFAULT_ADMIN_STOCK_PER_PAGE = 25
 DEFAULT_ADMIN_MOVEMENTS_PER_PAGE = 25
+EVENT_IMPORT_XLS_MOTIVO_REF = "Importação por Planilha"
 
 
 def _admin_stock_list_query_params():
@@ -1995,6 +2031,18 @@ def _parse_float(value):
         return None
 
 
+def _parse_tx_filter_date_arg(value) -> str | None:
+    """``YYYY-MM-DD`` para filtro por dia em ``transactions.created_at``; inválido/absento → ``None``."""
+    s = (value or "").strip()
+    if len(s) != 10:
+        return None
+    try:
+        datetime.strptime(s, "%Y-%m-%d")
+    except ValueError:
+        return None
+    return s
+
+
 def _wants_json_response() -> bool:
     """Detecta chamadas AJAX/API sem mudar o fluxo HTML existente."""
     return (
@@ -2189,6 +2237,52 @@ def _csv_cell(value):
     return value
 
 
+def _csv_fmt_date(value) -> str:
+    """Converte ISO datetime (AAAA-MM-DD...) para DD/MM/AAAA; retorna vazio se inválido."""
+    s = str(value or "").strip().replace("T", " ")
+    date_part = s[:10]  # AAAA-MM-DD
+    try:
+        return datetime.strptime(date_part, "%Y-%m-%d").strftime("%d/%m/%Y")
+    except ValueError:
+        return date_part
+
+
+def _csv_fmt_time(value) -> str:
+    """Extrai HH:MM de ISO datetime; retorna vazio se inválido."""
+    s = str(value or "").strip().replace("T", " ")
+    time_part = s[11:16] if len(s) >= 16 else ""  # HH:MM
+    if len(time_part) == 5 and time_part[2] == ":":
+        return time_part
+    return ""
+
+
+def _csv_fmt_brl(value) -> str:
+    """Formata valor numérico como decimal com 2 casas (ponto como separador decimal)."""
+    if value is None or value == "":
+        return ""
+    try:
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _csv_fmt_delta(value) -> str:
+    """Formata variação de estoque com sinal explícito (+5 / -3)."""
+    if value is None or value == "":
+        return ""
+    try:
+        n = int(value)
+        return f"+{n}" if n >= 0 else str(n)
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _csv_fmt_status(value) -> str:
+    """Capitaliza status da transação."""
+    s = str(value or "").strip()
+    return s.capitalize() if s else ""
+
+
 def _csv_attachment_response(filename: str, header: list[str], rows: list[list]) -> Response:
     buf = io.StringIO()
     writer = csv.writer(buf, lineterminator="\r\n")
@@ -2207,47 +2301,47 @@ def _csv_attachment_response(filename: str, header: list[str], rows: list[list])
 
 
 def _movement_export_table(movements: list[dict]) -> tuple[list[str], list[list]]:
+    # Ordem lógica: data/hora → tipo → produto → estoque → contexto → autoria → identificação
     header = [
-        "id_movimento",
-        "data_hora",
-        "tipo",
-        "tipo_descricao",
-        "produto_id",
-        "produto_nome",
-        "categoria",
-        "quantidade",
-        "delta",
-        "saldo_apos",
-        "evento_id",
-        "evento_nome",
-        "referencia",
-        "motivo",
-        "transacao_id",
-        "registrado_por",
-        "custo_unitario",
+        "Data",
+        "Hora",
+        "Tipo de Movimentação",
+        "Produto",
+        "SKU",
+        "Categoria",
+        "Qtd. na Operação",
+        "Variação de Estoque",
+        "Saldo Após",
+        "Evento",
+        "Referência (Pedido)",
+        "Motivo / Observação",
+        "Registrado por",
+        "Custo Unitário (R$)",
+        "ID Transação",
+        "ID Movimento",
     ]
     rows: list[list] = []
     for m in movements:
         mt = m.get("movement_type")
+        created = m.get("created_at")
         rows.append(
             [
-                _csv_cell(m.get("id")),
-                _csv_cell(m.get("created_at")),
-                _csv_cell(mt),
+                _csv_fmt_date(created),
+                _csv_fmt_time(created),
                 mov_label_filter(mt),
-                _csv_cell(m.get("product_id")),
                 _csv_cell(m.get("product_name")),
+                _csv_cell(m.get("product_sku")),
                 _csv_cell(m.get("product_category")),
                 _csv_cell(m.get("quantity")),
-                _csv_cell(m.get("delta")),
+                _csv_fmt_delta(m.get("delta")),
                 _csv_cell(m.get("balance_after")),
-                _csv_cell(m.get("event_id")),
                 _csv_cell(m.get("event_name")),
                 _csv_cell(m.get("reference")),
                 _csv_cell(m.get("reason")),
+                _display_created_by(m.get("created_by")),
+                _csv_fmt_brl(m.get("unit_cost")),
                 _csv_cell(m.get("transaction_id")),
-                _csv_cell(m.get("created_by")),
-                _csv_cell(m.get("unit_cost")),
+                _csv_cell(m.get("id")),
             ]
         )
     return header, rows
@@ -2310,37 +2404,49 @@ def admin_event_sales_export_csv(event_id: int):
             date_from=raw_from or None,
             date_to=raw_to or None,
         )
+        # Ordem lógica: identificação → data/hora → situação → vendedor →
+        #               financeiro → pagamento → cliente → CRO → ID interno
         header = [
-            "pedido_id",
-            "codigo_pedido",
-            "data_hora",
-            "total",
-            "qtd_itens",
-            "status",
-            "cliente_nome",
-            "cliente_cpf",
-            "cliente_cep",
-            "cliente_endereco",
-            "cliente_numero",
-            "cliente_complemento",
-            "cliente_cidade",
-            "cliente_estado",
-            "vendedor_id",
-            "vendedor_nome",
-            "forma_pagamento",
-            "cro_uf",
-            "cro_numero_registro",
+            "Código do Pedido",
+            "Data",
+            "Hora",
+            "Status",
+            "Vendedor",
+            "Qtd. de Itens",
+            "Valor Total (R$)",
+            "Forma de Pagamento",
+            "AUT",
+            "Nome do Cliente",
+            "CPF",
+            "CEP",
+            "Endereço",
+            "Número",
+            "Complemento",
+            "Cidade",
+            "UF",
+            "CRO UF",
+            "Nº CRO",
+            "ID Interno",
         ]
         rows = []
         for t in rows_data:
+            created = t.get("created_at")
             rows.append(
                 [
-                    _csv_cell(t.get("id")),
                     _csv_cell(t.get("order_number")),
-                    _csv_cell(t.get("created_at")),
-                    _csv_cell(t.get("total")),
+                    _csv_fmt_date(created),
+                    _csv_fmt_time(created),
+                    _csv_fmt_status(t.get("status")),
+                    _csv_cell(t.get("seller_name")),
                     _csv_cell(t.get("items_count")),
-                    _csv_cell(t.get("status")),
+                    _csv_fmt_brl(t.get("total")),
+                    _csv_cell(
+                        _payment_method_label(
+                            t.get("payment_method"),
+                            t.get("card_installments"),
+                        )
+                    ),
+                    _csv_cell(t.get("aut")),
                     _csv_cell(t.get("client_name")),
                     _csv_cell(t.get("client_cpf")),
                     _csv_cell(t.get("client_zipcode")),
@@ -2349,16 +2455,9 @@ def admin_event_sales_export_csv(event_id: int):
                     _csv_cell(t.get("client_complement")),
                     _csv_cell(t.get("client_city")),
                     _csv_cell(t.get("client_state")),
-                    _csv_cell(t.get("seller_id")),
-                    _csv_cell(t.get("seller_name")),
-                    _csv_cell(
-                        _payment_method_label(
-                            t.get("payment_method"),
-                            t.get("card_installments"),
-                        )
-                    ),
                     _csv_cell(t.get("client_cro_uf")),
                     _csv_cell(t.get("client_cro_numero")),
+                    _csv_cell(t.get("id")),
                 ]
             )
         fname = f"vendas_evento_{event_id}_{safe_ev}_pedidos_{ts}.csv"
@@ -2368,31 +2467,32 @@ def admin_event_sales_export_csv(event_id: int):
             date_from=raw_from or None,
             date_to=raw_to or None,
         )
+        # Ordem lógica: pedido → data/hora → vendedor → pagamento →
+        #               produto → quantidades → valores → IDs
         header = [
-            "item_id",
-            "pedido_id",
-            "codigo_pedido",
-            "data_hora_pedido",
-            "vendedor_id",
-            "vendedor_nome",
-            "forma_pagamento",
-            "produto_id",
-            "produto_nome",
-            "categoria",
-            "sku",
-            "quantidade",
-            "preco_unitario",
-            "subtotal",
+            "Código do Pedido",
+            "Data",
+            "Hora",
+            "Vendedor",
+            "Forma de Pagamento",
+            "AUT",
+            "Produto",
+            "SKU",
+            "Categoria",
+            "Qtd.",
+            "Preço Unitário (R$)",
+            "Subtotal (R$)",
+            "ID Pedido",
+            "ID Item",
         ]
         rows = []
         for ti in rows_data:
+            created = ti.get("created_at")
             rows.append(
                 [
-                    _csv_cell(ti.get("item_id")),
-                    _csv_cell(ti.get("transaction_id")),
                     _csv_cell(ti.get("order_number")),
-                    _csv_cell(ti.get("created_at")),
-                    _csv_cell(ti.get("seller_id")),
+                    _csv_fmt_date(created),
+                    _csv_fmt_time(created),
                     _csv_cell(ti.get("seller_name")),
                     _csv_cell(
                         _payment_method_label(
@@ -2400,13 +2500,15 @@ def admin_event_sales_export_csv(event_id: int):
                             ti.get("card_installments"),
                         )
                     ),
-                    _csv_cell(ti.get("product_id")),
+                    _csv_cell(ti.get("aut")),
                     _csv_cell(ti.get("product_name")),
-                    _csv_cell(ti.get("category")),
                     _csv_cell(ti.get("product_sku")),
+                    _csv_cell(ti.get("category")),
                     _csv_cell(ti.get("quantity")),
-                    _csv_cell(ti.get("unit_price")),
-                    _csv_cell(ti.get("subtotal")),
+                    _csv_fmt_brl(ti.get("unit_price")),
+                    _csv_fmt_brl(ti.get("subtotal")),
+                    _csv_cell(ti.get("transaction_id")),
+                    _csv_cell(ti.get("item_id")),
                 ]
             )
         fname = f"vendas_evento_{event_id}_{safe_ev}_itens_{ts}.csv"
@@ -2589,6 +2691,8 @@ def admin_event_stock(event_id: int):
         return redirect(url_for("admin_events"))
     products, filters, pagination = _admin_event_stock_page_view(event_id)
     stats = get_event_stock_stats(event_id)
+    promo_product_ids = product_ids_with_active_promotions_for_event(event_id)
+    promo_tooltips = active_promotion_tooltip_by_product_id(event_id)
     return render_template(
         "admin/event_stock.html",
         event=event,
@@ -2596,6 +2700,8 @@ def admin_event_stock(event_id: int):
         stats=stats,
         filters=filters,
         pagination=pagination,
+        promo_product_ids=promo_product_ids,
+        promo_tooltips=promo_tooltips,
         categories=_admin_stock_library_category_options(),
         allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
         active_event_tab="estoque",
@@ -2644,6 +2750,154 @@ def admin_event_add_product(event_id: int):
         flash(f"Produto \"{product['name']}\" adicionado ao evento.", "success")
     except ValueError as exc:
         flash(str(exc), "error")
+    return redirect(_url_for_admin_event_stock_list(event_id, preserved, page_override=1))
+
+
+def _parse_xls_skus(file_bytes: bytes) -> list[str]:
+    """Extrai os valores únicos e não-vazios da coluna A (índice 0) de um arquivo .xls,
+    usados como SKU/código de produto.
+
+    Estratégia de detecção do início dos dados:
+    - Procura a PRIMEIRA linha em que a coluna A seja um valor NUMÉRICO (xlrd ctype 2).
+      Isso ignora automaticamente linhas de título, metadados e cabeçalho de colunas
+      (que são sempre texto), exatamente como na planilha Item_Nota_Pedido.xls.
+    - Se não houver nenhuma linha numérica, aceita a primeira linha de texto curto (<= 40
+      caracteres) que não pareça uma frase (sem espaços longos, sem ":/" etc.), para cobrir
+      planilhas cujos SKUs são alfanuméricos.
+
+    Retorna lista ordenada de strings (inteiros sem ".0").
+    """
+    if not _XLRD_AVAILABLE:
+        raise RuntimeError("Biblioteca xlrd não instalada. Execute: pip install xlrd")
+    wb = _xlrd.open_workbook(file_contents=file_bytes)
+    skus: list[str] = []
+    seen: set[str] = set()
+    for sheet_idx in range(wb.nsheets):
+        sh = wb.sheet_by_index(sheet_idx)
+
+        # Passo 1: encontra a primeira linha numérica → início dos dados
+        data_start: int | None = None
+        for r in range(sh.nrows):
+            cell = sh.cell(r, 0)
+            if cell.ctype == 2 and cell.value:  # XL_CELL_NUMBER, não-zero/não-vazio
+                data_start = r
+                break
+
+        # Passo 2: fallback para planilhas com SKU alfanumérico (sem linhas numéricas)
+        if data_start is None:
+            for r in range(sh.nrows):
+                cell = sh.cell(r, 0)
+                if cell.ctype == 1:
+                    v = str(cell.value).strip()
+                    # Aceita texto curto sem espaços múltiplos, sem ":/,(", sem "Emissão"
+                    if (v and len(v) <= 40
+                            and " " not in v
+                            and not any(c in v for c in ":/, (")):
+                        data_start = r
+                        break
+
+        if data_start is None:
+            continue
+
+        for r in range(data_start, sh.nrows):
+            cell = sh.cell(r, 0)
+            if cell.ctype == 2:
+                raw = cell.value
+                # Converte número para string sem ".0" desnecessário
+                sku = str(int(raw)) if raw == int(raw) else str(raw)
+            elif cell.ctype == 1:
+                sku = str(cell.value).strip()
+            else:
+                continue
+            sku = sku.strip()
+            if sku and sku not in seen:
+                seen.add(sku)
+                skus.append(sku)
+    return skus
+
+
+@app.route("/admin/eventos/<int:event_id>/produtos/importar-xls", methods=["POST"])
+@admin_required
+def admin_event_import_xls(event_id: int):
+    """Importa produtos em lote para o evento a partir de planilha .xls/.xlsx.
+
+    Lê os valores da coluna A (SKU ou ID numérico) e tenta adicionar cada produto
+    ao evento via ``find_product_by_sku_or_id`` + ``add_product_to_event`` (com
+    movimentação tipo ``ajuste`` e motivo ``Importação por Planilha``).
+
+    Redireciona de volta ao estoque com um flash detalhado do resultado.
+    """
+    event = _event_or_404(event_id)
+    preserved = _event_stock_return_filters_from_form()
+    if event is None:
+        return redirect(url_for("admin_events"))
+
+    uploaded = request.files.get("xls_file")
+    if not uploaded or not uploaded.filename:
+        flash("Selecione uma planilha (.xls) para importar.", "error")
+        return redirect(_url_for_admin_event_stock_list(event_id, preserved))
+
+    fname = (uploaded.filename or "").lower()
+    if not (fname.endswith(".xls") or fname.endswith(".xlsx")):
+        flash("Formato inválido. Envie um arquivo .xls (Excel legado).", "error")
+        return redirect(_url_for_admin_event_stock_list(event_id, preserved))
+
+    try:
+        file_bytes = uploaded.read()
+        if len(file_bytes) > 5 * 1024 * 1024:  # 5 MB max
+            flash("Arquivo muito grande (máx. 5 MB).", "error")
+            return redirect(_url_for_admin_event_stock_list(event_id, preserved))
+
+        skus = _parse_xls_skus(file_bytes)
+    except RuntimeError as exc:
+        flash(str(exc), "error")
+        return redirect(_url_for_admin_event_stock_list(event_id, preserved))
+    except Exception as exc:
+        flash(f"Não foi possível ler a planilha: {exc}", "error")
+        return redirect(_url_for_admin_event_stock_list(event_id, preserved))
+
+    if not skus:
+        flash("Nenhum código encontrado na coluna A da planilha.", "error")
+        return redirect(_url_for_admin_event_stock_list(event_id, preserved))
+
+    added: list[str] = []
+    already: list[str] = []
+    not_found: list[str] = []
+    import_actor = _current_admin_user()
+
+    for sku in skus:
+        product = find_product_by_sku_or_id(sku)
+        if product is None:
+            not_found.append(sku)
+            continue
+        try:
+            add_product_to_event(
+                event_id,
+                int(product["id"]),
+                0,
+                0,
+                link_audit_reason=EVENT_IMPORT_XLS_MOTIVO_REF,
+                link_audit_reference=None,
+                created_by=import_actor,
+            )
+            added.append(product["name"])
+        except ValueError:
+            # "Produto já adicionado a este evento."
+            already.append(product["name"])
+
+    # Monta mensagem de resultado
+    parts: list[str] = []
+    if added:
+        parts.append(f"{len(added)} produto(s) adicionado(s) com sucesso")
+    if already:
+        parts.append(f"{len(already)} já estavam no evento")
+    if not_found:
+        parts.append(f"{len(not_found)} código(s) não encontrado(s) no catálogo: {', '.join(not_found[:10])}{'…' if len(not_found) > 10 else ''}")
+
+    summary = " · ".join(parts) if parts else "Nenhuma alteração realizada."
+    category = "success" if added else ("error" if not_found and not already else "info")
+    flash(summary, category)
+
     return redirect(_url_for_admin_event_stock_list(event_id, preserved, page_override=1))
 
 
@@ -2854,7 +3108,8 @@ def admin_event_promotion_edit(event_id: int, promo_id: int):
         rule_value = float(request.form.get("rule_value") or 0)
         min_qty = int(request.form.get("min_qty") or 1)
         free_qty = int(request.form.get("free_qty") or 0)
-        active = request.form.get("active") == "1"
+        # Ativar/desativar é só pelo botão dedicado (admin_event_promotion_toggle).
+        active = bool(int(promo.get("active") or 0))
         product_ids = [int(p) for p in request.form.getlist("product_ids") if p]
         update_promotion(
             promo_id, name, rule_type,
@@ -2986,6 +3241,10 @@ def admin_event_transactions(event_id: int):
     valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado"})
     status_norm = status_raw if status_raw in valid_status else "todos"
 
+    date_arg_raw = (request.args.get("data") or "").strip()
+    on_date = _parse_tx_filter_date_arg(date_arg_raw)
+    filter_date_display = on_date or ""
+
     event_sellers_rows = list_event_sellers(event_id)
     event_seller_ids = {int(s["id"]) for s in event_sellers_rows}
     seller_raw = _parse_int(request.args.get("vendedor"), 0)
@@ -3005,6 +3264,7 @@ def admin_event_transactions(event_id: int):
         seller_id=seller_filter,
         order_search=pedido or None,
         status=status_api,
+        on_date=on_date,
     )
     total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
     page = min(page, total_pages)
@@ -3015,6 +3275,7 @@ def admin_event_transactions(event_id: int):
         seller_id=seller_filter,
         order_search=pedido or None,
         status=status_api,
+        on_date=on_date,
         limit=per_page,
         offset=offset,
     )
@@ -3027,6 +3288,7 @@ def admin_event_transactions(event_id: int):
         "status": status_norm,
         "vendedor": seller_raw,
         "per_page": per_page,
+        "data": filter_date_display,
     }
     pagination = {
         "page": page,
@@ -3062,6 +3324,8 @@ def admin_api_event_stock(event_id: int):
     if _event_or_404(event_id) is None:
         return jsonify({"error": "Evento não encontrado."}), 404
     products, _filters, pagination = _admin_event_stock_page_view(event_id)
+    promo_ids = product_ids_with_active_promotions_for_event(event_id)
+    promo_tooltips = active_promotion_tooltip_by_product_id(event_id)
     return jsonify({
         "stats": get_event_stock_stats(event_id),
         "pagination": {
@@ -3077,6 +3341,8 @@ def admin_api_event_stock(event_id: int):
                 "estoque": p["stock"],
                 "estoque_minimo": p["min_stock"],
                 "status": _event_product_status(p),
+                "active_promo": int(p["product_id"]) in promo_ids,
+                "promo_tooltip": promo_tooltips.get(int(p["product_id"]), ""),
             }
             for p in products
         ],

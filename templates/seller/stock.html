@@ -157,7 +157,25 @@
                 <span class="admin-stock__product">
                     <img class="admin-stock__thumb" src="{{ p.imagem }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
                     <span>
-                        <strong>{{ p.nome }}</strong>
+                        <span class="admin-stock__product-name-row">
+                            <strong>{{ p.nome }}</strong>
+                            {% set promo_tip = promo_tooltips.get(p.id, '') %}
+                            <span class="admin-stock__promo-wrap"
+                                  data-stock-promo-wrap
+                                  {% if p.id not in promo_product_ids %}hidden{% endif %}>
+                                <span class="admin-stock__promo-tag-icon"
+                                      data-stock-promo-icon
+                                      title="{{ (promo_tip or 'Produto com promoção ativa neste evento')|e }}"
+                                      role="img"
+                                      tabindex="0"
+                                      aria-label="{{ ('Promoções: ' ~ promo_tip)|e if promo_tip else 'Em promoção' }}">
+                                    <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                                </span>
+                                <span class="admin-stock__promo-tooltip-panel {% if not promo_tip %}admin-stock__promo-tooltip-panel--empty{% endif %}"
+                                      data-stock-promo-tooltip-panel
+                                      role="tooltip">{{ promo_tip }}</span>
+                            </span>
+                        </span>
                         <small class="admin-stock__meta">ID: {{ p.id }} | SKU: <code class="admin-stock__sku-code">{{ p.sku or '—' }}</code></small>
                     </span>
                 </span>

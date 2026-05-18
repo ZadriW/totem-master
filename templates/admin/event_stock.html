@@ -94,7 +94,7 @@
 
     {# ---- Adicionar produto ---- #}
     {% if event.active %}
-    <div class="admin-card admin-card--form" style="margin-bottom:24px;">
+    <div class="admin-card admin-card--form" style="margin-bottom:16px;">
         <h2 class="admin-card__title">
             <i class="fa-solid fa-plus" aria-hidden="true"></i>
             Adicionar produto ao evento
@@ -121,6 +121,54 @@
                 <button type="submit" class="admin-btn admin-btn--primary">
                     <i class="fa-solid fa-plus" aria-hidden="true"></i>
                     Adicionar
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {# ---- Importar planilha XLS ---- #}
+    <div class="admin-card admin-card--form admin-card--import-xls" style="margin-bottom:24px;">
+        <h2 class="admin-card__title">
+            <i class="fa-solid fa-file-excel" aria-hidden="true"></i>
+            Importar produtos via planilha
+        </h2>
+        <p class="admin-card__subtitle">
+            Envie uma planilha <strong>.xls</strong> (formato Item Nota/Pedido). Os códigos da
+            <strong>coluna A</strong> serão usados como SKU para localizar e adicionar os
+            produtos a este evento. Produtos já presentes ou não encontrados no catálogo são
+            informados no resultado.
+        </p>
+        <form method="post"
+              action="{{ url_for('admin_event_import_xls', event_id=event.id) }}"
+              enctype="multipart/form-data"
+              class="admin-card__form admin-import-xls-form"
+              id="formImportXls">
+            {% include 'partials/csrf_field.html' %}
+            {{ event_stock_preserved_filters(filters, pagination) }}
+            <div class="admin-field">
+                <label class="admin-field__label" for="xls-upload">Arquivo de planilha (.xls)</label>
+                <div class="admin-import-xls__drop-zone" id="xlsDropZone" role="button" tabindex="0"
+                     aria-label="Clique ou arraste uma planilha .xls aqui">
+                    <input id="xls-upload" type="file" name="xls_file"
+                           accept=".xls,.xlsx"
+                           class="admin-import-xls__input"
+                           aria-describedby="hint-xls-upload"
+                           required>
+                    <div class="admin-import-xls__drop-content" id="xlsDropContent">
+                        <i class="fa-solid fa-file-arrow-up admin-import-xls__icon" aria-hidden="true"></i>
+                        <span class="admin-import-xls__label">Arraste a planilha aqui ou <strong>clique para selecionar</strong></span>
+                        <span class="admin-import-xls__hint" id="xlsFileHint">Aceito: .xls</span>
+                    </div>
+                </div>
+                <span id="hint-xls-upload" class="admin-filter__hint">
+                    Os valores da coluna A serão interpretados como SKU/código do produto.
+                    Máximo: 5 MB.
+                </span>
+            </div>
+            <div class="admin-card__actions">
+                <button type="submit" class="admin-btn admin-btn--primary" id="xlsSubmitBtn">
+                    <i class="fa-solid fa-file-import" aria-hidden="true"></i>
+                    Importar produtos
                 </button>
             </div>
         </form>
@@ -155,7 +203,25 @@
                     <img class="admin-stock__thumb" src="{{ p.image or '' }}" alt=""
                          loading="lazy" onerror="this.style.visibility='hidden'">
                     <span>
-                        <strong>{{ p.name }}</strong>
+                        <span class="admin-stock__product-name-row">
+                            <strong>{{ p.name }}</strong>
+                            {% set promo_tip = promo_tooltips.get(p.product_id, '') %}
+                            <span class="admin-stock__promo-wrap"
+                                  data-stock-promo-wrap
+                                  {% if p.product_id not in promo_product_ids %}hidden{% endif %}>
+                                <span class="admin-stock__promo-tag-icon"
+                                      data-stock-promo-icon
+                                      title="{{ (promo_tip or 'Produto com promoção ativa neste evento')|e }}"
+                                      role="img"
+                                      tabindex="0"
+                                      aria-label="{{ ('Promoções: ' ~ promo_tip)|e if promo_tip else 'Em promoção' }}">
+                                    <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                                </span>
+                                <span class="admin-stock__promo-tooltip-panel {% if not promo_tip %}admin-stock__promo-tooltip-panel--empty{% endif %}"
+                                      data-stock-promo-tooltip-panel
+                                      role="tooltip">{{ promo_tip }}</span>
+                            </span>
+                        </span>
                         <small class="admin-stock__meta">
                             ID: {{ p.product_id }} | SKU: <code class="admin-stock__sku-code">{{ p.sku or '—' }}</code>
                         </small>
@@ -264,4 +330,74 @@
 
 {% block admin_scripts %}
 <script src="{{ url_for('static', filename='js/admin-stock-live.js') }}"></script>
+<script>
+(function () {
+    'use strict';
+    var zone    = document.getElementById('xlsDropZone');
+    var input   = document.getElementById('xls-upload');
+    var hint    = document.getElementById('xlsFileHint');
+    var btn     = document.getElementById('xlsSubmitBtn');
+    var form    = document.getElementById('formImportXls');
+    if (!zone || !input) return;
+
+    function setFile(name) {
+        if (name) {
+            hint.textContent = '📄 ' + name;
+            zone.classList.add('admin-import-xls__drop-zone--has-file');
+        } else {
+            hint.textContent = 'Aceito: .xls';
+            zone.classList.remove('admin-import-xls__drop-zone--has-file');
+        }
+    }
+
+    zone.addEventListener('click', function (e) {
+        if (e.target !== input) input.click();
+    });
+    zone.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+    });
+    input.addEventListener('change', function () {
+        setFile(input.files[0] ? input.files[0].name : '');
+    });
+
+    zone.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        zone.classList.add('admin-import-xls__drop-zone--drag');
+    });
+    ['dragleave', 'dragend'].forEach(function (ev) {
+        zone.addEventListener(ev, function () {
+            zone.classList.remove('admin-import-xls__drop-zone--drag');
+        });
+    });
+    zone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        zone.classList.remove('admin-import-xls__drop-zone--drag');
+        var files = e.dataTransfer.files;
+        if (!files || !files.length) return;
+        var file = files[0];
+        var lower = file.name.toLowerCase();
+        if (!lower.endsWith('.xls') && !lower.endsWith('.xlsx')) {
+            hint.textContent = '⚠ Formato inválido. Envie um arquivo .xls';
+            zone.classList.remove('admin-import-xls__drop-zone--has-file');
+            return;
+        }
+        // Transfere para o input via DataTransfer
+        try {
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+            setFile(file.name);
+        } catch (_) {
+            hint.textContent = '⚠ Arraste não suportado; selecione o arquivo manualmente.';
+        }
+    });
+
+    if (form && btn) {
+        form.addEventListener('submit', function () {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Importando…';
+        });
+    }
+}());
+</script>
 {% endblock %}

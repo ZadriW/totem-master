@@ -2,6 +2,7 @@
     'use strict';
 
     const POLL_MS = 2000;
+    const PROMO_ICON_FALLBACK_TITLE = 'Produto com promoção ativa neste evento';
 
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -231,8 +232,35 @@
                 if (!product) return;
                 const qty = row.querySelector('[data-stock-qty]');
                 const status = row.querySelector('[data-stock-status]');
+                const promoWrap = row.querySelector('[data-stock-promo-wrap]');
+                const promoIcon = row.querySelector('[data-stock-promo-icon]');
+                const promoTipPanel = row.querySelector('[data-stock-promo-tooltip-panel]');
                 if (qty) qty.innerHTML = `<strong>${escapeHtml(product.estoque)}</strong>`;
                 if (status) status.innerHTML = badge(product.status);
+                const promoRoot = promoWrap || promoIcon;
+                if (promoRoot && promoIcon && Object.prototype.hasOwnProperty.call(product, 'active_promo')) {
+                    if (product.active_promo) {
+                        if (promoWrap) promoWrap.removeAttribute('hidden');
+                        else promoIcon.removeAttribute('hidden');
+                        const tip = String(product.promo_tooltip ?? '').trim();
+                        if (promoTipPanel) {
+                            promoTipPanel.textContent = tip;
+                            promoTipPanel.classList.toggle('admin-stock__promo-tooltip-panel--empty', !tip);
+                        }
+                        promoIcon.title = tip || PROMO_ICON_FALLBACK_TITLE;
+                        if (tip) promoIcon.setAttribute('aria-label', `Promoções: ${tip}`);
+                        else promoIcon.setAttribute('aria-label', 'Em promoção');
+                    } else {
+                        if (promoWrap) promoWrap.setAttribute('hidden', '');
+                        else promoIcon.setAttribute('hidden', '');
+                        if (promoTipPanel) {
+                            promoTipPanel.textContent = '';
+                            promoTipPanel.classList.add('admin-stock__promo-tooltip-panel--empty');
+                        }
+                        promoIcon.removeAttribute('title');
+                        promoIcon.setAttribute('aria-label', 'Em promoção');
+                    }
+                }
             });
             const subtitle = document.querySelector('[data-seller-stock-subtitle]');
             if (subtitle && data.stock) {

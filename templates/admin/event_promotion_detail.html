@@ -59,18 +59,6 @@
               id="formEditPromo">
             {% include 'partials/csrf_field.html' %}
 
-            {# Ativo #}
-            <div class="admin-field">
-                <label class="admin-field__label">Situação</label>
-                <div class="admin-field__hint-row" style="margin:0;">
-                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:14px;">
-                        <input type="checkbox" name="active" value="1"
-                               {{ 'checked' if promo.active }}>
-                        Promoção ativa (aplicada automaticamente nas vendas)
-                    </label>
-                </div>
-            </div>
-
             {# Nome #}
             <div class="admin-field">
                 <label class="admin-field__label" for="edit-promo-name">Nome da promoção</label>

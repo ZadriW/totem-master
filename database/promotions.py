@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections import defaultdict
 from typing import Dict, List, Optional
 
 from .connection import _now_iso, get_conn
@@ -253,6 +254,53 @@ def get_active_promotions_for_event(event_id: int) -> List[Dict]:
             d["rule_label"] = RULE_TYPE_LABELS.get(d.get("rule_type", ""), "")
             result.append(d)
     return result
+
+
+def product_ids_with_active_promotions_for_event(event_id: int) -> set[int]:
+    """Conjunto de ``product_id`` com pelo menos uma promoção **ativa** no evento."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT pp.product_id
+              FROM promotions pr
+              JOIN promotion_products pp ON pp.promotion_id = pr.id
+             WHERE pr.event_id = ? AND pr.active = 1
+            """,
+            (int(event_id),),
+        ).fetchall()
+    return {int(r["product_id"]) for r in rows}
+
+
+def _format_promo_tooltip_line(promo: Dict) -> str:
+    """Uma linha curta para tooltip/hover (nome + regra)."""
+    name = (promo.get("name") or "").strip() or "Promoção"
+    rt = promo.get("rule_type") or ""
+    rv = float(promo.get("rule_value") or 0)
+    min_q = max(1, int(promo.get("min_qty") or 1))
+    free_q = max(0, int(promo.get("free_qty") or 0))
+    if rt == "percent":
+        pct = min(100.0, max(0.0, rv))
+        pct_txt = str(int(pct)) if abs(pct - int(pct)) < 1e-9 else f"{pct:.1f}".replace(".", ",")
+        return f"{name}: {pct_txt}% de desconto"
+    if rt == "fixed":
+        brv = f"{rv:.2f}".replace(".", ",")
+        return f"{name}: R$ {brv} de desconto no preço unitário"
+    if rt == "bogo":
+        total = min_q + free_q if free_q > 0 else min_q
+        return f"{name}: compre {min_q}, leve {total}"
+    return name
+
+
+def active_promotion_tooltip_by_product_id(event_id: int) -> Dict[int, str]:
+    """Por produto, texto único listando todas as promoções ativas que o cobrem (separador · )."""
+    promos = get_active_promotions_for_event(event_id)
+    promos_sorted = sorted(promos, key=lambda p: int(p.get("id") or 0))
+    lines_by_pid: Dict[int, List[str]] = defaultdict(list)
+    for pr in promos_sorted:
+        line = _format_promo_tooltip_line(pr)
+        for pid in pr.get("product_ids") or []:
+            lines_by_pid[int(pid)].append(line)
+    return {pid: " · ".join(lines) for pid, lines in lines_by_pid.items()}
 
 
 # ---------------------------------------------------------------------------

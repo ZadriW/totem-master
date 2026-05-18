@@ -935,6 +935,7 @@ def _transactions_event_filter_sql_params(
     seller_id: Optional[int] = None,
     order_search: Optional[str] = None,
     status: Optional[str] = None,
+    on_date: Optional[str] = None,
 ) -> Tuple[str, List]:
     """Trecho ``WHERE ...`` (sem a palavra-chave) + parâmetros para transações do evento."""
     parts = ["t.event_id = ?"]
@@ -952,6 +953,9 @@ def _transactions_event_filter_sql_params(
     if st and st != "todos" and st in ("confirmado", "pendente", "cancelado"):
         parts.append("LOWER(TRIM(COALESCE(t.status, ''))) = ?")
         params.append(st)
+    if on_date:
+        parts.append("DATE(t.created_at) = DATE(?)")
+        params.append(on_date)
     return " AND ".join(parts), params
 
 
@@ -961,6 +965,7 @@ def count_transactions_for_event(
     seller_id: Optional[int] = None,
     order_search: Optional[str] = None,
     status: Optional[str] = None,
+    on_date: Optional[str] = None,
 ) -> int:
     """Conta transações ligadas ao ``event_id`` (coluna ``transactions.event_id``)."""
     wh, params = _transactions_event_filter_sql_params(
@@ -968,6 +973,7 @@ def count_transactions_for_event(
         seller_id=seller_id,
         order_search=order_search,
         status=status,
+        on_date=on_date,
     )
     sql = f"SELECT COUNT(*) AS c FROM transactions t WHERE {wh}"
     with get_conn() as conn:
@@ -981,6 +987,7 @@ def list_transactions_for_event(
     seller_id: Optional[int] = None,
     order_search: Optional[str] = None,
     status: Optional[str] = None,
+    on_date: Optional[str] = None,
     limit: int = 25,
     offset: int = 0,
 ) -> List[Dict]:
@@ -990,6 +997,7 @@ def list_transactions_for_event(
         seller_id=seller_id,
         order_search=order_search,
         status=status,
+        on_date=on_date,
     )
     lim = max(1, int(limit))
     off = max(0, int(offset))
@@ -1020,6 +1028,7 @@ def _transactions_seller_scope_filter_sql_params(
     *,
     order_search: Optional[str] = None,
     status: Optional[str] = None,
+    on_date: Optional[str] = None,
 ) -> Tuple[str, List]:
     """Trecho ``WHERE ...`` para transações de um único vendedor (qualquer ``event_id``)."""
     parts = ["t.seller_id = ?"]
@@ -1034,6 +1043,9 @@ def _transactions_seller_scope_filter_sql_params(
     if st and st != "todos" and st in ("confirmado", "pendente", "cancelado"):
         parts.append("LOWER(TRIM(COALESCE(t.status, ''))) = ?")
         params.append(st)
+    if on_date:
+        parts.append("DATE(t.created_at) = DATE(?)")
+        params.append(on_date)
     return " AND ".join(parts), params
 
 
@@ -1042,12 +1054,14 @@ def count_transactions_for_seller(
     *,
     order_search: Optional[str] = None,
     status: Optional[str] = None,
+    on_date: Optional[str] = None,
 ) -> int:
     """Conta transações em que ``seller_id`` coincide (catálogo global / sem filtro de evento)."""
     wh, params = _transactions_seller_scope_filter_sql_params(
         int(seller_id),
         order_search=order_search,
         status=status,
+        on_date=on_date,
     )
     sql = f"SELECT COUNT(*) AS c FROM transactions t WHERE {wh}"
     with get_conn() as conn:
@@ -1060,6 +1074,7 @@ def list_transactions_for_seller(
     *,
     order_search: Optional[str] = None,
     status: Optional[str] = None,
+    on_date: Optional[str] = None,
     limit: int = 25,
     offset: int = 0,
 ) -> List[Dict]:
@@ -1068,6 +1083,7 @@ def list_transactions_for_seller(
         int(seller_id),
         order_search=order_search,
         status=status,
+        on_date=on_date,
     )
     lim = max(1, int(limit))
     off = max(0, int(offset))
