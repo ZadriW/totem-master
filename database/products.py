@@ -1,6 +1,7 @@
 """Product catalog, Wake sync and admin library listings."""
 from __future__ import annotations
 
+import logging
 import sqlite3
 from typing import Dict, Iterable, List, Optional, Tuple
 
@@ -12,43 +13,101 @@ from .sku_helpers import (
     _is_placeholder_product_name,
 )
 
-def sync_products_from_wake(products: Iterable[Dict]) -> Dict[str, int]:
-    """Sincroniza a biblioteca local de produtos com a Wake Commerce.
+log = logging.getLogger(__name__)
 
-    Faz *upsert* por ``id`` (productId da Wake):
-    - Produto novo → insere com estoque ``0`` para o admin configurar.
-    - Produto existente → atualiza dados de catálogo (nome, categoria, preço,
-      imagem e sku), preservando estoque, estoque mínimo e status ativo locais.
-    - Produtos locais que **não** vieram da Wake permanecem intactos.
 
-    A Wake é tratada como biblioteca de produtos; o estoque operacional do
-    totem é sempre gerido pelo painel administrativo.
+def _row_to_product_dict(row: sqlite3.Row) -> Dict:
+    """Converte row SQLite de ``products`` para dict interno."""
+    return dict(row)
 
-    Retorna contadores ``{"inserted": N, "updated": N, "skipped": N}``.
+
+def _remap_product_id_references(conn: sqlite3.Connection, old_id: int, new_id: int) -> None:
+    """Redireciona FKs de cadastros legados (``id`` = ``productId``) para variante Wake."""
+    if old_id == new_id:
+        return
+    conn.execute(
+        "UPDATE event_products SET product_id = ? WHERE product_id = ?",
+        (new_id, old_id),
+    )
+    conn.execute(
+        "UPDATE stock_movements SET product_id = ? WHERE product_id = ?",
+        (new_id, old_id),
+    )
+    conn.execute(
+        "UPDATE promotion_products SET product_id = ? WHERE product_id = ?",
+        (new_id, old_id),
+    )
+    conn.execute(
+        "UPDATE transaction_items SET product_id = ? WHERE product_id = ?",
+        (str(new_id), str(old_id)),
+    )
+    conn.execute(
+        "UPDATE product_sku_aliases SET product_id = ? WHERE product_id = ?",
+        (new_id, old_id),
+    )
+
+
+def _maybe_migrate_legacy_wake_product_id(
+    conn: sqlite3.Connection,
+    wake_product_id: int,
+    variant_id: int,
+    *,
+    is_main_variant: bool,
+) -> bool:
+    """Se existir linha legada com ``id = wake_product_id``, migra referências."""
+    if not is_main_variant or wake_product_id <= 0 or wake_product_id == variant_id:
+        return False
+    legacy = conn.execute(
+        "SELECT id FROM products WHERE id = ?",
+        (wake_product_id,),
+    ).fetchone()
+    if legacy is None:
+        return False
+    _remap_product_id_references(conn, wake_product_id, variant_id)
+    conn.execute("DELETE FROM products WHERE id = ?", (wake_product_id,))
+    return True
+
+
+def sync_products_from_wake(
+    products: Iterable[Dict],
+    *,
+    remap_legacy: bool = True,
+) -> Dict[str, int]:
+    """Sincroniza a biblioteca local com variantes Wake (``id`` = ``productVariantId``).
+
+    - Produto novo → insere com estoque ``0``.
+    - Produto existente → atualiza catálogo; preserva estoque/mínimo/ativo locais.
+    - Com ``remap_legacy``, cadastros antigos indexados por ``productId`` são
+      redirecionados para a variante principal quando aplicável.
+
+    Retorna ``{"inserted": N, "updated": N, "skipped": N, "remapped": N}``.
     """
-    inserted = updated = skipped = 0
+    inserted = updated = skipped = remapped = 0
     now = _now_iso()
 
     with get_conn() as conn:
         for p in products:
-            pid = int(p["id"])
-            if pid <= 0:
+            variant_id = int(p["id"])
+            if variant_id <= 0:
                 skipped += 1
                 continue
 
+            wake_product_id = int(p.get("wake_product_id") or variant_id)
             raw_sku_wake = (p.get("sku") or "").strip()
             nome_wake = str(p.get("nome") or "").strip()
             name = nome_wake if nome_wake else "Produto"
             category = str(p.get("categoria") or "Geral")
             price = float(p.get("preco") or 0)
             image = p.get("imagem") or ""
+            variant_name = str(p.get("variant_name") or "").strip()
+            main_variant = 1 if p.get("main_variant") else 0
 
             existing = conn.execute(
-                "SELECT id, name, sku FROM products WHERE id = ?", (pid,)
+                "SELECT id, name, sku FROM products WHERE id = ?", (variant_id,)
             ).fetchone()
 
             if existing is None:
-                sku = raw_sku_wake or _default_sku_for_id(pid)
+                sku = raw_sku_wake or _default_sku_for_id(variant_id)
             else:
                 ex_name = (existing["name"] or "").strip()
                 ex_sku = (existing["sku"] or "").strip()
@@ -58,13 +117,12 @@ def sync_products_from_wake(products: Iterable[Dict]) -> Dict[str, int]:
                     name = ex_name
                 if raw_sku_wake:
                     sku = raw_sku_wake
-                elif ex_sku and not _is_generated_fallback_sku(ex_sku, pid):
+                elif ex_sku and not _is_generated_fallback_sku(ex_sku, variant_id):
                     sku = ex_sku
                 else:
-                    sku = _default_sku_for_id(pid)
+                    sku = _default_sku_for_id(variant_id)
 
-            sku = _ensure_distinct_sku(conn, pid, sku)
-
+            sku = _ensure_distinct_sku(conn, variant_id, sku)
             description = f"{name} — {category}"
 
             if existing is None:
@@ -72,11 +130,15 @@ def sync_products_from_wake(products: Iterable[Dict]) -> Dict[str, int]:
                     """
                     INSERT INTO products
                         (id, sku, name, category, description, price, image,
-                         stock, min_stock, active, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         stock, min_stock, active, wake_product_id, variant_name,
+                         main_variant, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (pid, sku, name, category, description, price, image,
-                     0, 5, 1, now, now),
+                    (
+                        variant_id, sku, name, category, description, price, image,
+                        0, 5, 1, wake_product_id, variant_name or None,
+                        main_variant, now, now,
+                    ),
                 )
                 inserted += 1
             else:
@@ -84,15 +146,120 @@ def sync_products_from_wake(products: Iterable[Dict]) -> Dict[str, int]:
                     """
                     UPDATE products
                        SET sku = ?, name = ?, category = ?, description = ?,
-                           price = ?, image = ?, updated_at = ?
+                           price = ?, image = ?, wake_product_id = ?,
+                           variant_name = ?, main_variant = ?, updated_at = ?
                      WHERE id = ?
                     """,
-                    (sku, name, category, description, price, image,
-                     now, pid),
+                    (
+                        sku, name, category, description, price, image,
+                        wake_product_id, variant_name or None, main_variant,
+                        now, variant_id,
+                    ),
                 )
                 updated += 1
 
-    return {"inserted": inserted, "updated": updated, "skipped": skipped}
+            if remap_legacy and _maybe_migrate_legacy_wake_product_id(
+                conn,
+                wake_product_id,
+                variant_id,
+                is_main_variant=bool(main_variant),
+            ):
+                remapped += 1
+
+    return {
+        "inserted": inserted,
+        "updated": updated,
+        "skipped": skipped,
+        "remapped": remapped,
+    }
+
+
+def _find_product_row_local(conn: sqlite3.Connection, q: str) -> Optional[sqlite3.Row]:
+    """Busca produto no SQLite (variante, alias ERP ou ``wake_product_id`` legado)."""
+    q = (q or "").strip()
+    if not q:
+        return None
+
+    row = conn.execute("SELECT * FROM products WHERE sku = ?", (q,)).fetchone()
+    if row:
+        return row
+
+    row = conn.execute(
+        """
+        SELECT p.* FROM product_sku_aliases a
+          JOIN products p ON p.id = a.product_id
+         WHERE a.sku = ?
+        """,
+        (q,),
+    ).fetchone()
+    if row:
+        return row
+
+    try:
+        num = int(q.lstrip("#").strip())
+    except ValueError:
+        return None
+
+    row = conn.execute("SELECT * FROM products WHERE id = ?", (num,)).fetchone()
+    if row:
+        return row
+
+    row = conn.execute(
+        """
+        SELECT * FROM products
+         WHERE wake_product_id = ?
+         ORDER BY main_variant DESC, id ASC
+         LIMIT 1
+        """,
+        (num,),
+    ).fetchone()
+    return row
+
+
+def resolve_product_by_sku_or_id(
+    q: str,
+    *,
+    fetch_wake: bool = True,
+) -> Optional[Dict]:
+    """Resolve produto por SKU/ID local; fallback Wake on-demand se configurado.
+
+    O fallback Wake consulta a API apenas quando o SKU não existe no SQLite,
+    upserta a variante encontrada e retorna o cadastro local.
+    """
+    q = (q or "").strip()
+    if not q:
+        return None
+
+    with get_conn() as conn:
+        row = _find_product_row_local(conn, q)
+        if row:
+            return _row_to_product_dict(row)
+
+    if not fetch_wake:
+        return None
+
+    try:
+        import wake_api
+    except ImportError:
+        return None
+
+    if not wake_api.wake_token_configured():
+        return None
+
+    try:
+        wake_rows = wake_api.fetch_variants_by_sku(q)
+    except Exception as exc:
+        log.warning("Wake lookup SKU %s falhou: %s", q, exc)
+        return None
+
+    if not wake_rows:
+        return None
+
+    sync_products_from_wake(wake_rows, remap_legacy=True)
+
+    with get_conn() as conn:
+        row = _find_product_row_local(conn, q)
+        return _row_to_product_dict(row) if row else None
 
 
 # ---------------------------------------------------------------------------
@@ -217,11 +384,15 @@ def _admin_products_library_filter_clause(
             "LOWER(p.name) LIKE ?",
             "LOWER(COALESCE(p.description, '')) LIKE ?",
             "LOWER(COALESCE(p.sku, '')) LIKE ?",
+            "EXISTS (SELECT 1 FROM product_sku_aliases a "
+            "WHERE a.product_id = p.id AND LOWER(a.sku) LIKE ?)",
         ]
-        or_params: List = [like, like, like]
+        or_params: List = [like, like, like, like]
         id_part = qs.lstrip("#").strip()
         if id_part.isdigit():
             or_parts.append("p.id = ?")
+            or_params.append(int(id_part))
+            or_parts.append("p.wake_product_id = ?")
             or_params.append(int(id_part))
             or_parts.append("INSTR(CAST(p.id AS TEXT), ?) > 0")
             or_params.append(id_part)
@@ -308,6 +479,79 @@ def list_products_admin_slice(
     with get_conn() as conn:
         rows = conn.execute(sql, qparams).fetchall()
     return [_admin_products_library_row_to_admin_product(r) for r in rows]
+
+
+def upsert_wake_variant(p: Dict) -> Optional[Dict]:
+    """Persiste uma variante Wake no catálogo local e retorna seu dict.
+
+    Regra de chave local:
+    - Variante secundária (``is_variant=True``): usa ``variant_id``
+      (``productVariantId`` da Wake) como ``id`` local — cria uma linha
+      independente, sem sobrescrever o registro da variante principal
+      (``productId``) já sincronizado.
+    - Variante principal ou produto sem variante: usa ``id`` (``productId``).
+
+    Se o ``local_id`` já existir no SQLite, os campos de catálogo são
+    atualizados (nome, sku, categoria, preço, imagem) sem tocar em estoque,
+    min_stock ou active — mesmo comportamento de ``sync_products_from_wake``.
+
+    Retorna None se os IDs forem inválidos ou ocorrer erro de persistência.
+    """
+    now = _now_iso()
+    variant_id = int(p.get("variant_id") or 0)
+    product_id = int(p.get("id") or 0)
+    is_variant = bool(p.get("is_variant")) and variant_id > 0
+
+    local_id = variant_id if is_variant else product_id
+    if local_id <= 0:
+        return None
+
+    raw_sku = (p.get("sku") or "").strip()
+    name = (p.get("nome") or "").strip() or "Produto"
+    category = str(p.get("categoria") or "Geral")
+    price = float(p.get("preco") or 0)
+    image = p.get("imagem") or ""
+    description = f"{name} — {category}"
+
+    try:
+        with get_conn() as conn:
+            existing = conn.execute(
+                "SELECT id, sku, name FROM products WHERE id = ?", (local_id,)
+            ).fetchone()
+
+            sku = raw_sku or _default_sku_for_id(local_id)
+            sku = _ensure_distinct_sku(conn, local_id, sku)
+
+            if existing is None:
+                conn.execute(
+                    """
+                    INSERT INTO products
+                        (id, sku, name, category, description, price, image,
+                         stock, min_stock, active, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 1, ?, ?)
+                    """,
+                    (local_id, sku, name, category, description,
+                     price, image, now, now),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE products
+                       SET sku = ?, name = ?, category = ?, description = ?,
+                           price = ?, image = ?, updated_at = ?
+                     WHERE id = ?
+                    """,
+                    (sku, name, category, description, price, image,
+                     now, local_id),
+                )
+
+            row = conn.execute(
+                "SELECT * FROM products WHERE id = ?", (local_id,)
+            ).fetchone()
+    except Exception:
+        return None
+
+    return _product_row_to_client(row) if row else None
 
 
 def get_product(product_id: int) -> Optional[Dict]:

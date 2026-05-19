@@ -133,10 +133,12 @@
             Importar produtos via planilha
         </h2>
         <p class="admin-card__subtitle">
-            Envie uma planilha <strong>.xls</strong> (formato Item Nota/Pedido). Os códigos da
-            <strong>coluna A</strong> serão usados como SKU para localizar e adicionar os
-            produtos a este evento. Produtos já presentes ou não encontrados no catálogo são
-            informados no resultado.
+            Envie uma planilha <strong>.xls</strong> no formato de relatório de estoque
+            (ex.: <em>AVARIADOS MATRIZ</em>). Os códigos da <strong>coluna A</strong>
+            (Cód. Produto / SKU) serão usados para localizar cada produto no catálogo, e o
+            valor da <strong>coluna E</strong> (Qtd. Disponível) será aplicado como estoque
+            inicial. Códigos duplicados têm suas quantidades somadas. Produtos já presentes
+            no evento ou não encontrados no catálogo são informados no resultado.
         </p>
         <form method="post"
               action="{{ url_for('admin_event_import_xls', event_id=event.id) }}"
@@ -161,8 +163,7 @@
                     </div>
                 </div>
                 <span id="hint-xls-upload" class="admin-filter__hint">
-                    Os valores da coluna A serão interpretados como SKU/código do produto.
-                    Máximo: 5 MB.
+                    Coluna A = SKU/código · Coluna E = Qtd. Disponível · Máx. 5 MB.
                 </span>
             </div>
             <div class="admin-card__actions">

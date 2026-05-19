@@ -15,6 +15,8 @@ import os
 import re
 import secrets
 import unicodedata
+
+import totem_env  # noqa: F401 — carrega .env / totem.env antes da integração Wake
 from collections import defaultdict
 from functools import wraps
 from datetime import datetime
@@ -122,6 +124,7 @@ from database import (
     restore_event,
     set_product_active,
     sync_products_from_wake,
+    upsert_wake_variant,
     update_event,
     update_event_product_stock,
     update_seller_account,
@@ -1682,7 +1685,9 @@ def admin_sync_wake():
             "O estoque do totem foi preservado e segue sendo controlado pelo administrador.",
             "success",
         )
-    except (ConnectionError, PermissionError) as exc:
+    except PermissionError:
+        flash(_wake_token_help_message(), "error")
+    except ConnectionError as exc:
         flash(
             f"Nao foi possivel conectar a Wake Commerce: {exc}",
             "error",
@@ -2730,6 +2735,54 @@ def admin_event_stock_product(event_id: int, product_id: int):
     )
 
 
+def _wake_token_help_message() -> str:
+    return (
+        "Configure WAKE_TOKEN com o TCS-Access-Token da Storefront API Wake Commerce. "
+        "Crie um arquivo .env na raiz do projeto (copie de .env.example) ou defina "
+        "a variável de ambiente do sistema."
+    )
+
+
+def _find_or_fetch_product(sku_or_id: str) -> tuple[dict | None, bool, str | None]:
+    """Localiza um produto por SKU/ID, com fallback Wake quando ausente localmente.
+
+    Retorna ``(produto_dict | None, veio_da_wake, erro)``.
+    ``erro`` é preenchido quando a busca falha por token Wake ausente
+    (``"wake_token"``) — distinto de produto simplesmente não encontrado.
+    """
+    q = (sku_or_id or "").strip()
+    if not q:
+        return None, False, None
+
+    local = find_product_by_sku_or_id(q)
+    if local is not None:
+        return local, False, None
+
+    if not wake_api.wake_token_configured():
+        return None, False, "wake_token"
+
+    wake_data = wake_api.fetch_product_by_sku(q)
+    if wake_data is None:
+        return None, False, None
+
+    if not upsert_wake_variant(wake_data):
+        return None, False, None
+
+    saved = find_product_by_sku_or_id(q)
+    if saved is None:
+        vid = wake_data.get("variant_id") or wake_data.get("id")
+        if vid:
+            saved = find_product_by_sku_or_id(str(vid))
+    if saved is None:
+        return None, False, None
+
+    app.logger.info(
+        "Variante Wake importada on-demand: SKU=%s id=%s nome=%s",
+        saved.get("sku"), saved.get("id"), saved.get("name"),
+    )
+    return saved, True, None
+
+
 @app.route("/admin/eventos/<int:event_id>/produtos/adicionar", methods=["POST"])
 @admin_required
 def admin_event_add_product(event_id: int):
@@ -2741,91 +2794,146 @@ def admin_event_add_product(event_id: int):
     if not q:
         flash("Informe o SKU ou ID do produto.", "error")
         return redirect(_url_for_admin_event_stock_list(event_id, preserved))
-    product = find_product_by_sku_or_id(q)
+    product, from_wake, lookup_err = _find_or_fetch_product(q)
+    if lookup_err == "wake_token":
+        flash(_wake_token_help_message(), "error")
+        return redirect(_url_for_admin_event_stock_list(event_id, preserved))
     if product is None:
-        flash(f"Produto \"{q}\" não encontrado.", "error")
+        flash(f"Produto \"{q}\" não encontrado no catálogo nem na Wake Commerce.", "error")
         return redirect(_url_for_admin_event_stock_list(event_id, preserved))
     try:
         add_product_to_event(event_id, int(product["id"]), 0, 0)
-        flash(f"Produto \"{product['name']}\" adicionado ao evento.", "success")
+        suffix = " (variante importada da Wake)" if from_wake else ""
+        flash(f"Produto \"{product['name']}\" adicionado ao evento{suffix}.", "success")
     except ValueError as exc:
         flash(str(exc), "error")
     return redirect(_url_for_admin_event_stock_list(event_id, preserved, page_override=1))
 
 
-def _parse_xls_skus(file_bytes: bytes) -> list[str]:
-    """Extrai os valores únicos e não-vazios da coluna A (índice 0) de um arquivo .xls,
-    usados como SKU/código de produto.
+_XLS_HEADER_NAMES_COL_A = frozenset({
+    "produto", "cód. produto", "cod. produto", "codigo", "código",
+    "sku", "cod produto", "cód produto", "item", "ref", "referência",
+    "referencia", "cod.", "cód.",
+})
 
-    Estratégia de detecção do início dos dados:
-    - Procura a PRIMEIRA linha em que a coluna A seja um valor NUMÉRICO (xlrd ctype 2).
-      Isso ignora automaticamente linhas de título, metadados e cabeçalho de colunas
-      (que são sempre texto), exatamente como na planilha Item_Nota_Pedido.xls.
-    - Se não houver nenhuma linha numérica, aceita a primeira linha de texto curto (<= 40
-      caracteres) que não pareça uma frase (sem espaços longos, sem ":/" etc.), para cobrir
-      planilhas cujos SKUs são alfanuméricos.
+_XLS_STOCK_COL_NAMES = frozenset({
+    "qtd. disponivel", "qtd disponivel", "qtd. disponível", "qtd disponível",
+    "qtd. estoque", "qtd estoque", "quantidade", "estoque", "disponivel",
+    "disponível", "saldo", "qty", "stock",
+})
 
-    Retorna lista ordenada de strings (inteiros sem ".0").
+
+def _cell_to_str(cell) -> str:
+    """Converte uma célula xlrd para string limpa, sem '.0' em inteiros."""
+    if cell.ctype == 2:  # XL_CELL_NUMBER
+        v = cell.value
+        return str(int(v)) if v == int(v) else str(v)
+    if cell.ctype == 1:  # XL_CELL_TEXT
+        return str(cell.value).strip()
+    return ""
+
+
+def _cell_to_int(cell) -> int:
+    """Converte célula de quantidade para inteiro (>=0). Retorna 0 em caso de falha."""
+    if cell.ctype == 2:
+        return max(0, int(cell.value))
+    if cell.ctype == 1:
+        try:
+            return max(0, int(float(str(cell.value).strip().replace(",", "."))))
+        except (ValueError, TypeError):
+            return 0
+    return 0
+
+
+def _detect_xls_header_row(sh) -> tuple[int | None, int]:
+    """Retorna (header_row, stock_col_index).
+
+    Varre as primeiras 15 linhas procurando uma cujo valor da coluna A seja
+    um dos nomes canônicos de cabeçalho (ex.: 'Cód. Produto', 'Produto').
+    Ao encontrar, tenta identificar a coluna de estoque pelo nome de alguma
+    célula da mesma linha; usa o índice 4 (col E) como fallback.
+    """
+    for r in range(min(15, sh.nrows)):
+        cell_a = sh.cell(r, 0)
+        if cell_a.ctype != 1:
+            continue
+        v = str(cell_a.value).strip().lower()
+        if v in _XLS_HEADER_NAMES_COL_A:
+            # Identifica coluna de estoque pela mesma linha de cabeçalho
+            stock_col = 4  # fallback: col E
+            for c in range(sh.ncols):
+                h = str(sh.cell(r, c).value).strip().lower()
+                if h in _XLS_STOCK_COL_NAMES:
+                    stock_col = c
+                    break
+            return r, stock_col
+    return None, 4
+
+
+def _parse_xls_sku_stock(file_bytes: bytes) -> list[tuple[str, int]]:
+    """Lê uma planilha .xls e retorna lista de (sku, stock_qty).
+
+    Lógica de detecção do início dos dados:
+    1. Procura linha de cabeçalho com nome canônico na coluna A
+       (ex.: 'Cód. Produto', 'Produto') → dados começam na linha seguinte.
+       Coluna de estoque identificada pelo nome na mesma linha; padrão: col E.
+    2. Fallback (sem cabeçalho textual): primeira linha com valor NUMÉRICO na
+       col A + col E como estoque.
+
+    SKUs duplicados têm seus estoques SOMADOS (ex.: mesmo produto em duas
+    linhas com 3 e 1 unidades → estoque 4 no evento).
+
+    Retorna lista na ordem de primeira aparição de cada SKU.
     """
     if not _XLRD_AVAILABLE:
         raise RuntimeError("Biblioteca xlrd não instalada. Execute: pip install xlrd")
+
     wb = _xlrd.open_workbook(file_contents=file_bytes)
-    skus: list[str] = []
-    seen: set[str] = set()
+    # {sku: stock_total} preservando ordem de inserção
+    result: dict[str, int] = {}
+
     for sheet_idx in range(wb.nsheets):
         sh = wb.sheet_by_index(sheet_idx)
-
-        # Passo 1: encontra a primeira linha numérica → início dos dados
-        data_start: int | None = None
-        for r in range(sh.nrows):
-            cell = sh.cell(r, 0)
-            if cell.ctype == 2 and cell.value:  # XL_CELL_NUMBER, não-zero/não-vazio
-                data_start = r
-                break
-
-        # Passo 2: fallback para planilhas com SKU alfanumérico (sem linhas numéricas)
-        if data_start is None:
-            for r in range(sh.nrows):
-                cell = sh.cell(r, 0)
-                if cell.ctype == 1:
-                    v = str(cell.value).strip()
-                    # Aceita texto curto sem espaços múltiplos, sem ":/,(", sem "Emissão"
-                    if (v and len(v) <= 40
-                            and " " not in v
-                            and not any(c in v for c in ":/, (")):
-                        data_start = r
-                        break
-
-        if data_start is None:
+        if sh.nrows < 2:
             continue
 
-        for r in range(data_start, sh.nrows):
-            cell = sh.cell(r, 0)
-            if cell.ctype == 2:
-                raw = cell.value
-                # Converte número para string sem ".0" desnecessário
-                sku = str(int(raw)) if raw == int(raw) else str(raw)
-            elif cell.ctype == 1:
-                sku = str(cell.value).strip()
-            else:
+        header_row, stock_col = _detect_xls_header_row(sh)
+
+        if header_row is not None:
+            data_start = header_row + 1
+        else:
+            # Fallback: primeira linha numérica na col A
+            data_start = None
+            for r in range(sh.nrows):
+                cell = sh.cell(r, 0)
+                if cell.ctype == 2 and cell.value:
+                    data_start = r
+                    break
+            if data_start is None:
                 continue
-            sku = sku.strip()
-            if sku and sku not in seen:
-                seen.add(sku)
-                skus.append(sku)
-    return skus
+
+        for r in range(data_start, sh.nrows):
+            sku = _cell_to_str(sh.cell(r, 0))
+            if not sku:
+                continue
+            qty = _cell_to_int(sh.cell(r, stock_col)) if sh.ncols > stock_col else 0
+            if sku in result:
+                result[sku] += qty  # agrega duplicatas somando estoque
+            else:
+                result[sku] = qty
+
+    return list(result.items())
 
 
 @app.route("/admin/eventos/<int:event_id>/produtos/importar-xls", methods=["POST"])
 @admin_required
 def admin_event_import_xls(event_id: int):
-    """Importa produtos em lote para o evento a partir de planilha .xls/.xlsx.
+    """Importa produtos em lote para o evento a partir de planilha .xls.
 
-    Lê os valores da coluna A (SKU ou ID numérico) e tenta adicionar cada produto
-    ao evento via ``find_product_by_sku_or_id`` + ``add_product_to_event`` (com
-    movimentação tipo ``ajuste`` e motivo ``Importação por Planilha``).
-
-    Redireciona de volta ao estoque com um flash detalhado do resultado.
+    Lê coluna A (SKU/código) e coluna E (Qtd. Disponível) de cada linha de dados.
+    SKUs duplicados têm seus estoques somados antes da importação.
+    Cada produto é adicionado com movimentação tipo ``ajuste`` e motivo
+    ``Importação por Planilha``, já com o estoque lido da planilha.
     """
     event = _event_or_404(event_id)
     preserved = _event_stock_return_filters_from_form()
@@ -2844,11 +2952,10 @@ def admin_event_import_xls(event_id: int):
 
     try:
         file_bytes = uploaded.read()
-        if len(file_bytes) > 5 * 1024 * 1024:  # 5 MB max
+        if len(file_bytes) > 5 * 1024 * 1024:
             flash("Arquivo muito grande (máx. 5 MB).", "error")
             return redirect(_url_for_admin_event_stock_list(event_id, preserved))
-
-        skus = _parse_xls_skus(file_bytes)
+        sku_stock_pairs = _parse_xls_sku_stock(file_bytes)
     except RuntimeError as exc:
         flash(str(exc), "error")
         return redirect(_url_for_admin_event_stock_list(event_id, preserved))
@@ -2856,43 +2963,59 @@ def admin_event_import_xls(event_id: int):
         flash(f"Não foi possível ler a planilha: {exc}", "error")
         return redirect(_url_for_admin_event_stock_list(event_id, preserved))
 
-    if not skus:
+    if not sku_stock_pairs:
         flash("Nenhum código encontrado na coluna A da planilha.", "error")
         return redirect(_url_for_admin_event_stock_list(event_id, preserved))
 
     added: list[str] = []
     already: list[str] = []
     not_found: list[str] = []
+    wake_fetched: list[str] = []   # SKUs que vieram da Wake on-demand
     import_actor = _current_admin_user()
+    total_units_imported = 0
 
-    for sku in skus:
-        product = find_product_by_sku_or_id(sku)
+    for sku, qty in sku_stock_pairs:
+        product, from_wake, lookup_err = _find_or_fetch_product(sku)
+        if lookup_err == "wake_token":
+            flash(_wake_token_help_message(), "error")
+            return redirect(_url_for_admin_event_stock_list(event_id, preserved))
         if product is None:
             not_found.append(sku)
             continue
+        if from_wake:
+            wake_fetched.append(sku)
         try:
             add_product_to_event(
                 event_id,
                 int(product["id"]),
-                0,
+                qty,
                 0,
                 link_audit_reason=EVENT_IMPORT_XLS_MOTIVO_REF,
                 link_audit_reference=None,
                 created_by=import_actor,
             )
-            added.append(product["name"])
+            qty_label = f" ({qty} un.)" if qty > 0 else ""
+            added.append(f"{product['name']}{qty_label}")
+            total_units_imported += qty
         except ValueError:
-            # "Produto já adicionado a este evento."
             already.append(product["name"])
 
     # Monta mensagem de resultado
     parts: list[str] = []
     if added:
-        parts.append(f"{len(added)} produto(s) adicionado(s) com sucesso")
+        units_txt = f" · {total_units_imported} unidade(s) em estoque" if total_units_imported > 0 else ""
+        parts.append(f"{len(added)} produto(s) adicionado(s) com sucesso{units_txt}")
+    if wake_fetched:
+        parts.append(
+            f"{len(wake_fetched)} variante(s) importada(s) da Wake e adicionada(s) ao catálogo: "
+            f"{', '.join(wake_fetched[:5])}{'…' if len(wake_fetched) > 5 else ''}"
+        )
     if already:
         parts.append(f"{len(already)} já estavam no evento")
     if not_found:
-        parts.append(f"{len(not_found)} código(s) não encontrado(s) no catálogo: {', '.join(not_found[:10])}{'…' if len(not_found) > 10 else ''}")
+        short = not_found[:10]
+        tail = "…" if len(not_found) > 10 else ""
+        parts.append(f"{len(not_found)} código(s) não encontrado(s) no catálogo nem na Wake: {', '.join(short)}{tail}")
 
     summary = " · ".join(parts) if parts else "Nenhuma alteração realizada."
     category = "success" if added else ("error" if not_found and not already else "info")
