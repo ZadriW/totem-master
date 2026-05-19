@@ -581,8 +581,16 @@
     <div class="receipt__body">
         <div class="receipt__not-found">
             <div class="receipt__not-found-icon">&#128220;</div>
+            {% if receipt_error == 'invalid_link' %}
+            <h2>Link inválido</h2>
+            <p>
+                Este link da nota de retirada não é válido ou está incompleto.
+                Solicite um novo link no balcão ou pelo painel do vendedor.
+            </p>
+            {% else %}
             <h2>Pedido não encontrado</h2>
             <p>O código <strong>{{ order_number }}</strong> não corresponde a nenhuma transação registrada.</p>
+            {% endif %}
         </div>
     </div>
 

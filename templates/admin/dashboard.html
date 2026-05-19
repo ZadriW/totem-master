@@ -89,29 +89,6 @@
     </div>
 </section>
 
-<section class="admin-section admin-section--wake">
-    <header class="admin-section__header admin-section__header--row">
-        <div>
-            <h2 class="admin-section__title">
-                <i class="fa-solid fa-cloud-arrow-down" aria-hidden="true"></i>
-                Integração Wake Commerce
-            </h2>
-            <p class="admin-section__subtitle">
-                Sincronize a biblioteca de produtos do totem com a plataforma Wake Commerce
-                (Dental Odonto Master). Produtos existentes terão dados de catálogo atualizados;
-                novos produtos serão adicionados com estoque zerado para configuração manual.
-            </p>
-        </div>
-        <form method="POST" action="{{ url_for('admin_sync_wake') }}" id="wakeSyncForm">
-            {% include 'partials/csrf_field.html' %}
-            <button type="submit" class="admin-btn admin-btn--wake" id="wakeSyncBtn">
-                <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
-                Sincronizar agora
-            </button>
-        </form>
-    </header>
-</section>
-
 <section class="admin-section admin-section--danger-zone" aria-labelledby="adminDangerZoneHeading">
     <div class="admin-danger-zone__toolbar">
         <button

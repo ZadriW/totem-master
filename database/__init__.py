@@ -129,6 +129,7 @@ from .transactions import (
     list_transactions,
     list_transactions_for_event,
     list_transactions_for_seller,
+    refund_transaction,
     reset_totem_to_default_state,
     update_pending_transaction,
 )
@@ -212,6 +213,7 @@ __all__ = [
     "list_transactions_summary_for_event_period",
     "max_stock_movement_id_filtered",
     "normalize_event_badge_color",
+    "refund_transaction",
     "register_event_stock_adjustment",
     "register_event_stock_entry",
     "register_event_stock_exit",

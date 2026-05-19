@@ -133,12 +133,9 @@
             Importar produtos via planilha
         </h2>
         <p class="admin-card__subtitle">
-            Envie uma planilha <strong>.xls</strong> no formato de relatório de estoque
-            (ex.: <em>AVARIADOS MATRIZ</em>). Os códigos da <strong>coluna A</strong>
-            (Cód. Produto / SKU) serão usados para localizar cada produto no catálogo, e o
-            valor da <strong>coluna E</strong> (Qtd. Disponível) será aplicado como estoque
-            inicial. Códigos duplicados têm suas quantidades somadas. Produtos já presentes
-            no evento ou não encontrados no catálogo são informados no resultado.
+            Planilha <strong>.xls</strong> de estoque:
+            coluna <strong>A</strong> = SKU, coluna <strong>E</strong> = quantidade.
+            Duplicatas são somadas; O resultado mostra o que foi importado ou não encontrado.
         </p>
         <form method="post"
               action="{{ url_for('admin_event_import_xls', event_id=event.id) }}"

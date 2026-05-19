@@ -1,15 +1,10 @@
-"""Cliente de integração com a API GraphQL Storefront da Wake Commerce.
+"""Cliente Wake Commerce — consulta on-demand por SKU (Storefront GraphQL).
+
+Usado ao adicionar produtos por SKU ou importar planilha quando o item
+ainda não existe no catálogo local. Não há sincronização em massa do catálogo.
 
 Endpoint: https://storefront-api.fbits.net/graphql
-Header:   TCS-Access-Token  (identifica a loja)
-Param:    partnerAccessToken (filtro de parceiro, opcional)
-
-O token **Storefront** (header ``TCS-Access-Token``) deve estar apenas na
-variável de ambiente ``WAKE_TOKEN`` — não versionar o valor no repositório.
-
-Se ``WAKE_TOKEN`` não estiver definida, as chamadas à API falham com erro
-explícito. Se a API estiver indisponível ou o token for inválido, o chamador
-recebe exceção e pode usar fallback local (ex.: catálogo já no SQLite).
+Header:   TCS-Access-Token (variável de ambiente ``WAKE_TOKEN``)
 """
 
 from __future__ import annotations
@@ -17,7 +12,7 @@ from __future__ import annotations
 import logging
 import os
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import requests
 
@@ -43,69 +38,6 @@ def _require_wake_token() -> str:
             "da Storefront API (painel Wake Commerce). O token não deve ficar no código-fonte."
         )
     return raw
-
-
-# ---------------------------------------------------------------------------
-# Queries GraphQL
-# ---------------------------------------------------------------------------
-
-_PRODUCTS_QUERY = """
-query FetchProducts($first: Int!, $after: String) {
-  products(
-    first: $first
-    after: $after
-    filters: { mainVariant: true }
-    sortKey: NAME
-    sortDirection: ASC
-  ) {
-    nodes {
-      productId
-      productVariantId
-      mainVariant
-      productName
-      variantName
-      alias
-      sku
-      ean
-      prices {
-        price
-        listPrice
-      }
-      images {
-        url
-        fileName
-      }
-      productCategories {
-        name
-        hierarchy
-      }
-    }
-    pageInfo {
-      hasNextPage
-      endCursor
-    }
-  }
-}
-"""
-
-_CATEGORIES_QUERY = """
-query {
-  categories(first: 200, sortKey: NAME, sortDirection: ASC) {
-    nodes {
-      id
-      name
-    }
-  }
-}
-"""
-
-_SHOP_QUERY = """
-query {
-  shop {
-    name
-  }
-}
-"""
 
 
 # ---------------------------------------------------------------------------
@@ -165,15 +97,8 @@ def _graphql(
 
 
 # ---------------------------------------------------------------------------
-# Funções públicas
+# Helpers e consulta por SKU
 # ---------------------------------------------------------------------------
-
-def fetch_categories() -> List[Dict]:
-    """Retorna a lista de categorias da loja Wake."""
-    data = _graphql(_CATEGORIES_QUERY)
-    nodes = (data.get("categories") or {}).get("nodes") or []
-    return [{"id": n.get("id"), "name": n.get("name", "")} for n in nodes]
-
 
 def _primary_category(categories: list) -> str:
     """Extrai o nome da categoria mais específica (último nível da hierarquia)."""
@@ -209,100 +134,6 @@ def _display_product_sku(node: Dict[str, Any]) -> str:
     if ean:
         return ean
     return ""
-
-
-def _wake_row_rank(node: Dict[str, Any]) -> tuple:
-    """Ordenação usada ao escolher uma variante canônica por ``productId``."""
-    name = _display_product_name(node)
-    sku = _display_product_sku(node)
-    main = 1 if node.get("mainVariant") else 0
-    pvid = int(node.get("productVariantId") or 0)
-    return (main, len(name), len(sku), pvid)
-
-
-def _dedupe_wake_nodes_by_product_id(nodes: List[dict]) -> List[dict]:
-    """Evita múltiplas variantes do mesmo ``productId`` sobrescreverem o SQLite.
-
-    Sem ``mainVariant: true`` (ou em cenários extremos), a Storefront pode
-    devolver várias linhas por produto; a última da página podia gravar nome
-    vazio e gerar placeholders ``Produto`` / ``OM-xxxxx`` / ``Geral``.
-    """
-    best: Dict[int, dict] = {}
-    for node in nodes:
-        raw = node.get("productId")
-        if raw is None:
-            continue
-        try:
-            pid = int(raw)
-        except (TypeError, ValueError):
-            continue
-        if pid <= 0:
-            continue
-        if pid not in best or _wake_row_rank(node) > _wake_row_rank(best[pid]):
-            best[pid] = node
-    return list(best.values())
-
-
-def fetch_products(page_size: int = 50, max_pages: int = 500) -> List[Dict]:
-    """Busca todos os produtos da loja Wake com paginação automática.
-
-    Retorna lista normalizada com campos compatíveis ao schema local.
-    Usa apenas a **variante principal** (filtro ``mainVariant``) e remove
-    duplicados por ``productId``. Registros com ``productId`` inválido
-    (``<= 0``), p.ex. listas especiais da loja, são ignorados.
-
-    A Wake é usada como biblioteca de produtos; estoque, estoque mínimo e
-    ativação comercial são controlados localmente pelo administrador.
-    """
-    raw_nodes: List[dict] = []
-    cursor: Optional[str] = None
-
-    for _ in range(max_pages):
-        variables: Dict[str, Any] = {"first": page_size}
-        if cursor:
-            variables["after"] = cursor
-
-        data = _graphql(_PRODUCTS_QUERY, variables)
-        products_data = data.get("products") or {}
-        batch = products_data.get("nodes") or []
-        raw_nodes.extend(batch)
-
-        page_info = products_data.get("pageInfo") or {}
-        if not page_info.get("hasNextPage"):
-            break
-        cursor = page_info.get("endCursor")
-        if not cursor:
-            break
-
-    canonical = _dedupe_wake_nodes_by_product_id(raw_nodes)
-    all_products: List[Dict] = []
-
-    for node in canonical:
-        prices = node.get("prices") or {}
-        price = prices.get("price") or prices.get("listPrice") or 0
-        images = node.get("images") or []
-        image_url = images[0].get("url", "") if images else ""
-        cats = node.get("productCategories") or []
-        category = _primary_category(cats)
-        nome = _display_product_name(node) or "Produto"
-        sku_wake = _display_product_sku(node)
-
-        all_products.append({
-            "id": int(node["productId"]),
-            "sku": sku_wake,
-            "nome": nome,
-            "categoria": category,
-            "descricao": f"{nome} — {category}",
-            "preco": float(price),
-            "imagem": image_url,
-        })
-
-    log.info(
-        "Wake API: %d linhas recebidas, %d produtos canônicos.",
-        len(raw_nodes),
-        len(all_products),
-    )
-    return all_products
 
 
 def _normalize_wake_node(node: Dict[str, Any]) -> Dict:
@@ -413,22 +244,3 @@ def fetch_product_by_sku(sku: str) -> Optional[Dict]:
     )
     node = exact if exact is not None else nodes[0]
     return _normalize_wake_node(node)
-
-
-def test_connection() -> Dict:
-    """Testa a conexão com a API e retorna um resumo.
-
-    ``ok=True`` se a API respondeu com dados; ``ok=False`` com mensagem
-    de erro detalhada caso contrário.
-    """
-    try:
-        products = fetch_products(page_size=5, max_pages=1)
-        return {
-            "ok": True,
-            "products_sample": len(products),
-            "sample_names": [p["nome"] for p in products[:5]],
-        }
-    except (ConnectionError, PermissionError, RuntimeError) as exc:
-        return {"ok": False, "error": str(exc)}
-    except Exception as exc:
-        return {"ok": False, "error": f"Erro inesperado: {exc}"}

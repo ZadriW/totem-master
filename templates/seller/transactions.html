@@ -2,6 +2,7 @@
 {% from "macros/admin_tx_client.html" import admin_tx_client_section %}
 {% from "macros/admin_tx_order_cell.html" import admin_tx_order_cell %}
 {% from "macros/admin_tx_receipt_link.html" import admin_tx_receipt_link %}
+{% from "macros/admin_tx_status_badge.html" import admin_tx_status_badge %}
 
 {% block title %}Transações{% if seller_event %} — {{ seller_event.name }}{% endif %} - Vendedor | Dental Odonto Master{% endblock %}
 
@@ -38,6 +39,7 @@
                 <option value="confirmado" {% if filters.status == 'confirmado' %}selected{% endif %}>Confirmado</option>
                 <option value="pendente" {% if filters.status == 'pendente' %}selected{% endif %}>Pendente</option>
                 <option value="cancelado" {% if filters.status == 'cancelado' %}selected{% endif %}>Cancelado</option>
+                <option value="estornado" {% if filters.status == 'estornado' %}selected{% endif %}>Estornado</option>
             </select>
         </label>
 
@@ -145,9 +147,7 @@
                     </span>
                     <span class="admin-table__col admin-table__col--num admin-tx__status">
                         <span class="admin-tx__status-stack">
-                            <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else ('warn' if tx.status == 'pendente' else ('danger' if tx.status == 'cancelado' else 'neutral')) }}">
-                                {{ tx.status }}
-                            </span>
+                            {{ admin_tx_status_badge(tx) }}
                             {{ admin_tx_receipt_link(tx) }}
                         </span>
                     </span>

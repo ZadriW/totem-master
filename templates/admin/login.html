@@ -1,8 +1,18 @@
 {% extends "base.html" %}
+{% from "macros/admin_brand_logo.html" import admin_brand_logo %}
 
 {% block title %}Administração - Admin | Dental Odonto Master{% endblock %}
 
 {% block head %}
+<script>
+(function () {
+    try {
+        if (localStorage.getItem('totem-admin-theme') === 'dark') {
+            document.documentElement.classList.add('admin-theme--dark');
+        }
+    } catch (e) { /* ignore */ }
+})();
+</script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
 {% endblock %}
 
@@ -11,7 +21,7 @@
     <form class="admin-login__card" method="post" autocomplete="off">
         {% include 'partials/csrf_field.html' %}
         <div class="admin-login__brand">
-            <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
+            {{ admin_brand_logo() }}
         </div>
         <h1 class="admin-login__title">Painel administrativo</h1>
         <p class="admin-login__subtitle">Acesso restrito a administradores</p>

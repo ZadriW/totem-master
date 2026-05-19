@@ -1,0 +1,7 @@
+{# Badge de status da transação (confirmado, pendente, cancelado, estornado). #}
+{% macro admin_tx_status_badge(tx) -%}
+{% set st = (tx.status or '')|lower %}
+<span class="admin-badge admin-badge--{{ 'success' if st == 'confirmado' else ('warn' if st == 'pendente' else ('danger' if st == 'cancelado' else ('neutral' if st == 'estornado' else 'neutral'))) }}">
+    {{ tx.status }}
+</span>
+{%- endmacro %}

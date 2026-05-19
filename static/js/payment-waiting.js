@@ -61,6 +61,8 @@
     let pendingTxId = null;
     /** Número do pedido retornado pela API, definido após confirmação com AUT. */
     let confirmedOrderNumber = null;
+    /** Token assinado (``t``) para abrir a nota de retirada. */
+    let confirmedReceiptToken = null;
 
     function paymentMethodLabel(raw, installments) {
         const v = String(raw || '').toLowerCase();
@@ -161,6 +163,8 @@
             credentials: 'same-origin',
             body: JSON.stringify({ aut }),
         });
+        confirmedReceiptToken =
+            data.receipt_token != null ? String(data.receipt_token) : null;
         return data.order_number;
     }
 
@@ -290,8 +294,12 @@
     });
 
     function openReceiptPrint() {
-        if (!confirmedOrderNumber) return;
-        const path = `/nota/${encodeURIComponent(confirmedOrderNumber)}?print=1`;
+        if (!confirmedOrderNumber || !confirmedReceiptToken) return;
+        const qs = new URLSearchParams({
+            t: confirmedReceiptToken,
+            print: '1',
+        });
+        const path = `/nota/${encodeURIComponent(confirmedOrderNumber)}?${qs.toString()}`;
         // ``window.open(..., 'noopener')`` devolve ``null`` nos navegadores atuais; o fallback
         // ``location.assign`` roubava a aba do fluxo de compra. Abrir via ``<a target=_blank>``
         // mantém esta aba na tela de sucesso e isola a nova com noopener/noreferrer.

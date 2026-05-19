@@ -584,6 +584,7 @@ def list_transactions_summary_for_event_period(
         " SELECT 1 FROM stock_movements m "
         " WHERE m.transaction_id = t.id AND m.movement_type = 'venda' "
         " AND m.event_id = ?)"
+        " AND t.status = 'confirmado'"
     )
     params: List = [int(event_id)]
     if date_from:
@@ -619,6 +620,7 @@ def list_transaction_items_for_event_period(
         " SELECT 1 FROM stock_movements m "
         " WHERE m.transaction_id = t.id AND m.movement_type = 'venda' "
         " AND m.event_id = ?)"
+        " AND t.status = 'confirmado'"
     )
     params: List = [int(event_id)]
     if date_from:

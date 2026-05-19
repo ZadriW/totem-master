@@ -2,6 +2,7 @@
 {% from "macros/admin_tx_client.html" import admin_tx_client_section %}
 {% from "macros/admin_tx_order_cell.html" import admin_tx_order_cell %}
 {% from "macros/admin_tx_receipt_link.html" import admin_tx_receipt_link %}
+{% from "macros/admin_tx_status_badge.html" import admin_tx_status_badge %}
 
 {% block title %}Transações — {{ event.name }} | Dental Odonto Master{% endblock %}
 
@@ -80,6 +81,7 @@
                 <option value="confirmado" {% if filters.status == 'confirmado' %}selected{% endif %}>Confirmado</option>
                 <option value="pendente" {% if filters.status == 'pendente' %}selected{% endif %}>Pendente</option>
                 <option value="cancelado" {% if filters.status == 'cancelado' %}selected{% endif %}>Cancelado</option>
+                <option value="estornado" {% if filters.status == 'estornado' %}selected{% endif %}>Estornado</option>
             </select>
         </label>
 
@@ -183,9 +185,7 @@
                     </span>
                     <span class="admin-table__col admin-table__col--num admin-tx__status">
                         <span class="admin-tx__status-stack">
-                            <span class="admin-badge admin-badge--{{ 'success' if tx.status == 'confirmado' else ('warn' if tx.status == 'pendente' else ('danger' if tx.status == 'cancelado' else 'neutral')) }}">
-                                {{ tx.status }}
-                            </span>
+                            {{ admin_tx_status_badge(tx) }}
                             {{ admin_tx_receipt_link(tx) }}
                         </span>
                     </span>
@@ -248,6 +248,21 @@
                                 <strong>{{ tx.total | brl }}</strong>
                             </div>
                         </div>
+                        {% if tx.status == 'confirmado' %}
+                        <div class="admin-tx__actions">
+                            <form
+                                method="post"
+                                action="{{ url_for('admin_event_transaction_refund', event_id=event.id, tx_id=tx.id) }}"
+                                onsubmit="return confirm('Estornar este pedido? O estoque será reposto e o valor sairá dos totais de vendas.');"
+                            >
+                                {% include 'partials/csrf_field.html' %}
+                                <button type="submit" class="admin-btn admin-btn--danger admin-btn--sm">
+                                    <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                                    Estornar venda
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>

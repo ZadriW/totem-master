@@ -341,8 +341,31 @@
     gap: 12px;
 }
 
-.admin-topbar__brand img {
+.admin-topbar__brand img,
+.admin-topbar__brand .admin-brand-logo {
     height: 40px;
+}
+
+/* Logos claro / escuro (painel admin) */
+.admin-brand-logo--dark {
+    display: none;
+}
+
+html.admin-theme--dark .admin-brand-logo--light {
+    display: none;
+}
+
+html.admin-theme--dark .admin-brand-logo--dark {
+    display: block;
+}
+
+.admin-login__brand .admin-brand-logo {
+    height: 52px;
+    display: inline-block;
+}
+
+html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
+    display: inline-block;
 }
 
 .admin-topbar__badge {
@@ -400,6 +423,40 @@
 .admin-topbar__logout:hover {
     border-color: var(--color-primary);
     color: var(--color-primary);
+}
+
+.admin-topbar__theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: var(--radius-pill);
+    background: var(--color-bg);
+    color: var(--color-text-muted);
+    border: 1.5px solid var(--color-border);
+    cursor: pointer;
+    transition: border-color var(--transition), color var(--transition), background var(--transition);
+}
+
+.admin-topbar__theme-toggle:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+.admin-topbar__theme-toggle:focus {
+    outline: none;
+}
+
+.admin-topbar__theme-toggle:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.admin-topbar__theme-toggle i {
+    font-size: 15px;
+    line-height: 1;
 }
 
 /* ---------- Main ---------- */
@@ -833,6 +890,59 @@
     justify-self: center;
 }
 
+@media (max-width: 760px) {
+    .admin-sellers {
+        display: block;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .admin-sellers .admin-table__head {
+        display: none;
+    }
+
+    .admin-sellers__row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "person status"
+            "events events"
+            "sales revenue"
+            "login action";
+        margin-bottom: 12px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        padding: 14px;
+        border-bottom: none;
+        gap: 10px 12px;
+    }
+
+    .admin-sellers__row > :nth-child(1) { grid-area: person; }
+    .admin-sellers__row > :nth-child(2) { grid-area: events; }
+    .admin-sellers__row > :nth-child(3) {
+        grid-area: status;
+        justify-self: end;
+    }
+    .admin-sellers__row > :nth-child(4) {
+        grid-area: sales;
+        justify-self: start;
+    }
+    .admin-sellers__row > :nth-child(5) {
+        grid-area: revenue;
+        justify-self: end;
+    }
+    .admin-sellers__row > :nth-child(6) {
+        grid-area: login;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-sellers__row > :nth-child(7) {
+        grid-area: action;
+        justify-self: end;
+    }
+}
+
 .admin-table__col--num {
     text-align: center;
     font-variant-numeric: tabular-nums;
@@ -1205,6 +1315,16 @@
     font-weight: 800;
     color: var(--color-primary);
     font-variant-numeric: tabular-nums;
+}
+
+.admin-tx__actions {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px dashed var(--color-border);
+}
+
+.admin-tx__actions form {
+    margin: 0;
 }
 
 /* AUT — código de autorização da maquininha */
@@ -3580,113 +3700,6 @@
     transform: scale(0.95);
 }
 
-/* ======================================================================
-   Integração Wake Commerce
-   ====================================================================== */
-
-.admin-section--wake .admin-section__title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.admin-section--wake .admin-section__title i {
-    color: #6c47ff;
-}
-
-.admin-btn--wake {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 22px;
-    border: none;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #6c47ff, #8b5cf6);
-    color: #fff;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
-    white-space: nowrap;
-}
-
-.admin-btn--wake:hover {
-    background: linear-gradient(135deg, #5b35e8, #7c3aed);
-    box-shadow: 0 4px 12px rgba(108, 71, 255, 0.35);
-}
-
-.admin-btn--wake:active {
-    transform: scale(0.97);
-}
-
-@media (max-width: 760px) {
-    .admin-sellers {
-        display: block;
-        background: transparent;
-        box-shadow: none;
-    }
-
-    .admin-sellers .admin-table__head {
-        display: none;
-    }
-
-    .admin-sellers__row {
-        grid-template-columns: minmax(0, 1fr) auto;
-        grid-template-areas:
-            "person status"
-            "events events"
-            "sales revenue"
-            "login action";
-        margin-bottom: 12px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        background: var(--color-surface);
-        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
-        padding: 14px;
-        border-bottom: none;
-        gap: 10px 12px;
-    }
-
-    .admin-sellers__row > :nth-child(1) { grid-area: person; }
-    .admin-sellers__row > :nth-child(2) { grid-area: events; }
-    .admin-sellers__row > :nth-child(3) {
-        grid-area: status;
-        justify-self: end;
-    }
-    .admin-sellers__row > :nth-child(4) {
-        grid-area: sales;
-        justify-self: start;
-    }
-    .admin-sellers__row > :nth-child(5) {
-        grid-area: revenue;
-        justify-self: end;
-    }
-    .admin-sellers__row > :nth-child(6) {
-        grid-area: login;
-        font-size: 12px;
-        color: var(--color-text-muted);
-    }
-    .admin-sellers__row > :nth-child(7) {
-        grid-area: action;
-        justify-self: end;
-    }
-}
-
-.admin-btn--wake:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-}
-
-.admin-btn--wake .fa-spin {
-    animation: fa-spin 1s linear infinite;
-}
-
-@keyframes fa-spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
-
 /* ==========================================================================
    Eventos de Estoque
    ========================================================================== */
@@ -3872,10 +3885,9 @@
     font-weight: 700;
     letter-spacing: 0.02em;
     color: var(--color-text-muted);
-    border-bottom: 2px solid transparent;
     margin-bottom: -2px;
     white-space: nowrap;
-    transition: color var(--transition), border-color var(--transition);
+    transition: color var(--transition);
     text-decoration: none;
 }
 
@@ -4524,4 +4536,448 @@
     color: var(--color-primary);
     flex-shrink: 0;
     font-size: 16px;
+}
+
+/* ==========================================================================
+   Modo escuro acinzentado — painel administrativo (destaque amarelo Odonto Master)
+   Ativado via classe ``admin-theme--dark`` em ``<html>`` (admin-theme.js).
+   ========================================================================== */
+
+html.admin-theme--dark {
+    color-scheme: dark;
+
+    --color-primary: #f0c030;
+    --color-primary-dark: #d4a810;
+    --color-primary-light: #ffd966;
+    --color-text: #e8eaed;
+    --color-text-muted: #9aa3ad;
+    --color-bg: #131518;
+    --color-surface: #1c1f24;
+    --color-border: #383d46;
+    --color-shadow: rgba(0, 0, 0, 0.42);
+
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.28);
+    --shadow-md: 0 8px 28px rgba(0, 0, 0, 0.36);
+    --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.46);
+
+    --admin-tint: rgba(240, 192, 48, 0.14);
+    --admin-tint-hover: rgba(240, 192, 48, 0.22);
+    --admin-tint-strong: rgba(240, 192, 48, 0.30);
+    --admin-accent-glow: rgba(240, 192, 48, 0.42);
+    --admin-success: #6ecf96;
+    --admin-success-bg: rgba(110, 207, 150, 0.14);
+    --admin-warn: #e89420;
+    --admin-warn-bg: rgba(232, 148, 32, 0.14);
+    --admin-danger: #f07178;
+    --admin-danger-bg: rgba(240, 113, 120, 0.14);
+}
+
+html.admin-theme--dark ::selection {
+    background: var(--color-primary);
+    color: #131518;
+}
+
+html.admin-theme--dark ::-webkit-scrollbar-thumb {
+    background: rgba(240, 192, 48, 0.28);
+}
+
+html.admin-theme--dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(240, 192, 48, 0.42);
+}
+
+/* Login */
+html.admin-theme--dark .admin-login {
+    background:
+        radial-gradient(circle at 20% 20%, rgba(240, 192, 48, 0.07), transparent 60%),
+        radial-gradient(circle at 80% 80%, rgba(240, 192, 48, 0.05), transparent 60%),
+        var(--color-bg);
+}
+
+html.admin-theme--dark .admin-field__toggle-pass:hover {
+    background: var(--admin-tint);
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-field__input:focus,
+html.admin-theme--dark .admin-filter__input:focus {
+    background: var(--color-surface);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--admin-tint-strong);
+}
+
+html.admin-theme--dark .admin-field__input--invalid,
+html.admin-theme--dark .admin-field__input--invalid:focus {
+    border-color: var(--admin-danger);
+    background: var(--admin-danger-bg);
+    box-shadow: 0 0 0 4px rgba(240, 113, 120, 0.12);
+}
+
+html.admin-theme--dark .admin-field__error {
+    color: var(--admin-danger);
+}
+
+html.admin-theme--dark .admin-alert--error {
+    background: var(--admin-danger-bg);
+    color: var(--admin-danger);
+}
+
+html.admin-theme--dark .admin-login__back:hover {
+    color: var(--color-primary);
+}
+
+/* Topbar e navegação */
+html.admin-theme--dark .admin-topbar {
+    border-bottom: 1px solid var(--color-border);
+    box-shadow: none;
+}
+
+html.admin-theme--dark .admin-topbar__badge {
+    background: var(--admin-tint);
+    color: var(--color-primary-light);
+}
+
+html.admin-theme--dark .admin-topbar__user i,
+html.admin-theme--dark .admin-topbar__clock i {
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-topbar__logout:hover,
+html.admin-theme--dark .admin-topbar__theme-toggle:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-nav__item:hover {
+    background: var(--admin-tint);
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-nav__item.is-active {
+    background: var(--admin-tint-strong);
+    color: var(--color-primary-light);
+}
+
+html.admin-theme--dark .admin-event-subnav__item:hover {
+    color: var(--color-primary);
+    background: transparent;
+    border-bottom-color: var(--admin-accent-glow);
+}
+
+html.admin-theme--dark .admin-event-subnav__item.is-active {
+    color: var(--color-primary-light);
+    border-bottom-color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-breadcrumb {
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-breadcrumb:hover {
+    background: var(--admin-tint);
+    color: var(--color-primary-light);
+}
+
+/* KPIs */
+html.admin-theme--dark .kpi::before {
+    background: var(--color-primary);
+}
+
+html.admin-theme--dark .kpi__icon {
+    background: var(--admin-tint);
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .kpi--primary::before {
+    background: var(--color-primary);
+}
+
+html.admin-theme--dark .kpi--primary .kpi__icon {
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .kpi--success::before {
+    background: var(--admin-success);
+}
+
+html.admin-theme--dark .kpi--success .kpi__icon {
+    background: var(--admin-success-bg);
+    color: var(--admin-success);
+}
+
+html.admin-theme--dark .kpi--warn::before {
+    background: var(--admin-warn);
+}
+
+html.admin-theme--dark .kpi--warn .kpi__icon {
+    background: var(--admin-warn-bg);
+    color: var(--admin-warn);
+}
+
+html.admin-theme--dark .admin-empty i {
+    color: var(--color-primary);
+}
+
+/* Tabelas e listagens */
+html.admin-theme--dark .admin-event-dash-sales__row.admin-table__head {
+    background: var(--admin-tint);
+}
+
+html.admin-theme--dark .admin-event-dash-sales__prod-name a {
+    color: var(--color-primary-light);
+}
+
+html.admin-theme--dark .admin-event-dash-sales__table--by-day
+    > .admin-event-dash-sales__row:not(.admin-table__head):nth-child(even),
+html.admin-theme--dark .admin-event-dash-sales__table--top-skus
+    > .admin-event-dash-sales__row--top:not(.admin-table__head):nth-child(even) {
+    background: rgba(240, 192, 48, 0.04);
+}
+
+html.admin-theme--dark .admin-tx__row:hover,
+html.admin-theme--dark .admin-tx__row.is-open {
+    background: var(--admin-tint);
+}
+
+html.admin-theme--dark .admin-tx__order strong,
+html.admin-theme--dark .admin-tx__row.is-open .admin-tx__chevron {
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-tx__copy-order:hover {
+    color: var(--color-primary);
+    background: var(--admin-tint-hover);
+}
+
+html.admin-theme--dark .admin-tx__restore-cart {
+    color: var(--color-primary);
+    background: var(--admin-tint);
+}
+
+html.admin-theme--dark .admin-tx__restore-cart:hover {
+    background: var(--admin-tint-strong);
+    color: var(--color-primary-light);
+}
+
+html.admin-theme--dark .admin-mov__note-btn:hover {
+    background: var(--admin-tint-hover);
+}
+
+html.admin-theme--dark .admin-mov__product small code.admin-mov__sku {
+    background: var(--admin-tint);
+    color: var(--color-primary-light);
+}
+
+html.admin-theme--dark .admin-mov__product a:hover {
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-mov__reason code {
+    color: var(--color-primary-light);
+}
+
+html.admin-theme--dark .admin-mov__badge--venda,
+html.admin-theme--dark .admin-mov__badge--inicial {
+    background: var(--admin-tint);
+    color: var(--color-primary-light);
+}
+
+html.admin-theme--dark .admin-stock__sku-code,
+html.admin-theme--dark .admin-stock__qty strong {
+    color: var(--color-primary-light);
+}
+
+html.admin-theme--dark .admin-event-dash-sales__sku {
+    background: var(--admin-tint);
+    color: var(--color-primary-light);
+}
+
+html.admin-theme--dark .admin-event__edit-row {
+    background: rgba(240, 192, 48, 0.05);
+}
+
+html.admin-theme--dark .admin-event-edit-trigger:hover {
+    color: var(--color-primary);
+    background: var(--admin-tint);
+}
+
+html.admin-theme--dark input[type="checkbox"],
+html.admin-theme--dark input[type="radio"] {
+    accent-color: var(--color-primary);
+}
+
+/* Badges e status */
+html.admin-theme--dark .admin-badge--success {
+    background: var(--admin-success-bg);
+    color: var(--admin-success);
+}
+
+html.admin-theme--dark .admin-badge--warn {
+    background: var(--admin-warn-bg);
+    color: var(--admin-warn);
+}
+
+html.admin-theme--dark .admin-badge--danger {
+    background: var(--admin-danger-bg);
+    color: var(--admin-danger);
+}
+
+html.admin-theme--dark .admin-badge--neutral {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--color-text-muted);
+}
+
+html.admin-theme--dark .admin-badge--promo-type {
+    background: rgba(240, 192, 48, 0.16);
+    color: var(--color-primary-light);
+}
+
+/* Flashes */
+html.admin-theme--dark .admin-flash {
+    border-left-color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-flash--success {
+    border-left-color: var(--admin-success);
+    color: var(--admin-success);
+}
+
+html.admin-theme--dark .admin-flash--error {
+    border-left-color: var(--admin-danger);
+    color: var(--admin-danger);
+}
+
+/* Botões */
+html.admin-theme--dark .admin-btn--primary {
+    background: var(--color-primary);
+    color: #131518;
+}
+
+html.admin-theme--dark .admin-btn--primary:hover {
+    background: var(--color-primary-light);
+    color: #131518;
+}
+
+html.admin-theme--dark .admin-btn--ghost:hover {
+    background: var(--admin-tint);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-btn--warn {
+    background: #c9922e;
+    color: #131518;
+}
+
+html.admin-theme--dark .admin-btn--warn:hover {
+    background: var(--admin-warn);
+}
+
+html.admin-theme--dark .admin-btn--danger {
+    color: var(--admin-danger);
+}
+
+html.admin-theme--dark .admin-btn--danger:hover {
+    border-color: var(--admin-danger);
+    background: var(--admin-danger-bg);
+}
+
+html.admin-theme--dark .admin-btn--danger-solid {
+    background: #c94c54;
+    border-color: #c94c54;
+    color: #fff;
+}
+
+html.admin-theme--dark .admin-btn--danger-solid:hover:not(:disabled) {
+    background: var(--admin-danger);
+    border-color: var(--admin-danger);
+}
+
+html.admin-theme--dark .admin-section--danger-zone {
+    border-color: rgba(240, 113, 120, 0.35);
+    background: rgba(240, 113, 120, 0.06);
+}
+
+html.admin-theme--dark .admin-tx__discard-cart:hover {
+    background: var(--admin-danger-bg);
+    color: var(--admin-danger);
+}
+
+html.admin-theme--dark .admin-tx__restore-cart:hover {
+    background: var(--admin-tint-strong);
+}
+
+html.admin-theme--dark .admin-login__submit {
+    background: var(--color-primary);
+    color: #131518;
+}
+
+html.admin-theme--dark .admin-login__submit:hover {
+    background: var(--color-primary-light);
+}
+
+/* Cards e movimentações */
+html.admin-theme--dark .admin-card--entrada {
+    border-left-color: var(--admin-success);
+}
+
+html.admin-theme--dark .admin-card--saida {
+    border-left-color: var(--admin-warn);
+}
+
+html.admin-theme--dark .admin-card--ajuste {
+    border-left-color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-card__header--toggle:hover .admin-card__toggle-chevron {
+    background: var(--admin-tint);
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-mov__aut {
+    background: rgba(0, 0, 0, 0.22);
+    border-color: var(--color-border);
+    color: var(--color-primary-light);
+}
+
+/* Modais e formulários */
+html.admin-theme--dark .admin-modal__close:hover {
+    background: var(--admin-tint-hover);
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-section__collapse-toggle:hover {
+    background: var(--admin-tint);
+    border-color: var(--admin-accent-glow);
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-event-badge-color-input {
+    background: var(--color-surface);
+}
+
+html.admin-theme--dark .admin-tx__summary-row--total strong {
+    color: var(--color-primary-light);
+}
+
+/* Estoque — promoções (mantém roxo apenas onde não é destaque de marca) */
+html.admin-theme--dark .admin-stock__promo-tooltip-panel {
+    background: #2a2e36;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-md);
+}
+
+html.admin-theme--dark .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty)::after {
+    border-top-color: #2a2e36;
+}
+
+/* Responsivo — topbar em telas menores */
+@media (max-width: 900px) {
+    html.admin-theme--dark .admin-topbar {
+        background: var(--color-surface);
+    }
+
+    html.admin-theme--dark .admin-stock__row > :nth-child(4) {
+        background: var(--admin-tint);
+    }
 }

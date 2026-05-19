@@ -17,6 +17,7 @@ import secrets
 import unicodedata
 
 import totem_env  # noqa: F401 — carrega .env / totem.env antes da integração Wake
+from receipt_tokens import sign_receipt_token, verify_receipt_token
 from collections import defaultdict
 from functools import wraps
 from datetime import datetime
@@ -115,6 +116,7 @@ from database import (
     list_transactions_for_seller,
     list_transactions_summary_for_event_period,
     normalize_event_badge_color,
+    refund_transaction,
     register_event_stock_adjustment,
     register_event_stock_entry,
     register_event_stock_exit,
@@ -123,7 +125,6 @@ from database import (
     reset_totem_to_default_state,
     restore_event,
     set_product_active,
-    sync_products_from_wake,
     upsert_wake_variant,
     update_event,
     update_event_product_stock,
@@ -347,22 +348,6 @@ try:
     )
 except Exception as exc:
     app.logger.warning("Conta inicial de vendedor indisponivel: %s", exc)
-
-# Tenta sincronizar com a Wake Commerce no startup (silencioso se falhar).
-try:
-    wake_products = wake_api.fetch_products()
-    if wake_products:
-        result = sync_products_from_wake(wake_products)
-        app.logger.info(
-            "Sync Wake Commerce (startup): %d inseridos, %d atualizados.",
-            result["inserted"], result["updated"],
-        )
-        _wake_categories = sorted({p["categoria"] for p in wake_products})
-        if _wake_categories:
-            CATEGORIES.clear()
-            CATEGORIES.extend(_wake_categories)
-except Exception as exc:
-    app.logger.warning("Sync Wake Commerce indisponivel no startup: %s", exc)
 
 
 def _auth_serializer(salt: str) -> URLSafeSerializer:
@@ -679,6 +664,11 @@ def api_confirm_transaction_aut(tx_id: int):
         result = confirm_transaction_with_aut(
             tx_id, aut, created_by=f"vendedor:{seller_name}"
         )
+        order_number = (result.get("order_number") or "").strip()
+        if order_number:
+            result["receipt_token"] = sign_receipt_token(
+                order_number, app.secret_key
+            )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception:
@@ -1104,7 +1094,7 @@ def seller_transactions():
 
     pedido = (request.args.get("pedido") or "").strip()
     status_raw = (request.args.get("status") or "").strip().lower()
-    valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado"})
+    valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado", "estornado"})
     status_norm = status_raw if status_raw in valid_status else "todos"
 
     date_arg_raw = (request.args.get("data") or "").strip()
@@ -1662,40 +1652,6 @@ def admin_seller_delete(seller_id: int):
     except ValueError as exc:
         flash(str(exc), "error")
     return redirect(url_for("admin_sellers"))
-
-
-@app.route("/admin/sincronizar-wake", methods=["POST"])
-@admin_required
-def admin_sync_wake():
-    """Sincroniza a biblioteca de produtos com a Wake Commerce."""
-    try:
-        products = wake_api.fetch_products()
-        if not products:
-            flash("A API Wake Commerce respondeu, mas nenhum produto foi retornado.", "error")
-            return redirect(url_for("admin_dashboard"))
-        result = sync_products_from_wake(products)
-        wake_categories = sorted({p["categoria"] for p in products})
-        if wake_categories:
-            CATEGORIES.clear()
-            CATEGORIES.extend(wake_categories)
-        flash(
-            f"Sincronizacao concluida: {result['inserted']} produto(s) novo(s), "
-            f"{result['updated']} atualizado(s). "
-            f"Total de {len(products)} produto(s) da Wake Commerce. "
-            "O estoque do totem foi preservado e segue sendo controlado pelo administrador.",
-            "success",
-        )
-    except PermissionError:
-        flash(_wake_token_help_message(), "error")
-    except ConnectionError as exc:
-        flash(
-            f"Nao foi possivel conectar a Wake Commerce: {exc}",
-            "error",
-        )
-    except Exception as exc:
-        app.logger.exception("Falha ao sincronizar com Wake Commerce")
-        flash(f"Erro ao sincronizar: {exc}", "error")
-    return redirect(url_for("admin_dashboard"))
 
 
 @app.route("/admin/reiniciar-sistema", methods=["POST"])
@@ -3361,7 +3317,7 @@ def admin_event_transactions(event_id: int):
 
     pedido = (request.args.get("pedido") or "").strip()
     status_raw = (request.args.get("status") or "").strip().lower()
-    valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado"})
+    valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado", "estornado"})
     status_norm = status_raw if status_raw in valid_status else "todos"
 
     date_arg_raw = (request.args.get("data") or "").strip()
@@ -3437,6 +3393,33 @@ def admin_event_transactions(event_id: int):
     )
 
 
+@app.route(
+    "/admin/eventos/<int:event_id>/transacoes/<int:tx_id>/estornar",
+    methods=["POST"],
+)
+@admin_required
+def admin_event_transaction_refund(event_id: int, tx_id: int):
+    if _event_or_404(event_id) is None:
+        flash("Evento não encontrado.", "error")
+        return redirect(url_for("admin_events"))
+    try:
+        result = refund_transaction(
+            tx_id,
+            created_by=_current_admin_user(),
+            expected_event_id=event_id,
+        )
+        order_label = result.get("order_number") or f"#{tx_id}"
+        flash(
+            f"Pedido {order_label} estornado. Estoque reposto e totais de vendas atualizados.",
+            "success",
+        )
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(
+        request.referrer or url_for("admin_event_transactions", event_id=event_id)
+    )
+
+
 # ---------------------------------------------------------------------------
 # Eventos — API de polling (estoque)
 # ---------------------------------------------------------------------------
@@ -3487,9 +3470,32 @@ def admin_api_event_stock_product(event_id: int, product_id: int):
 # Nota não fiscal
 # ---------------------------------------------------------------------------
 
+def _receipt_public_url(order_number: str, *, autoprint: bool = False) -> str:
+    """URL assinada da nota de retirada (``/nota/OM...?t=...``)."""
+    on = (order_number or "").strip()
+    if not on:
+        return ""
+    token = sign_receipt_token(on, app.secret_key)
+    extra = {"print": "1"} if autoprint else {}
+    return url_for("receipt", order_number=on, t=token, **extra)
+
+
+app.add_template_global(_receipt_public_url, "receipt_url")
+
+
 @app.route("/nota/<path:order_number>")
 def receipt(order_number: str):
-    """Exibe a nota não fiscal de uma transação (identificada pelo número do pedido)."""
+    """Exibe a nota não fiscal (requer parâmetro ``t`` com assinatura válida)."""
+    token = (request.args.get("t") or "").strip()
+    if not verify_receipt_token(order_number, token, app.secret_key):
+        return render_template(
+            "nota.html",
+            tx=None,
+            order_number=order_number,
+            autoprint=False,
+            receipt_error="invalid_link",
+        ), 403
+
     tx = get_transaction_by_order_number(order_number)
     autoprint = request.args.get("print", "").lower() in ("1", "true", "yes")
     if tx is None:
@@ -3498,12 +3504,14 @@ def receipt(order_number: str):
             tx=None,
             order_number=order_number,
             autoprint=False,
+            receipt_error="not_found",
         ), 404
     return render_template(
         "nota.html",
         tx=tx,
         order_number=order_number,
         autoprint=autoprint,
+        receipt_error=None,
     )
 
 

@@ -2,7 +2,7 @@
 {% macro admin_tx_receipt_link(tx) -%}
 {% if tx.status == 'confirmado' and tx.order_number %}
 <a
-    href="{{ url_for('receipt', order_number=tx.order_number) }}"
+    href="{{ receipt_url(tx.order_number) }}"
     target="_blank"
     rel="noopener noreferrer"
     class="admin-mov__note-btn"

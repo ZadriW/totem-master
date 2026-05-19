@@ -13,6 +13,8 @@ from .promotions import apply_promotions_to_items_in_conn
 from .sku_helpers import _default_sku_for_id
 from .stock import _apply_movement, _normalize_order_reference
 
+TX_FILTER_STATUSES = frozenset({"confirmado", "pendente", "cancelado", "estornado"})
+
 # ---------------------------------------------------------------------------
 # Transações (vendas)
 # ---------------------------------------------------------------------------
@@ -758,6 +760,117 @@ def confirm_transaction_with_aut(tx_id: int, aut: str, *, created_by: str = "tot
     }
 
 
+def refund_transaction(
+    tx_id: int,
+    *,
+    created_by: str = "admin",
+    expected_event_id: Optional[int] = None,
+) -> Dict:
+    """Estorna transação confirmada: repõe estoque e marca status ``estornado``.
+
+    Levanta ``ValueError`` se a transação não existir, não estiver confirmada,
+    já tiver sido estornada ou não pertencer ao ``expected_event_id`` informado.
+    """
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM transactions WHERE id = ?", (tx_id,)).fetchone()
+        if row is None:
+            raise ValueError("Transação não encontrada.")
+        if row["status"] != "confirmado":
+            raise ValueError("Somente transações confirmadas podem ser estornadas.")
+
+        tx_row = dict(row)
+        order_number = (tx_row.get("order_number") or "").strip() or f"#{tx_id}"
+        reason = f"Estorno"
+
+        dup = conn.execute(
+            """
+            SELECT 1 FROM stock_movements
+             WHERE transaction_id = ? AND delta > 0 AND reason LIKE 'Estorno%'
+             LIMIT 1
+            """,
+            (tx_id,),
+        ).fetchone()
+        if dup:
+            raise ValueError("Esta transação já foi estornada.")
+
+        event_id_raw = tx_row.get("event_id")
+        event_id: Optional[int] = (
+            int(event_id_raw) if event_id_raw is not None else None
+        )
+        if event_id is None:
+            mov = conn.execute(
+                """
+                SELECT event_id FROM stock_movements
+                 WHERE transaction_id = ? AND movement_type = 'venda' AND event_id IS NOT NULL
+                 LIMIT 1
+                """,
+                (tx_id,),
+            ).fetchone()
+            if mov and mov["event_id"] is not None:
+                event_id = int(mov["event_id"])
+
+        if expected_event_id is not None:
+            tx_ev = tx_row.get("event_id")
+            resolved = event_id
+            if resolved is None and tx_ev is not None:
+                resolved = int(tx_ev)
+            if resolved is None or int(resolved) != int(expected_event_id):
+                raise ValueError("Esta transação não pertence a este evento.")
+
+        items_rows = conn.execute(
+            "SELECT product_id, quantity FROM transaction_items WHERE transaction_id = ?",
+            (tx_id,),
+        ).fetchall()
+        demand: Dict[int, int] = {}
+        for it in items_rows:
+            try:
+                pid = int(it["product_id"])
+            except (TypeError, ValueError):
+                continue
+            demand[pid] = demand.get(pid, 0) + int(it["quantity"] or 0)
+
+        if not demand:
+            raise ValueError("Transação sem itens válidos para estorno.")
+
+        ref = order_number if order_number.startswith("OM") else None
+        if event_id is not None:
+            for pid, qty in demand.items():
+                _apply_event_movement(
+                    conn,
+                    event_id=int(event_id),
+                    product_id=pid,
+                    movement_type="entrada",
+                    delta=qty,
+                    reason=reason,
+                    reference=ref,
+                    transaction_id=tx_id,
+                    created_by=created_by,
+                )
+        else:
+            for pid, qty in demand.items():
+                _apply_movement(
+                    conn,
+                    product_id=pid,
+                    movement_type="entrada",
+                    delta=qty,
+                    reason=reason,
+                    reference=ref,
+                    transaction_id=tx_id,
+                    created_by=created_by,
+                )
+
+        conn.execute(
+            "UPDATE transactions SET status = 'estornado' WHERE id = ?",
+            (tx_id,),
+        )
+
+    return {
+        "id": tx_id,
+        "order_number": tx_row.get("order_number"),
+        "status": "estornado",
+    }
+
+
 def get_pending_transaction_if_owned(transaction_id: int, seller_id: int) -> Optional[Dict]:
     """Retorna a linha mínima da transação **pendente** se pertencer ao vendedor."""
     with get_conn() as conn:
@@ -950,7 +1063,7 @@ def _transactions_event_filter_sql_params(
         )
         params.append(ref)
     st = (status or "").strip().lower()
-    if st and st != "todos" and st in ("confirmado", "pendente", "cancelado"):
+    if st and st != "todos" and st in TX_FILTER_STATUSES:
         parts.append("LOWER(TRIM(COALESCE(t.status, ''))) = ?")
         params.append(st)
     if on_date:
@@ -1040,7 +1153,7 @@ def _transactions_seller_scope_filter_sql_params(
         )
         params.append(ref)
     st = (status or "").strip().lower()
-    if st and st != "todos" and st in ("confirmado", "pendente", "cancelado"):
+    if st and st != "todos" and st in TX_FILTER_STATUSES:
         parts.append("LOWER(TRIM(COALESCE(t.status, ''))) = ?")
         params.append(st)
     if on_date:
