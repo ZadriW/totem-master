@@ -1,0 +1,251 @@
+{# Conteúdo do catálogo (topbar + grid + carrinho). Requer: categories, categories_by_letter, products, catalog_brand_href, catalog_brand_aria #}
+<header class="topbar">
+    <a class="topbar__brand" href="{{ catalog_brand_href }}" aria-label="{{ catalog_brand_aria }}">
+        <img
+            class="admin-brand-logo admin-brand-logo--light"
+            src="{{ url_for('static', filename='images/logo-master.png') }}"
+            alt="Odonto Master"
+        >
+        <img
+            class="admin-brand-logo admin-brand-logo--dark"
+            src="{{ url_for('static', filename='images/logo-branca.png') }}"
+            alt="Odonto Master"
+        >
+    </a>
+
+    <div class="topbar__search">
+        <svg class="topbar__search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input
+            id="searchInput"
+            type="search"
+            placeholder="Buscar produto..."
+            autocomplete="off"
+        >
+    </div>
+
+    <button
+        class="topbar__cart"
+        type="button"
+        id="openCartBtn"
+        aria-label="Abrir carrinho"
+    >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="21" r="1"></circle>
+            <circle cx="20" cy="21" r="1"></circle>
+            <path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"></path>
+        </svg>
+        <span class="topbar__cart-count" id="cartCount">0</span>
+    </button>
+</header>
+
+<div
+    id="catalogAddToast"
+    class="catalog-toast"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+    aria-hidden="true"
+>
+    <span class="catalog-toast__icon" aria-hidden="true">
+        <i class="fa-solid fa-circle-check"></i>
+    </span>
+    <span class="catalog-toast__text">Produto adicionado ao carrinho!</span>
+</div>
+
+<div class="categories-bar">
+    {% set _letters = categories_by_letter if categories_by_letter is defined else [] %}
+    <nav class="categories" aria-label="Categorias">
+        <div class="categories__scroll">
+        <button class="category-chip category-chip--all is-active" type="button" data-category="todos">Todos</button>
+        {% for letter, names in _letters %}
+        <div class="category-dropdown" data-letter="{{ letter }}">
+            <button
+                type="button"
+                class="category-letter-trigger"
+                aria-expanded="false"
+                aria-haspopup="true"
+                aria-controls="categoryDropdownPanel{{ loop.index0 }}"
+            >
+                {% if letter == '#' %}0-9{% else %}{{ letter }}{% endif %}
+            </button>
+            <div
+                id="categoryDropdownPanel{{ loop.index0 }}"
+                class="category-dropdown__panel"
+                role="menu"
+                hidden
+                aria-label="Categorias — {% if letter == '#' %}0-9 e outros{% else %}{{ letter }}{% endif %}"
+            >
+                {% for category in names %}
+                <button
+                    type="button"
+                    class="category-chip category-dropdown__item"
+                    role="menuitem"
+                    data-category="{{ category }}"
+                >{{ category }}</button>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+        </div>
+    </nav>
+    <button
+        type="button"
+        class="categories-clear"
+        id="clearCatalogFilters"
+        aria-label="Limpar filtros de categoria e busca"
+    >
+        <i class="fa-solid fa-filter-circle-xmark" aria-hidden="true"></i>
+        Limpar filtros
+    </button>
+</div>
+
+<main class="catalog">
+    <div class="catalog__header">
+        <h1 class="catalog__title">Catálogo de Produtos</h1>
+        <p class="catalog__subtitle" id="resultsInfo">{{ products|length }} produtos disponíveis</p>
+    </div>
+
+    <div class="product-grid" id="productGrid">
+        {% for product in products %}
+        {% set sm = (product.estoque_minimo | default(0)) | int %}
+        {% set q = product.estoque | int %}
+        {% if q <= 0 %}
+            {% set stock_tone = 'empty' %}
+        {% elif sm > 0 and q < sm %}
+            {% set stock_tone = 'low' %}
+        {% else %}
+            {% set stock_tone = 'ok' %}
+        {% endif %}
+        {% set em_promo = product.em_promocao | default(false) %}
+        <article
+            class="product-card{% if em_promo %} product-card--promo{% endif %}"
+            data-id="{{ product.id }}"
+            data-category="{{ product.categoria }}"
+            data-name="{{ product.nome|lower }}"
+            data-sku="{{ (product.sku or '')|lower }}"
+            data-estoque="{{ product.estoque }}"
+            data-estoque-min="{{ sm }}"
+            data-preco="{{ product.preco }}"
+        >
+            <div data-promo-badge-root>
+                {% if em_promo and product.promo_badge %}
+                <div class="product-card__promo-badge">
+                    <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                    {{ product.promo_badge }}
+                </div>
+                {% endif %}
+            </div>
+            <div class="product-card__image">
+                <img src="{{ product.imagem }}" alt="{{ product.nome }}" loading="lazy">
+            </div>
+            <div class="product-card__body">
+                <span class="product-card__category">{{ product.categoria }}</span>
+                <h2 class="product-card__name">{{ product.nome }}</h2>
+                {% if product.sku %}
+                <div class="product-card__meta-line">
+                    <span class="product-card__sku">SKU {{ product.sku }}</span>
+                    <span class="product-card__stock product-card__stock--{{ stock_tone }}" data-stock-display>{{ product.estoque }} no estoque.</span>
+                </div>
+                {% else %}
+                <span class="product-card__stock product-card__stock--{{ stock_tone }} product-card__stock--alone" data-stock-display>{{ product.estoque }} no estoque.</span>
+                {% endif %}
+                <div data-catalog-pricing>
+                    {% if em_promo and product.preco_original is defined and product.preco_original != product.preco %}
+                    <div class="product-card__price-wrap">
+                        <span class="product-card__price-original">R$ {{ '%.2f'|format(product.preco_original)|replace('.', ',') }}</span>
+                        <p class="product-card__price product-card__price--promo">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
+                    </div>
+                    {% elif em_promo and product.promo_tipo == 'bogo' %}
+                    <div class="product-card__price-wrap">
+                        <p class="product-card__price">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
+                        <span class="product-card__promo-name">{{ product.promo_nome }}</span>
+                    </div>
+                    {% else %}
+                    <p class="product-card__price">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="product-card__actions">
+                <div class="product-card__counter" role="group" aria-label="Quantidade">
+                    <button type="button" class="product-card__counter-btn" data-action="dec" aria-label="Diminuir quantidade">
+                        <span aria-hidden="true">&minus;</span>
+                    </button>
+                    <input
+                        class="product-card__counter-input"
+                        type="number"
+                        min="1"
+                        max="{{ product.estoque }}"
+                        value="1"
+                        inputmode="numeric"
+                        aria-label="Quantidade a adicionar"
+                    >
+                    <button type="button" class="product-card__counter-btn" data-action="inc" aria-label="Aumentar quantidade">
+                        <span aria-hidden="true">+</span>
+                    </button>
+                </div>
+                <button class="product-card__button" type="button" data-id="{{ product.id }}" aria-label="Adicionar ao carrinho">
+                    <i class="fa-solid fa-cart-plus" aria-hidden="true"></i>
+                </button>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+
+    <p class="catalog__empty" id="emptyState" hidden>
+        Nenhum produto encontrado para sua busca.
+    </p>
+</main>
+
+<div class="cart-backdrop" id="cartBackdrop" aria-hidden="true"></div>
+
+<aside
+    class="cart-drawer"
+    id="cartDrawer"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="cartDrawerTitle"
+    aria-hidden="true"
+>
+    <header class="cart-drawer__header">
+        <h2 class="cart-drawer__title" id="cartDrawerTitle">
+            <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
+            Meu carrinho
+            <span class="cart-drawer__title-count" id="cartDrawerCount">0</span>
+        </h2>
+        <button type="button" class="cart-drawer__close" id="cartDrawerClose" aria-label="Fechar carrinho">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+    </header>
+
+    <div class="cart-drawer__body">
+        <div class="cart-drawer__empty" id="cartDrawerEmpty">
+            <div class="cart-drawer__empty-icon">
+                <i class="fa-solid fa-basket-shopping" aria-hidden="true"></i>
+            </div>
+            <p class="cart-drawer__empty-title">Seu carrinho está vazio</p>
+            <p class="cart-drawer__empty-text">
+                Adicione produtos do catálogo para continuar.
+            </p>
+        </div>
+        <div class="cart-drawer__items" id="cartDrawerItems" hidden></div>
+    </div>
+
+    <footer class="cart-drawer__footer">
+        <div class="cart-drawer__summary">
+            <span class="cart-drawer__summary-label">Total</span>
+            <span class="cart-drawer__summary-value" id="cartDrawerTotal">R$ 0,00</span>
+        </div>
+        <button
+            type="button"
+            class="cart-drawer__checkout"
+            id="cartDrawerCheckout"
+            disabled
+        >
+            Finalizar compra
+            <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+        </button>
+    </footer>
+</aside>

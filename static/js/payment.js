@@ -8,8 +8,30 @@
     const Cart = window.Cart;
     if (!Cart) return;
 
-    const WAITING_URL = '/pagamento/aguardando';
-    const CATALOG_URL = '/catalogo';
+    const FLOW = window.__TOTEM_FLOW__ || {};
+    const WAITING_URL = FLOW.paymentWaiting || '/vendedor/pagamento/aguardando';
+    const CATALOG_URL = FLOW.catalog || '/vendedor/venda';
+    const RESUME_PENDING_TX_KEY = 'totem_resume_pending_tx_id';
+
+    function readResumePendingTxId() {
+        try {
+            const raw = sessionStorage.getItem(RESUME_PENDING_TX_KEY);
+            return raw && /^\d+$/.test(raw.trim()) ? raw.trim() : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function clearResumePendingTxId() {
+        try {
+            sessionStorage.removeItem(RESUME_PENDING_TX_KEY);
+        } catch (_) {}
+    }
+
+    function waitingUrlWithOptionalResume(baseUrl, txId) {
+        const sep = baseUrl.includes('?') ? '&' : '?';
+        return `${baseUrl}${sep}pendente=${encodeURIComponent(txId)}`;
+    }
 
     const itemsEl = document.getElementById('paymentItems');
     const countEl = document.getElementById('paymentCount');
@@ -42,6 +64,7 @@
     function renderSummary() {
         const items = Cart.getItems();
         if (items.length === 0) {
+            clearResumePendingTxId();
             window.location.replace(CATALOG_URL);
             return;
         }
@@ -54,15 +77,24 @@
 
     continueBtn.addEventListener('click', () => {
         if (Cart.isEmpty()) return;
-        window.location.assign(WAITING_URL);
+        if (!window.PaymentForm || !window.PaymentForm.save()) {
+            return;
+        }
+        const resumeId = readResumePendingTxId();
+        const targetUrl = resumeId ? waitingUrlWithOptionalResume(WAITING_URL, resumeId) : WAITING_URL;
+        window.location.assign(targetUrl);
     });
 
     cancelBtn.addEventListener('click', () => {
+        clearResumePendingTxId();
         window.location.assign(CATALOG_URL);
     });
 
     Cart.subscribe(() => {
         renderSummary();
+        if (window.PaymentForm && typeof window.PaymentForm.syncInstallmentsFromCart === 'function') {
+            window.PaymentForm.syncInstallmentsFromCart();
+        }
     });
 
     renderSummary();

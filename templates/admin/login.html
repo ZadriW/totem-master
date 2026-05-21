@@ -1,16 +1,27 @@
 {% extends "base.html" %}
+{% from "macros/admin_brand_logo.html" import admin_brand_logo %}
 
-{% block title %}Administração | Odonto Master{% endblock %}
+{% block title %}Administração - Admin | Dental Odonto Master{% endblock %}
 
 {% block head %}
+<script>
+(function () {
+    try {
+        if (localStorage.getItem('totem-admin-theme') === 'dark') {
+            document.documentElement.classList.add('admin-theme--dark');
+        }
+    } catch (e) { /* ignore */ }
+})();
+</script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
 {% endblock %}
 
 {% block body %}
 <main class="admin-login">
     <form class="admin-login__card" method="post" autocomplete="off">
+        {% include 'partials/csrf_field.html' %}
         <div class="admin-login__brand">
-            <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
+            {{ admin_brand_logo() }}
         </div>
         <h1 class="admin-login__title">Painel administrativo</h1>
         <p class="admin-login__subtitle">Acesso restrito a administradores</p>
@@ -39,15 +50,26 @@
 
         <label class="admin-field">
             <span class="admin-field__label">Senha</span>
-            <span class="admin-field__wrap">
+            <span class="admin-field__wrap admin-field__wrap--has-toggle">
                 <i class="fa-solid fa-lock admin-field__icon" aria-hidden="true"></i>
                 <input
+                    id="adminLoginPassword"
                     class="admin-field__input"
                     type="password"
                     name="password"
                     autocomplete="current-password"
                     required
                 >
+                <button
+                    type="button"
+                    class="admin-field__toggle-pass"
+                    id="adminTogglePassword"
+                    aria-label="Mostrar senha"
+                    aria-pressed="false"
+                    title="Mostrar senha"
+                >
+                    <i class="fa-regular fa-eye" aria-hidden="true"></i>
+                </button>
             </span>
         </label>
 
@@ -62,4 +84,25 @@
         </a>
     </form>
 </main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    var input = document.getElementById('adminLoginPassword');
+    var btn = document.getElementById('adminTogglePassword');
+    if (!input || !btn) return;
+    var icon = btn.querySelector('i');
+    btn.addEventListener('click', function () {
+        var hidden = input.type === 'password';
+        input.type = hidden ? 'text' : 'password';
+        btn.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+        btn.setAttribute('aria-label', hidden ? 'Ocultar senha' : 'Mostrar senha');
+        btn.setAttribute('title', hidden ? 'Ocultar senha' : 'Mostrar senha');
+        if (icon) {
+            icon.className = hidden ? 'fa-regular fa-eye-slash' : 'fa-regular fa-eye';
+        }
+    });
+})();
+</script>
 {% endblock %}

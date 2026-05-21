@@ -150,6 +150,23 @@
             });
         },
 
+        /** Atualiza ``preco`` dos itens do carrinho a partir do mapa id→produto do catálogo (polling de promoções). */
+        syncPricesFromProductMap(productMap) {
+            if (!productMap || typeof productMap.forEach !== 'function') return;
+            const items = readRaw();
+            let changed = false;
+            const next = items.map(item => {
+                const p = productMap.get(String(item.id));
+                if (!p) return item;
+                const np = Number(p.preco);
+                if (!Number.isFinite(np)) return item;
+                if (Number(item.preco) === np) return item;
+                changed = true;
+                return { ...item, preco: np };
+            });
+            if (changed) writeRaw(next);
+        },
+
         subscribe(handler) {
             const listener = e => handler(e.detail ? e.detail.items : readRaw(), e);
             window.addEventListener(EVENT_NAME, listener);

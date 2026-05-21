@@ -1,10 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}Aguardando pagamento | Odonto Master{% endblock %}
+{% block title %}Aguardando pagamento | Dental Odonto Master{% endblock %}
 
 {% block head %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/payment.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/idle-timeout.css') }}">
 {% endblock %}
 
 {% block body %}
@@ -12,9 +11,9 @@
     <header class="payment__topbar">
         <button type="button" class="payment__back" id="waitingBack">
             <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
-            Voltar ao resumo
+            <span id="waitingBackLabel">Voltar ao resumo</span>
         </button>
-        <a class="payment__brand" href="{{ url_for('welcome') }}" aria-label="Odonto Master">
+        <a class="payment__brand" href="{{ payment_home_url }}" aria-label="Odonto Master">
             <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
         </a>
     </header>
@@ -26,7 +25,8 @@
             </div>
             <h1 class="payment-wait__title">Aguardando pagamento</h1>
             <p class="payment-wait__lead">
-                Utilize a <strong>maquininha</strong> ao lado do totem para concluir o pagamento.
+                Utilize a <strong>maquininha</strong> ao lado do totem para concluir o pagamento
+                (<strong>PIX</strong> ou <strong>cartão</strong>, conforme selecionado no passo anterior).
                 Quando a operação for aprovada na maquininha, toque no botão abaixo para registrar
                 a venda e liberar a nota de retirada.
             </p>
@@ -38,6 +38,10 @@
                 Seu pedido
             </h2>
             <div class="payment__items payment-wait__items" id="waitingItems"></div>
+            <div class="payment-wait__total-row payment-wait__method-row">
+                <span>Forma de pagamento</span>
+                <strong id="waitingPaymentMethod">—</strong>
+            </div>
             <div class="payment-wait__total-row">
                 <span>Total a pagar</span>
                 <strong id="waitingTotal">R$ 0,00</strong>
@@ -55,51 +59,74 @@
         </div>
     </main>
 
-    <section class="payment__success" id="paymentSuccess" hidden>
-        <div class="payment__success-icon">
-            <i class="fa-solid fa-check" aria-hidden="true"></i>
+    {# Tela de AUT — exibida após clicar em "Pagamento realizado" #}
+    <section class="payment-aut" id="autSection" hidden aria-hidden="true">
+        <div class="payment-aut__card">
+            <div class="payment-aut__icon" aria-hidden="true">
+                <i class="fa-solid fa-key"></i>
+            </div>
+            <h2 class="payment-aut__title">Digite o código AUT</h2>
+            <p class="payment-aut__resume-hint" id="autResumeOrderHint" hidden></p>
+            <p class="payment-aut__lead">
+                Informe o código de autorização (<strong>AUT</strong>) exibido na
+                maquininha após a aprovação do pagamento.
+            </p>
+            <div class="payment-aut__field">
+                <label class="payment-aut__label" for="autInput">Código AUT</label>
+                <input
+                    type="text"
+                    id="autInput"
+                    class="payment-aut__input"
+                    inputmode="text"
+                    autocomplete="off"
+                    maxlength="60"
+                    placeholder="Ex.: 123456"
+                    aria-describedby="autError"
+                >
+                <p class="payment-aut__error" id="autError" role="alert" hidden></p>
+            </div>
+            <div class="payment-aut__actions">
+                <button type="button" class="payment__btn payment__btn--primary" id="autSave">
+                    <i class="fa-solid fa-check" aria-hidden="true"></i>
+                    Salvar AUT
+                </button>
+            </div>
         </div>
-        <h2 class="payment__success-title">Pagamento confirmado!</h2>
-        <p class="payment__success-text">
-            Retire a nota impressa e apresente no balcão para retirar seus produtos.
-            <br>
-            O totem voltará à tela inicial em <span id="successCountdown">8</span>s.
-        </p>
-        <div class="payment__success-order" id="successOrder">Pedido #—</div>
-        <button type="button" class="payment__btn payment__btn--primary" id="successFinish">
-            Finalizar agora
-        </button>
     </section>
-</div>
 
-<div
-    id="idle-timeout-overlay"
-    class="idle-modal-overlay"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="idle-timeout-title"
-    aria-describedby="idle-timeout-desc"
-    aria-hidden="true"
->
-    <div class="idle-modal-dialog" role="document">
-        <div class="idle-modal-dialog__icon" aria-hidden="true">
-            <i class="fa-regular fa-clock"></i>
+    <section class="payment__success" id="paymentSuccess" hidden aria-hidden="true">
+        <div class="payment__success-card">
+            <div class="payment__success-icon">
+                <i class="fa-solid fa-check" aria-hidden="true"></i>
+            </div>
+            <h2 class="payment__success-title">Pagamento confirmado!</h2>
+            <p class="payment__success-text">
+                Retire a nota impressa e apresente no balcão para retirar seus produtos.
+                <br>
+                O totem retornará ao painel do vendedor em <span id="successCountdown">30</span>s.
+            </p>
+            <div class="payment__success-order" id="successOrder">Pedido #—</div>
+            <div class="payment__success-actions">
+                <button type="button" class="payment__btn payment__btn--secondary" id="successPrint">
+                    <i class="fa-solid fa-print" aria-hidden="true"></i>
+                    Imprimir nota
+                </button>
+                <button type="button" class="payment__btn payment__btn--primary" id="successFinish">
+                    Finalizar agora
+                </button>
+            </div>
         </div>
-        <h2 id="idle-timeout-title" class="idle-modal-dialog__title">Ainda está aí?</h2>
-        <p id="idle-timeout-desc" class="idle-modal-dialog__text">
-            Toque no botão abaixo para continuar. Sem interação, o totem voltará à tela inicial em instantes.
-        </p>
-        <div class="idle-modal-dialog__actions">
-            <button type="button" class="idle-modal-dialog__btn" id="idle-timeout-continue">
-                Continuar
-            </button>
-        </div>
-    </div>
+    </section>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/totem-api-errors.js') }}"></script>
+<script>
+window.__TOTEM_FLOW__ = {{ (totem_flow or {}) | tojson }};
+window.__PENDING_AUT_RESUME__ = {{ resume_pending_aut | tojson }};
+</script>
 <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
-<script src="{{ url_for('static', filename='js/idle-timeout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/payment-form.js') }}"></script>
 <script src="{{ url_for('static', filename='js/payment-waiting.js') }}"></script>
 {% endblock %}

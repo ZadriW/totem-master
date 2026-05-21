@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% from "macros/admin_brand_logo.html" import admin_brand_logo %}
+
+{% block head %}
+<script>
+(function () {
+    try {
+        if (localStorage.getItem('totem-admin-theme') === 'dark') {
+            document.documentElement.classList.add('admin-theme--dark');
+        }
+    } catch (e) { /* ignore */ }
+})();
+</script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+{% block seller_head %}{% endblock %}
+{% endblock %}
+
+{% block body %}
+<div class="admin-shell">
+    <header class="admin-topbar">
+        <a class="admin-topbar__brand" href="{{ url_for('seller_dashboard') }}">
+            {{ admin_brand_logo() }}
+            <span class="admin-topbar__badge">Vendedor</span>
+        </a>
+
+        <nav class="admin-nav" aria-label="Seções do painel do vendedor">
+            {% if seller_event %}
+            {% set seller_ev_badge = seller_event.badge_color | event_badge_style %}
+            <span class="admin-nav__event-badge" title="Você está operando no contexto deste evento"{% if seller_ev_badge %} style="{{ seller_ev_badge }}"{% endif %}>
+                <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
+                {{ seller_event.name }}
+            </span>
+            {% endif %}
+            <a class="admin-nav__item {% if active_section == 'dashboard' %}is-active{% endif %}"
+               href="{{ url_for('seller_dashboard') }}">
+                <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
+                Dashboard
+            </a>
+            <a class="admin-nav__item {% if active_section == 'venda' %}is-active{% endif %}"
+               href="{{ seller_venda_url|default('/vendedor/venda', true) }}">
+                <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
+                Catálogo
+            </a>
+            <a class="admin-nav__item {% if active_section == 'estoque' %}is-active{% endif %}"
+               href="{{ url_for('seller_stock') }}">
+                <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
+                Estoque
+            </a>
+            <a class="admin-nav__item {% if active_section == 'movimentacoes' %}is-active{% endif %}"
+               href="{{ url_for('seller_movements') }}">
+                <i class="fa-solid fa-right-left" aria-hidden="true"></i>
+                Movimentações
+            </a>
+            <a class="admin-nav__item {% if active_section == 'transacoes' %}is-active{% endif %}"
+               href="{{ url_for('seller_transactions') }}">
+                <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
+                Transações
+            </a>
+        </nav>
+
+        <div class="admin-topbar__meta">
+            <span class="admin-topbar__user">
+                <i class="fa-solid fa-user" aria-hidden="true"></i>
+                {{ seller_name }}
+            </span>
+            <span class="admin-topbar__clock">
+                <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                {{ now.strftime('%d/%m/%Y %H:%M') }}
+            </span>
+            <button
+                type="button"
+                class="admin-topbar__theme-toggle"
+                data-admin-theme-toggle
+                aria-pressed="false"
+                title="Modo escuro"
+                aria-label="Ativar modo escuro"
+            >
+                <i class="fa-solid fa-moon" aria-hidden="true"></i>
+            </button>
+            <form method="post" action="{{ url_for('seller_logout') }}" class="admin-topbar__logout-form">
+                {% include 'partials/csrf_field.html' %}
+                <button
+                    type="submit"
+                    class="admin-topbar__logout"
+                    title="Sair"
+                    aria-label="Sair do painel do vendedor"
+                >
+                    <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+                    <span class="admin-topbar__logout-label">Sair</span>
+                </button>
+            </form>
+        </div>
+    </header>
+
+    <main class="admin-main {% block admin_main_class %}{% endblock %}">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="admin-flashes">
+                {% for category, msg in messages %}
+                <div class="admin-flash admin-flash--{{ category }}" role="status">
+                    <i class="fa-solid {% if category == 'success' %}fa-circle-check{% elif category == 'error' %}fa-triangle-exclamation{% else %}fa-circle-info{% endif %}" aria-hidden="true"></i>
+                    <span>{{ msg }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        {% endwith %}
+
+        {% block seller_body %}{% endblock %}
+    </main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/totem-api-errors.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin-theme.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% block seller_scripts %}{% endblock %}
+{% endblock %}

@@ -1,6 +1,6 @@
 {% extends "admin/_layout.html" %}
 
-{% block title %}Movimentações | Odonto Master{% endblock %}
+{% block title %}Movimentações - Admin | Dental Odonto Master{% endblock %}
 
 {% block admin_body %}
 <section class="admin-section">
@@ -68,7 +68,13 @@
         </div>
     </form>
 
-    <div class="admin-table" role="table" aria-label="Movimentações">
+    <div
+        class="admin-table"
+        role="table"
+        aria-label="Movimentações"
+        data-admin-movements
+        data-api-url="{{ url_for('admin_api_movements', tipo=filters.tipo, produto=filters.produto, pedido=filters.pedido) }}"
+    >
         <div class="admin-table__head admin-mov__row admin-mov__row--wide" role="row">
             <span role="columnheader">Data/Hora</span>
             <span role="columnheader">Produto</span>
@@ -81,28 +87,88 @@
 
         {% if movements %}
             {% for m in movements %}
-            <div class="admin-mov__row admin-mov__row--wide" role="row">
-                <span>{{ m.created_at | datahora }}</span>
-                <span class="admin-mov__product">
-                    <a href="{{ url_for('admin_stock_product', product_id=m.product_id) }}">
-                        {{ m.product_name or '—' }}
-                    </a>
-                    <small>#{{ m.product_id }} &middot; {{ m.product_category or '-' }}</small>
-                </span>
-                <span>
-                    <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
-                        {{ m.movement_type | movlabel }}
+            <div class="admin-mov__wrapper" data-movement-id="{{ m.id }}">
+                <div class="admin-mov__row admin-mov__row--wide" role="row">
+                    <span>{{ m.created_at | datahora }}</span>
+                    <span class="admin-mov__product">
+                        <a href="{{ url_for('admin_stock_product', product_id=m.product_id) }}">
+                            {{ m.product_name or '—' }}
+                        </a>
+                        <small>#{{ m.product_id }} &middot; {{ m.product_category or '-' }}</small>
                     </span>
-                </span>
-                <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% else %}negative{% endif %}">
-                    {{ m.delta | signed }}
-                </span>
-                <span class="admin-table__col--num"><strong>{{ m.balance_after }}</strong></span>
-                <span class="admin-mov__reason">
-                    {% if m.reference %}<code>{{ m.reference }}</code>{% endif %}
-                    {{ m.reason or '-' }}
-                </span>
-                <span>{{ m.created_by or '-' }}</span>
+                    <span class="admin-mov__type-cell">
+                        <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
+                            {{ m.movement_type | movlabel }}
+                        </span>
+                        {% if m.movement_type == 'venda' and m.transaction_id %}
+                            <button type="button" class="admin-mov__toggle" data-toggle="{{ m.id }}" aria-expanded="false" aria-controls="details-{{ m.id }}" aria-label="Exibir ou ocultar dados do cliente">
+                                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                            </button>
+                        {% endif %}
+                    </span>
+                    <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% else %}negative{% endif %}">
+                        {{ m.delta | signed }}
+                    </span>
+                    <span class="admin-table__col--num"><strong>{{ m.balance_after }}</strong></span>
+                    <span class="admin-mov__reason">
+                        {% if m.reference %}<code>{{ m.reference }}</code>{% endif %}
+                        {{ m.reason or '-' }}
+                    </span>
+                    <span class="admin-mov__user-cell">
+                        {{ m.created_by | display_created_by or '-' }}
+                        {% if m.movement_type == 'venda' and m.reference %}
+                            <a
+                                href="{{ url_for('receipt', order_number=m.reference) }}"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="admin-mov__note-btn"
+                                title="Abrir nota de retirada ({{ m.reference }})"
+                                aria-label="Abrir nota de retirada do pedido {{ m.reference }}"
+                            >
+                                <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
+                            </a>
+                        {% endif %}
+                    </span>
+                </div>
+                {% if m.movement_type == 'venda' and m.transaction_id %}
+                <div class="admin-mov__details" id="details-{{ m.id }}" hidden>
+                    <div class="admin-mov__details-content">
+                        <h4 class="admin-mov__details-title">
+                            <i class="fa-solid fa-user" aria-hidden="true"></i>
+                            Dados do cliente (pedido)
+                        </h4>
+                        <dl class="admin-mov__details-list">
+                            <div class="admin-mov__details-item">
+                                <dt>Nome</dt>
+                                <dd>{{ m.client_name or '—' }}</dd>
+                            </div>
+                        <div class="admin-mov__details-item">
+                            <dt>CPF</dt>
+                            <dd>{{ m.client_cpf or '—' }}</dd>
+                        </div>
+                        <div class="admin-mov__details-item">
+                            <dt>Forma de pagamento</dt>
+                            <dd>{{ m.payment_method | paymethod }}</dd>
+                        </div>
+                        <div class="admin-mov__details-item">
+                            <dt>CEP</dt>
+                                <dd>{{ m.client_zipcode or '—' }}</dd>
+                            </div>
+                            <div class="admin-mov__details-item admin-mov__details-item--wide">
+                                <dt>Endereço</dt>
+                                <dd>
+                                    {% if m.client_address or m.client_number or m.client_city %}
+                                        {{ m.client_address or '—' }}{% if m.client_number %}, {{ m.client_number }}{% endif %}{% if m.client_complement %} — {{ m.client_complement }}{% endif %}<br>
+                                        {{ m.client_city or '—' }}{% if m.client_state %} — {{ m.client_state }}{% endif %}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+                {% endif %}
             </div>
             {% endfor %}
         {% else %}
@@ -113,4 +179,8 @@
         {% endif %}
     </div>
 </section>
+{% endblock %}
+
+{% block admin_scripts %}
+<script src="{{ url_for('static', filename='js/admin-movements.js') }}"></script>
 {% endblock %}

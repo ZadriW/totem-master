@@ -1,0 +1,267 @@
+"""Seller accounts (seller panel)."""
+from __future__ import annotations
+
+from typing import Dict, List, Optional
+
+from .connection import _now_iso, get_conn
+
+# ---------------------------------------------------------------------------
+# Vendedores (autenticação do painel somente leitura)
+# ---------------------------------------------------------------------------
+
+def ensure_seller_account(
+    name: str,
+    email: str,
+    password_hash: str,
+    pin_hash: Optional[str] = None,
+) -> Dict:
+    """Cria uma conta de vendedor se o e-mail ainda não existir."""
+    normalized_email = (email or "").strip().lower()
+    seller_name = (name or "").strip() or "Vendedor"
+    if not normalized_email:
+        raise ValueError("E-mail do vendedor é obrigatório.")
+    now = _now_iso()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM sellers WHERE LOWER(email) = LOWER(?)",
+            (normalized_email,),
+        ).fetchone()
+        if row:
+            if pin_hash and not row["pin_hash"]:
+                conn.execute(
+                    "UPDATE sellers SET pin_hash = ?, updated_at = ? WHERE id = ?",
+                    (pin_hash, _now_iso(), int(row["id"])),
+                )
+                row = conn.execute(
+                    "SELECT * FROM sellers WHERE id = ?",
+                    (int(row["id"]),),
+                ).fetchone()
+            return dict(row)
+        cur = conn.execute(
+            """
+            INSERT INTO sellers
+                (name, email, password_hash, pin_hash, active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 1, ?, ?)
+            """,
+            (seller_name, normalized_email, password_hash, pin_hash, now, now),
+        )
+        created = conn.execute(
+            "SELECT * FROM sellers WHERE id = ?",
+            (cur.lastrowid,),
+        ).fetchone()
+    return dict(created)
+
+
+def create_seller_account(
+    name: str,
+    email: str,
+    password_hash: str,
+    pin_hash: Optional[str] = None,
+) -> Dict:
+    """Cria uma conta de vendedor, falhando se o e-mail já estiver em uso.
+
+    ``pin_hash`` é opcional (PIN de venda não é mais usado no fluxo atual).
+    """
+    normalized_email = (email or "").strip().lower()
+    seller_name = (name or "").strip()
+    if not seller_name:
+        raise ValueError("Nome do vendedor é obrigatório.")
+    if not normalized_email:
+        raise ValueError("E-mail do vendedor é obrigatório.")
+    if "@" not in normalized_email:
+        raise ValueError("Informe um e-mail válido.")
+    if not (password_hash or "").strip():
+        raise ValueError("Senha do vendedor é obrigatória.")
+    ph = (pin_hash or "").strip() or None
+    now = _now_iso()
+    with get_conn() as conn:
+        exists = conn.execute(
+            "SELECT 1 FROM sellers WHERE LOWER(email) = LOWER(?)",
+            (normalized_email,),
+        ).fetchone()
+        if exists:
+            raise ValueError("Já existe um vendedor com este e-mail.")
+        cur = conn.execute(
+            """
+            INSERT INTO sellers
+                (name, email, password_hash, pin_hash, active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, 1, ?, ?)
+            """,
+            (seller_name, normalized_email, password_hash, ph, now, now),
+        )
+        row = conn.execute(
+            "SELECT * FROM sellers WHERE id = ?",
+            (cur.lastrowid,),
+        ).fetchone()
+    return dict(row)
+
+
+def list_sellers() -> List[Dict]:
+    """Lista vendedores com métricas agregadas de vendas e eventos associados."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                s.*,
+                COALESCE(COUNT(t.id), 0) AS transactions_count,
+                COALESCE(SUM(t.total), 0) AS total_revenue,
+                COALESCE(SUM(t.items_count), 0) AS items_sold,
+                MAX(t.created_at) AS last_sale_at
+              FROM sellers s
+              LEFT JOIN transactions t
+                ON t.seller_id = s.id AND t.status = 'confirmado'
+             GROUP BY s.id
+             ORDER BY s.active DESC, LOWER(s.name), LOWER(s.email)
+            """
+        ).fetchall()
+        sellers = [dict(r) for r in rows]
+        if not sellers:
+            return sellers
+        seller_ids = [int(s["id"]) for s in sellers]
+        placeholders = ",".join("?" * len(seller_ids))
+        ev_sql = (
+            f"""
+            SELECT es.seller_id AS seller_id,
+                   e.id AS event_id,
+                   e.name AS event_name,
+                   e.badge_color AS badge_color,
+                   e.active AS event_active
+              FROM event_sellers es
+              JOIN events e ON e.id = es.event_id
+             WHERE es.seller_id IN ({placeholders})
+             ORDER BY e.active DESC, LOWER(e.name)
+            """
+        )
+        ev_rows = conn.execute(ev_sql, seller_ids).fetchall()
+        by_seller: Dict[int, List[Dict]] = {}
+        for er in ev_rows:
+            d = dict(er)
+            sid = int(d["seller_id"])
+            bucket = by_seller.setdefault(sid, [])
+            bucket.append(
+                {
+                    "event_id": int(d["event_id"]),
+                    "name": d["event_name"],
+                    "badge_color": d["badge_color"],
+                    "active": bool(d["event_active"]),
+                }
+            )
+        for s in sellers:
+            s["assigned_events"] = by_seller.get(int(s["id"]), [])
+    return sellers
+
+
+def list_seller_pin_hashes() -> List[Dict]:
+    """Retorna hashes de PIN para validação/autenticação por PIN."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, name, email, active, pin_hash
+              FROM sellers
+             WHERE pin_hash IS NOT NULL AND pin_hash <> ''
+             ORDER BY id
+            """
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_seller_by_email(email: str) -> Optional[Dict]:
+    normalized_email = (email or "").strip().lower()
+    if not normalized_email:
+        return None
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM sellers WHERE LOWER(email) = LOWER(?)",
+            (normalized_email,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_seller(seller_id: int) -> Optional[Dict]:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM sellers WHERE id = ?",
+            (int(seller_id),),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def delete_seller(seller_id: int) -> Dict:
+    """Remove o cadastro do vendedor. Transações ligadas ficam com ``seller_id`` nulo (FK)."""
+    sid = int(seller_id)
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, name FROM sellers WHERE id = ?",
+            (sid,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("Vendedor não encontrado.")
+        name = str(row["name"] or "")
+        conn.execute("DELETE FROM sellers WHERE id = ?", (sid,))
+    return {"id": sid, "name": name}
+
+
+def update_seller_last_login(seller_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE sellers SET last_login_at = ?, updated_at = ? WHERE id = ?",
+            (_now_iso(), _now_iso(), int(seller_id)),
+        )
+
+
+def update_seller_account(
+    seller_id: int,
+    *,
+    name: str,
+    email: str,
+    active: bool,
+    password_hash: Optional[str] = None,
+    pin_hash: Optional[str] = None,
+    clear_pin_hash: bool = False,
+) -> Dict:
+    """Atualiza dados principais do vendedor e opcionalmente redefine a senha."""
+    normalized_email = (email or "").strip().lower()
+    seller_name = (name or "").strip()
+    if not seller_name:
+        raise ValueError("Nome do vendedor é obrigatório.")
+    if not normalized_email or "@" not in normalized_email:
+        raise ValueError("Informe um e-mail válido.")
+    now = _now_iso()
+    with get_conn() as conn:
+        exists = conn.execute(
+            "SELECT id FROM sellers WHERE LOWER(email) = LOWER(?) AND id <> ?",
+            (normalized_email, int(seller_id)),
+        ).fetchone()
+        if exists:
+            raise ValueError("Já existe outro vendedor com este e-mail.")
+        updates = [
+            "name = ?",
+            "email = ?",
+            "active = ?",
+        ]
+        params: List = [seller_name, normalized_email, 1 if active else 0]
+        if password_hash:
+            updates.append("password_hash = ?")
+            params.append(password_hash)
+        if clear_pin_hash:
+            updates.append("pin_hash = NULL")
+        elif pin_hash:
+            updates.append("pin_hash = ?")
+            params.append(pin_hash)
+        updates.append("updated_at = ?")
+        params.extend([now, int(seller_id)])
+        conn.execute(
+            f"""
+            UPDATE sellers
+               SET {", ".join(updates)}
+             WHERE id = ?
+            """,
+            params,
+        )
+        row = conn.execute(
+            "SELECT * FROM sellers WHERE id = ?",
+            (int(seller_id),),
+        ).fetchone()
+    if row is None:
+        raise ValueError("Vendedor não encontrado.")
+    return dict(row)

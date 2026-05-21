@@ -1,12 +1,22 @@
 {% extends "base.html" %}
+{% from "macros/admin_brand_logo.html" import admin_brand_logo %}
 
 {#
-    Layout compartilhado do painel administrativo (dashboard, estoque,
-    movimentações). Fornece topbar + menu + container de flash messages.
+    Layout compartilhado do painel administrativo (dashboard, produtos,
+    eventos, vendedores). Fornece topbar + menu + container de flash messages.
     Páginas devem sobrescrever {% block admin_body %}.
 #}
 
 {% block head %}
+<script>
+(function () {
+    try {
+        if (localStorage.getItem('totem-admin-theme') === 'dark') {
+            document.documentElement.classList.add('admin-theme--dark');
+        }
+    } catch (e) { /* ignore */ }
+})();
+</script>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
 {% block admin_head %}{% endblock %}
 {% endblock %}
@@ -15,7 +25,7 @@
 <div class="admin-shell">
     <header class="admin-topbar">
         <a class="admin-topbar__brand" href="{{ url_for('admin_dashboard') }}">
-            <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
+            {{ admin_brand_logo() }}
             <span class="admin-topbar__badge">Admin</span>
         </a>
 
@@ -25,15 +35,20 @@
                 <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
                 Dashboard
             </a>
-            <a class="admin-nav__item {% if active_section == 'estoque' %}is-active{% endif %}"
-               href="{{ url_for('admin_stock') }}">
-                <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
-                Estoque
+            <a class="admin-nav__item {% if active_section == 'produtos' %}is-active{% endif %}"
+               href="{{ url_for('admin_products') }}">
+                <i class="fa-solid fa-tags" aria-hidden="true"></i>
+                Produtos
             </a>
-            <a class="admin-nav__item {% if active_section == 'movimentacoes' %}is-active{% endif %}"
-               href="{{ url_for('admin_movements') }}">
-                <i class="fa-solid fa-right-left" aria-hidden="true"></i>
-                Movimentações
+            <a class="admin-nav__item {% if active_section == 'eventos' %}is-active{% endif %}"
+               href="{{ url_for('admin_events') }}">
+                <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+                Eventos
+            </a>
+            <a class="admin-nav__item {% if active_section == 'vendedores' %}is-active{% endif %}"
+               href="{{ url_for('admin_sellers') }}">
+                <i class="fa-solid fa-users" aria-hidden="true"></i>
+                Vendedores
             </a>
         </nav>
 
@@ -46,16 +61,32 @@
                 <i class="fa-regular fa-clock" aria-hidden="true"></i>
                 {{ now.strftime('%d/%m/%Y %H:%M') }}
             </span>
+            <button
+                type="button"
+                class="admin-topbar__theme-toggle"
+                data-admin-theme-toggle
+                aria-pressed="false"
+                title="Modo escuro"
+                aria-label="Ativar modo escuro"
+            >
+                <i class="fa-solid fa-moon" aria-hidden="true"></i>
+            </button>
             <form method="post" action="{{ url_for('admin_logout') }}" class="admin-topbar__logout-form">
-                <button type="submit" class="admin-topbar__logout" title="Sair">
+                {% include 'partials/csrf_field.html' %}
+                <button
+                    type="submit"
+                    class="admin-topbar__logout"
+                    title="Sair"
+                    aria-label="Sair do painel administrativo"
+                >
                     <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
-                    Sair
+                    <span class="admin-topbar__logout-label">Sair</span>
                 </button>
             </form>
         </div>
     </header>
 
-    <main class="admin-main">
+    <main class="admin-main{% block admin_main_class %}{% endblock %}">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
             <div class="admin-flashes">
@@ -72,9 +103,35 @@
         {% block admin_body %}{% endblock %}
     </main>
 </div>
+
+<dialog
+    id="admin-image-lightbox"
+    class="admin-image-lightbox"
+    aria-labelledby="admin-image-lightbox-title"
+>
+    <div class="admin-image-lightbox__panel" role="document">
+        <header class="admin-image-lightbox__header">
+            <p id="admin-image-lightbox-title" class="admin-image-lightbox__title">Imagem do produto</p>
+            <button
+                type="button"
+                class="admin-image-lightbox__close"
+                data-admin-image-lightbox-close
+                aria-label="Fechar visualização"
+            >
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+        </header>
+        <div class="admin-image-lightbox__body">
+            <img class="admin-image-lightbox__img" src="" alt="">
+        </div>
+    </div>
+</dialog>
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/totem-api-errors.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin-theme.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin-image-lightbox.js') }}"></script>
 {% block admin_scripts %}{% endblock %}
 {% endblock %}

@@ -1,0 +1,291 @@
+{% extends "admin/_layout.html" %}
+
+{% block title %}Promoções — {{ event.name }} | Dental Odonto Master{% endblock %}
+
+{% block admin_body %}
+
+{% include "admin/_event_subnav.html" %}
+
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <a class="admin-breadcrumb" href="{{ url_for('admin_event_detail', event_id=event.id) }}">
+                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                {{ event.name }}
+            </a>
+            <h1 class="admin-section__title">Promoções</h1>
+            <p class="admin-section__subtitle">
+                {{ promotions|length }} promoção(ões) · {{ promotions|selectattr('active')|list|length }} ativa(s)
+            </p>
+        </div>
+    </header>
+
+    {# ---- Lista de promoções ---- #}
+    {% if promotions %}
+    <div class="admin-table admin-promos-list" role="table" aria-label="Promoções do evento">
+        <div class="admin-table__head admin-promos-list__row" role="row">
+            <span role="columnheader">Nome</span>
+            <span role="columnheader">Regra</span>
+            <span role="columnheader">Produtos</span>
+            <span role="columnheader">Situação</span>
+            <span role="columnheader">Ações</span>
+        </div>
+        {% for promo in promotions %}
+        <div class="admin-promos-list__row" role="row">
+            <span class="admin-promos-list__name">
+                <strong>{{ promo.name }}</strong>
+            </span>
+            <span class="admin-promos-list__rule">
+                <span class="admin-badge admin-badge--promo-type">
+                    {% if promo.rule_type == 'percent' %}
+                        <i class="fa-solid fa-percent" aria-hidden="true"></i>
+                        {{ promo.rule_value | int }}% de desconto
+                    {% elif promo.rule_type == 'fixed' %}
+                        <i class="fa-solid fa-minus" aria-hidden="true"></i>
+                        R$ {{ '%.2f'|format(promo.rule_value)|replace('.',',') }} de desconto
+                    {% elif promo.rule_type == 'bogo' %}
+                        <i class="fa-solid fa-gift" aria-hidden="true"></i>
+                        Compre {{ promo.min_qty }} Leve {{ promo.min_qty + promo.free_qty }}
+                    {% endif %}
+                </span>
+            </span>
+            <span class="admin-promos-list__products">
+                {% if promo.products %}
+                    <span class="admin-promos-list__product-count">{{ promo.products|length }} produto(s)</span>
+                    <span class="admin-promos-list__product-names">
+                        {{ promo.products|map(attribute='name')|list|join(', ') | truncate(60) }}
+                    </span>
+                {% else %}
+                    <span class="admin-text-muted">—</span>
+                {% endif %}
+            </span>
+            <span>
+                {% if promo.active %}
+                    <span class="admin-badge admin-badge--success">Ativa</span>
+                {% else %}
+                    <span class="admin-badge admin-badge--neutral">Inativa</span>
+                {% endif %}
+            </span>
+            <span class="admin-promos-list__actions">
+                <a class="admin-btn admin-btn--ghost admin-btn--sm"
+                   href="{{ url_for('admin_event_promotion_detail', event_id=event.id, promo_id=promo.id) }}"
+                   title="Editar promoção">
+                    <i class="fa-solid fa-pen-to-square" aria-hidden="true"></i>
+                </a>
+                <form method="post"
+                      action="{{ url_for('admin_event_promotion_toggle', event_id=event.id, promo_id=promo.id) }}"
+                      style="display:contents;">
+                    {% include 'partials/csrf_field.html' %}
+                    <button type="submit"
+                            class="admin-btn admin-btn--ghost admin-btn--sm"
+                            title="{{ 'Desativar' if promo.active else 'Ativar' }} promoção">
+                        <i class="fa-solid {{ 'fa-toggle-on' if promo.active else 'fa-toggle-off' }}" aria-hidden="true"></i>
+                    </button>
+                </form>
+                <form method="post"
+                      action="{{ url_for('admin_event_promotion_delete', event_id=event.id, promo_id=promo.id) }}"
+                      style="display:contents;">
+                    {% include 'partials/csrf_field.html' %}
+                    <button type="submit"
+                            class="admin-btn admin-btn--ghost admin-btn--sm admin-btn--danger"
+                            title="Excluir promoção"
+                            onclick="return confirm('Excluir a promoção «{{ promo.name|e }}»? Esta ação não pode ser desfeita.');">
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                    </button>
+                </form>
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="admin-empty">
+        <i class="fa-solid fa-tag" aria-hidden="true"></i>
+        <p>Nenhuma promoção cadastrada para este evento.</p>
+    </div>
+    {% endif %}
+
+    {# ---- Criar nova promoção ---- #}
+    {% if event.active %}
+    <div class="admin-card admin-card--form admin-promo-form" id="nova-promocao" style="margin-top:32px;">
+        <h2 class="admin-card__title">
+            <i class="fa-solid fa-plus" aria-hidden="true"></i>
+            Nova promoção
+        </h2>
+
+        <form method="post"
+              action="{{ url_for('admin_event_promotion_create', event_id=event.id) }}"
+              class="admin-card__form admin-promo-create-form"
+              id="formNovaPromo">
+            {% include 'partials/csrf_field.html' %}
+
+            {# Nome #}
+            <div class="admin-field">
+                <label class="admin-field__label" for="promo-name">Nome da promoção</label>
+                <input id="promo-name" type="text" name="name"
+                       class="admin-field__input"
+                       placeholder="Ex.: Black Friday Implantes"
+                       required maxlength="120" autocomplete="off">
+            </div>
+
+            {# Tipo de regra #}
+            <div class="admin-field">
+                <label class="admin-field__label" for="promo-rule-type">Tipo de regra</label>
+                <select id="promo-rule-type" name="rule_type"
+                        class="admin-field__input"
+                        data-promo-rule-select>
+                    {% for value, label in rule_type_labels.items() %}
+                    <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {# Campos condicional: percent / fixed #}
+            <div class="admin-promo-rule-fields" data-rule-fields="percent fixed" style="display:flex; gap:16px; flex-wrap:wrap;">
+                <div class="admin-field" style="flex:1; min-width:160px;">
+                    <label class="admin-field__label" for="promo-rule-value">
+                        <span data-rule-label-percent>Percentual (%)</span>
+                        <span data-rule-label-fixed style="display:none;">Valor fixo (R$)</span>
+                    </label>
+                    <input id="promo-rule-value" type="number" name="rule_value"
+                           class="admin-field__input"
+                           min="0.01" step="0.01" value="10"
+                           placeholder="Ex.: 15">
+                </div>
+            </div>
+
+            {# Campos condicional: bogo #}
+            <div class="admin-promo-rule-fields" data-rule-fields="bogo" style="display:none; gap:16px; flex-wrap:wrap;">
+                <div class="admin-field" style="flex:1; min-width:130px;">
+                    <label class="admin-field__label" for="promo-min-qty">Compre (qtd. paga)</label>
+                    <input id="promo-min-qty" type="number" name="min_qty"
+                           class="admin-field__input"
+                           min="1" step="1" value="2"
+                           placeholder="Ex.: 2">
+                </div>
+                <div class="admin-field" style="flex:1; min-width:130px;">
+                    <label class="admin-field__label" for="promo-free-qty">Leve a mais (grátis)</label>
+                    <input id="promo-free-qty" type="number" name="free_qty"
+                           class="admin-field__input"
+                           min="1" step="1" value="1"
+                           placeholder="Ex.: 1">
+                </div>
+                <div class="admin-promo-bogo-preview admin-field__hint" aria-live="polite" style="width:100%;">
+                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                    <span data-bogo-summary>Compre 2, leve 3 (1 grátis)</span>
+                </div>
+            </div>
+
+            {# Produtos participantes (lista do evento) #}
+            <div class="admin-field">
+                <label class="admin-field__label">Produtos participantes</label>
+                {% if event_products %}
+                <div class="admin-promo-product-list" data-promo-product-list>
+                    <div class="admin-promo-product-list__controls">
+                        <label class="admin-promo-product-filter">
+                            <span class="admin-promo-product-filter__icon" aria-hidden="true">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                            </span>
+                            <input type="search"
+                                   class="admin-promo-product-filter__input"
+                                   data-promo-product-filter
+                                   placeholder="Buscar por SKU ou ID..."
+                                   autocomplete="off"
+                                   spellcheck="false"
+                                   aria-label="Filtrar produtos por SKU ou ID">
+                        </label>
+                        <div class="admin-promo-product-list__actions">
+                            <button type="button" class="admin-btn admin-btn--ghost admin-btn--xs" data-select-all-promo>
+                                <i class="fa-solid fa-check-double" aria-hidden="true"></i> Todos
+                            </button>
+                            <button type="button" class="admin-btn admin-btn--ghost admin-btn--xs" data-deselect-all-promo>
+                                <i class="fa-solid fa-xmark" aria-hidden="true"></i> Nenhum
+                            </button>
+                        </div>
+                    </div>
+                    <div class="admin-promo-product-list__grid">
+                        {% for ep in event_products %}
+                        <label class="admin-promo-product-item"
+                               data-promo-pid="{{ ep.product_id }}"
+                               data-promo-sku="{{ (ep.sku or '')|lower }}">
+                            <input type="checkbox" name="product_ids"
+                                   value="{{ ep.product_id }}"
+                                   class="admin-promo-product-item__check">
+                            <span class="admin-promo-product-item__name">{{ ep.name }}</span>
+                            <span class="admin-promo-product-item__meta">{{ ep.sku or '' }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <p class="admin-field__hint">
+                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                    Adicione produtos ao evento antes de criar promoções.
+                </p>
+                {% endif %}
+            </div>
+
+            <div class="admin-card__actions">
+                <button type="submit" class="admin-btn admin-btn--primary">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                    Criar promoção
+                </button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+</section>
+
+{% endblock %}
+
+{% block admin_scripts %}
+<script src="{{ url_for('static', filename='js/admin-promo-product-filter.js') }}"></script>
+<script>
+(function () {
+    'use strict';
+
+    // ---- Seletor de tipo de regra ----
+    const ruleSelect = document.querySelector('[data-promo-rule-select]');
+    const percentFixedFields = document.querySelector('[data-rule-fields="percent fixed"]');
+    const bogoFields = document.querySelector('[data-rule-fields="bogo"]');
+    const labelPercent = document.querySelector('[data-rule-label-percent]');
+    const labelFixed = document.querySelector('[data-rule-label-fixed]');
+    const bogoSummary = document.querySelector('[data-bogo-summary]');
+    const minQtyInput = document.getElementById('promo-min-qty');
+    const freeQtyInput = document.getElementById('promo-free-qty');
+
+    function updateRuleFields() {
+        if (!ruleSelect) return;
+        const val = ruleSelect.value;
+        if (percentFixedFields) percentFixedFields.style.display = (val === 'percent' || val === 'fixed') ? 'flex' : 'none';
+        if (bogoFields) bogoFields.style.display = val === 'bogo' ? 'flex' : 'none';
+        if (labelPercent) labelPercent.style.display = val === 'percent' ? '' : 'none';
+        if (labelFixed) labelFixed.style.display = val === 'fixed' ? '' : 'none';
+    }
+
+    function updateBogoSummary() {
+        if (!bogoSummary || !minQtyInput || !freeQtyInput) return;
+        const min = Math.max(1, parseInt(minQtyInput.value) || 1);
+        const free = Math.max(1, parseInt(freeQtyInput.value) || 1);
+        bogoSummary.textContent = `Compre ${min}, leve ${min + free} (${free} grátis)`;
+    }
+
+    if (ruleSelect) {
+        ruleSelect.addEventListener('change', updateRuleFields);
+        updateRuleFields();
+    }
+    if (minQtyInput) minQtyInput.addEventListener('input', updateBogoSummary);
+    if (freeQtyInput) freeQtyInput.addEventListener('input', updateBogoSummary);
+
+    document.addEventListener('click', function (e) {
+        const form = e.target.closest('#formNovaPromo') || e.target.closest('#formEditPromo');
+        if (!form) return;
+        if (e.target.closest('[data-select-all-promo]')) {
+            form.querySelectorAll('input[name="product_ids"]').forEach(cb => { cb.checked = true; });
+        }
+        if (e.target.closest('[data-deselect-all-promo]')) {
+            form.querySelectorAll('input[name="product_ids"]').forEach(cb => { cb.checked = false; });
+        }
+    });
+})();
+</script>
+{% endblock %}

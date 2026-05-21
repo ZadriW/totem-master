@@ -1,6 +1,6 @@
 {% extends "admin/_layout.html" %}
 
-{% block title %}Estoque | Odonto Master{% endblock %}
+{% block title %}Estoque - Admin | Dental Odonto Master{% endblock %}
 
 {% block admin_body %}
 <section class="admin-section">
@@ -54,6 +54,17 @@
             </select>
         </label>
 
+        <label class="admin-filter">
+            <span class="admin-filter__label">Por página</span>
+            <select name="per_page" class="admin-filter__input" title="Quantidade de produtos listados por requisição">
+                {% for n in allowed_per_page %}
+                <option value="{{ n }}" {% if filters.per_page == n %}selected{% endif %}>{{ n }} produtos</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <input type="hidden" name="page" value="1" aria-hidden="true">
+
         <div class="admin-filters__actions">
             <button type="submit" class="admin-btn admin-btn--primary">
                 <i class="fa-solid fa-filter" aria-hidden="true"></i>
@@ -63,10 +74,15 @@
         </div>
     </form>
 
-    <div class="admin-table admin-stock" role="table" aria-label="Produtos em estoque">
+    <div
+        class="admin-table admin-stock"
+        role="table"
+        aria-label="Produtos em estoque"
+        data-admin-stock-list
+        data-api-url="{{ url_for('admin_api_stock', q=filters.q, categoria=filters.categoria, status=filters.status, per_page=filters.per_page, page=pagination.page) }}"
+    >
         <div class="admin-table__head admin-stock__row" role="row">
             <span role="columnheader">Produto</span>
-            <span role="columnheader">SKU</span>
             <span role="columnheader">Categoria</span>
             <span class="admin-table__col--num" role="columnheader">Preço</span>
             <span class="admin-table__col--num" role="columnheader">Estoque</span>
@@ -79,20 +95,19 @@
             {% for p in products %}
             <div class="admin-stock__row" data-product-id="{{ p.id }}">
                 <span class="admin-stock__product">
-                    <img class="admin-stock__thumb" src="{{ p.imagem }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+                    <img class="admin-stock__thumb" src="{{ p.imagem }}" alt="{{ p.nome }}" loading="lazy" onerror="this.style.visibility='hidden'">
                     <span>
                         <strong>{{ p.nome }}</strong>
-                        <small>#{{ p.id }}</small>
+                        <small class="admin-stock__meta">ID: {{ p.id }} | SKU: <code class="admin-stock__sku-code">{{ p.sku or '—' }}</code></small>
                     </span>
                 </span>
-                <span><code class="admin-stock__sku-code">{{ p.sku }}</code></span>
                 <span>{{ p.categoria }}</span>
                 <span class="admin-table__col--num">{{ p.preco | brl }}</span>
-                <span class="admin-table__col--num admin-stock__qty">
+                <span class="admin-table__col--num admin-stock__qty" data-stock-qty>
                     <strong>{{ p.estoque }}</strong>
                 </span>
                 <span class="admin-table__col--num">{{ p.estoque_minimo }}</span>
-                <span>
+                <span data-stock-status>
                     {% if not p.ativo %}
                         <span class="admin-badge admin-badge--neutral">Inativo</span>
                     {% elif p.sem_estoque %}
@@ -106,9 +121,9 @@
                 <span class="admin-stock__actions">
                     <a class="admin-btn admin-btn--ghost admin-btn--sm"
                        href="{{ url_for('admin_stock_product', product_id=p.id) }}"
-                       title="Gerenciar">
+                       title="Gerenciar"
+                       aria-label="Gerenciar {{ p.nome }}">
                         <i class="fa-solid fa-sliders" aria-hidden="true"></i>
-                        Gerenciar
                     </a>
                 </span>
             </div>
@@ -120,5 +135,48 @@
             </div>
         {% endif %}
     </div>
+
+    {% if pagination.total > 0 %}
+    <nav class="admin-pagination" aria-label="Paginação da listagem de estoque">
+        <p class="admin-pagination__summary">
+            Mostrando
+            <strong>{{ pagination.showing_from }}–{{ pagination.showing_to }}</strong>
+            de <strong>{{ pagination.total }}</strong> produto(s)
+            · página {{ pagination.page }} de {{ pagination.total_pages }}
+        </p>
+        <div class="admin-pagination__nav">
+            {% if pagination.has_prev %}
+            <a class="admin-btn admin-btn--ghost admin-btn--sm"
+               href="{{ url_for('admin_stock', q=filters.q, categoria=filters.categoria, status=filters.status, per_page=filters.per_page, page=pagination.page - 1) }}"
+               rel="prev">
+                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                Anterior
+            </a>
+            {% else %}
+            <span class="admin-pagination__disabled admin-btn admin-btn--ghost admin-btn--sm" aria-disabled="true">
+                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                Anterior
+            </span>
+            {% endif %}
+            {% if pagination.has_next %}
+            <a class="admin-btn admin-btn--ghost admin-btn--sm"
+               href="{{ url_for('admin_stock', q=filters.q, categoria=filters.categoria, status=filters.status, per_page=filters.per_page, page=pagination.page + 1) }}"
+               rel="next">
+                Próxima
+                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            </a>
+            {% else %}
+            <span class="admin-pagination__disabled admin-btn admin-btn--ghost admin-btn--sm" aria-disabled="true">
+                Próxima
+                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            </span>
+            {% endif %}
+        </div>
+    </nav>
+    {% endif %}
 </section>
+{% endblock %}
+
+{% block admin_scripts %}
+<script src="{{ url_for('static', filename='js/admin-stock-live.js') }}"></script>
 {% endblock %}

@@ -1,0 +1,6 @@
+.env
+totem.env
+__pycache__/
+*.pyc
+.venv/
+*.sqlite3-journal

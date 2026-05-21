@@ -1,0 +1,150 @@
+{% extends "admin/_layout.html" %}
+
+{% block title %}{{ product.nome }} - Produtos - Admin | Dental Odonto Master{% endblock %}
+
+{% block admin_main_class %} admin-main--product-detail{% endblock %}
+
+{% block admin_body %}
+<section
+    class="admin-section"
+    data-admin-product
+    data-api-url="{{ url_for('admin_api_products_detail', product_id=product.id) }}"
+>
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <a class="admin-breadcrumb" href="{{ url_for('admin_products') }}">
+                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                Voltar aos produtos
+            </a>
+            <h1 class="admin-section__title">{{ product.nome }}</h1>
+            <p class="admin-section__subtitle">
+                <span class="admin-product__sku">SKU <strong>{{ product.sku }}</strong></span>
+                &middot; #{{ product.id }} &middot; {{ product.categoria }} &middot; {{ product.preco | brl }}
+            </p>
+            <p class="admin-section__subtitle">
+                Quantidades exibidas são a <strong>soma em todos os eventos</strong>.
+                Para entrada, saída ou ajuste, use a seção <strong>Eventos</strong>.
+            </p>
+        </div>
+
+        <div class="admin-product__status" data-product-status>
+            {% if not product.ativo %}
+                <span class="admin-badge admin-badge--neutral">Inativo</span>
+            {% elif product.sem_estoque %}
+                <span class="admin-badge admin-badge--danger">Sem estoque</span>
+            {% elif product.abaixo_minimo %}
+                <span class="admin-badge admin-badge--warn">Abaixo do mínimo</span>
+            {% else %}
+                <span class="admin-badge admin-badge--success">OK</span>
+            {% endif %}
+        </div>
+    </header>
+
+    <div class="admin-product admin-product--detail-split">
+        <aside class="admin-product__card">
+            <div class="admin-product__image">
+                <img src="{{ product.imagem }}" alt="{{ product.nome }}" onerror="this.style.visibility='hidden'">
+            </div>
+            <dl class="admin-product__meta">
+                <div>
+                    <dt>SKU</dt>
+                    <dd><code>{{ product.sku }}</code></dd>
+                </div>
+                <div>
+                    <dt>Estoque nos eventos</dt>
+                    <dd data-product-stock><strong>{{ product.estoque }}</strong> un.</dd>
+                </div>
+                <div>
+                    <dt>Estoque mínimo (referência)</dt>
+                    <dd data-product-min-stock>{{ product.estoque_minimo }} un.</dd>
+                </div>
+                <div>
+                    <dt>Valor (eventos × preço)</dt>
+                    <dd data-product-stock-value>{{ (product.estoque * product.preco) | brl }}</dd>
+                </div>
+            </dl>
+
+            <form method="post"
+                  action="{{ url_for('admin_product_toggle_active', product_id=product.id) }}"
+                  class="admin-product__toggle"
+                  data-live-stock-form>
+                {% include 'partials/csrf_field.html' %}
+                {% if product.ativo %}
+                    <input type="hidden" name="active" value="0">
+                    <button type="submit" class="admin-btn admin-btn--ghost admin-btn--danger"
+                            data-confirm="Desativar este produto? Ele deixará de aparecer no totem.">
+                        <i class="fa-solid fa-eye-slash" aria-hidden="true"></i>
+                        Desativar produto
+                    </button>
+                {% else %}
+                    <input type="hidden" name="active" value="1">
+                    <button type="submit" class="admin-btn admin-btn--ghost">
+                        <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                        Ativar produto
+                    </button>
+                {% endif %}
+            </form>
+        </aside>
+
+        <section class="admin-section admin-product__history" aria-labelledby="product-movements-heading">
+            <header class="admin-section__header">
+                <h2 id="product-movements-heading" class="admin-section__title">Histórico de movimentações</h2>
+                <p class="admin-section__subtitle">
+                    Últimas {{ movements|length }} {% if movements|length == 1 %}movimentação{% else %}movimentações{% endif %} globais deste produto (referência; o saldo operacional é por evento).
+                </p>
+            </header>
+
+            <div
+                class="admin-table admin-product__movements-table"
+                role="table"
+                aria-label="Movimentações do produto"
+                data-product-movements
+            >
+                <div class="admin-table__head admin-mov__row" role="row">
+                    <span role="columnheader">Data/Hora</span>
+                    <span role="columnheader">Tipo</span>
+                    <span role="columnheader" class="admin-table__col--num">Delta</span>
+                    <span role="columnheader" class="admin-table__col--num">Saldo após</span>
+                    <span role="columnheader">Motivo / Ref.</span>
+                    <span role="columnheader">Usuário</span>
+                </div>
+
+                {% if movements %}
+                    {% for m in movements %}
+                    <div class="admin-mov__wrapper" data-movement-id="{{ m.id }}">
+                        <div class="admin-mov__row" role="row">
+                            <span>{{ m.created_at | datahora }}</span>
+                            <span class="admin-mov__type-cell">
+                                <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
+                                    {{ m.movement_type | movlabel }}
+                                </span>
+                            </span>
+                            <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% elif m.delta < 0 %}negative{% else %}neutral{% endif %}">
+                                {{ m.delta | signed }}
+                            </span>
+                            <span class="admin-table__col--num"><strong>{{ m.balance_after }}</strong></span>
+                            <span class="admin-mov__reason">
+                                {% if m.reference %}<code>{{ m.reference }}</code>{% endif %}
+                                {{ m.reason or '-' }}
+                            </span>
+                            <span class="admin-mov__user-cell">
+                                {{ m.created_by | display_created_by or '-' }}
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="admin-empty">
+                        <i class="fa-regular fa-folder-open" aria-hidden="true"></i>
+                        <p>Nenhuma movimentação registrada.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+</section>
+{% endblock %}
+
+{% block admin_scripts %}
+<script src="{{ url_for('static', filename='js/admin-stock-live.js') }}"></script>
+{% endblock %}
