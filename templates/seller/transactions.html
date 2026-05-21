@@ -3,6 +3,7 @@
 {% from "macros/admin_tx_order_cell.html" import admin_tx_order_cell %}
 {% from "macros/admin_tx_receipt_link.html" import admin_tx_receipt_link %}
 {% from "macros/admin_tx_status_badge.html" import admin_tx_status_badge %}
+{% from "macros/admin_tx_pending_actions.html" import admin_tx_pending_actions %}
 
 {% block title %}Transações{% if seller_event %} — {{ seller_event.name }}{% endif %} - Vendedor | Dental Odonto Master{% endblock %}
 
@@ -149,6 +150,7 @@
                         <span class="admin-tx__status-stack">
                             {{ admin_tx_status_badge(tx) }}
                             {{ admin_tx_receipt_link(tx) }}
+                            {{ admin_tx_pending_actions(tx) }}
                         </span>
                     </span>
                 </div>

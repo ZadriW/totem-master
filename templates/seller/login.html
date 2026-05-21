@@ -1,9 +1,10 @@
 {% extends "base.html" %}
+{% from "macros/admin_brand_logo.html" import admin_brand_logo %}
 
 {% block title %}Login do vendedor - Vendedor | Dental Odonto Master{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+{% include 'partials/totem_theme_head.html' %}
 {% endblock %}
 
 {% block body %}
@@ -11,7 +12,7 @@
     <form class="admin-login__card" method="post" autocomplete="off">
         {% include 'partials/csrf_field.html' %}
         <div class="admin-login__brand">
-            <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
+            {{ admin_brand_logo() }}
         </div>
         <h1 class="admin-login__title">Painel do vendedor</h1>
         <p class="admin-login__subtitle">Acompanhe vendas, estoque e movimentações em modo leitura.</p>
@@ -78,6 +79,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/admin-theme.js') }}"></script>
 <script>
 (function () {
     var input = document.getElementById('sellerLoginPassword');

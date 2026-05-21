@@ -92,7 +92,8 @@
                            class="admin-field__input"
                            min="0.01" step="0.01"
                            value="{{ promo.rule_value }}"
-                           placeholder="Ex.: 15">
+                           placeholder="Ex.: 15"
+                           {{ 'disabled' if promo.rule_type not in ('percent','fixed') }}>
                 </div>
             </div>
 
@@ -105,7 +106,8 @@
                            class="admin-field__input"
                            min="1" step="1"
                            value="{{ promo.min_qty }}"
-                           placeholder="Ex.: 2">
+                           placeholder="Ex.: 2"
+                           {{ 'disabled' if promo.rule_type != 'bogo' }}>
                 </div>
                 <div class="admin-field" style="flex:1; min-width:130px;">
                     <label class="admin-field__label" for="edit-promo-free-qty">Leve a mais (grátis)</label>
@@ -113,11 +115,39 @@
                            class="admin-field__input"
                            min="1" step="1"
                            value="{{ promo.free_qty }}"
-                           placeholder="Ex.: 1">
+                           placeholder="Ex.: 1"
+                           {{ 'disabled' if promo.rule_type != 'bogo' }}>
                 </div>
                 <div class="admin-promo-bogo-preview admin-field__hint" aria-live="polite" style="width:100%;">
                     <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
                     <span data-bogo-summary>Compre {{ promo.min_qty }}, leve {{ promo.min_qty + promo.free_qty }} ({{ promo.free_qty }} grátis)</span>
+                </div>
+            </div>
+
+            {# pacote por quantidade #}
+            <div class="admin-promo-rule-fields" data-rule-fields="a_partir_de na_compra_de"
+                 style="display:{{ 'flex' if promo.rule_type in ('a_partir_de','na_compra_de') else 'none' }}; gap:16px; flex-wrap:wrap;">
+                <div class="admin-field" style="flex:1; min-width:130px;">
+                    <label class="admin-field__label" for="edit-promo-pack-qty">Quantidade de produtos iguais</label>
+                    <input id="edit-promo-pack-qty" type="number" name="min_qty"
+                           class="admin-field__input"
+                           min="1" step="1"
+                           value="{{ promo.min_qty }}"
+                           placeholder="Ex.: 3"
+                           {{ 'disabled' if promo.rule_type not in ('a_partir_de','na_compra_de') }}>
+                </div>
+                <div class="admin-field" style="flex:1; min-width:160px;">
+                    <label class="admin-field__label" for="edit-promo-pack-value">Valor total (R$)</label>
+                    <input id="edit-promo-pack-value" type="number" name="rule_value"
+                           class="admin-field__input"
+                           min="0.01" step="0.01"
+                           value="{{ promo.rule_value }}"
+                           placeholder="Ex.: 99,90"
+                           {{ 'disabled' if promo.rule_type not in ('a_partir_de','na_compra_de') }}>
+                </div>
+                <div class="admin-promo-bogo-preview admin-field__hint" aria-live="polite" style="width:100%;">
+                    <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                    <span data-pack-summary></span>
                 </div>
             </div>
 
@@ -195,6 +225,10 @@
             <p>Cada unidade de produto participante tem <strong>R$ {{ '%.2f'|format(promo.rule_value)|replace('.',',') }} de desconto</strong> no preço de lista. Se o desconto ultrapassar o preço, o item é cobrado a R$ 0,00.</p>
             {% elif promo.rule_type == 'bogo' %}
             <p>A cada <strong>{{ promo.min_qty }} unidade(s) pagas</strong>, o cliente leva <strong>{{ promo.free_qty }} unidade(s) gratuitamente</strong> — ou seja, leva {{ promo.min_qty + promo.free_qty }} pagando {{ promo.min_qty }}. O desconto é distribuído proporcionalmente no subtotal do pedido.</p>
+            {% elif promo.rule_type == 'a_partir_de' %}
+            <p>A partir de <strong>{{ promo.min_qty }} unidade(s) iguais</strong> no carrinho, cada unidade passa a valer o equivalente a <strong>R$ {{ '%.2f'|format(promo.rule_value / promo.min_qty)|replace('.',',') }}</strong> (total de <strong>R$ {{ '%.2f'|format(promo.rule_value)|replace('.',',') }}</strong> por {{ promo.min_qty }} un.). Abaixo dessa quantidade, o preço de lista é mantido.</p>
+            {% elif promo.rule_type == 'na_compra_de' %}
+            <p>Na compra de <strong>{{ promo.min_qty }} unidade(s) iguais</strong>, o pacote sai por <strong>R$ {{ '%.2f'|format(promo.rule_value)|replace('.',',') }}</strong>. Compras em múltiplos fechados do pacote repetem o valor; unidades avulsas fora do pacote são cobradas pelo preço de lista.</p>
             {% endif %}
             <p class="admin-text-muted" style="margin-top:8px; font-size:13px;">
                 <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
@@ -218,33 +252,75 @@
     const ruleSelect = form.querySelector('[data-promo-rule-select]');
     const percentFixedFields = form.querySelector('[data-rule-fields="percent fixed"]');
     const bogoFields = form.querySelector('[data-rule-fields="bogo"]');
+    const packFields = form.querySelector('[data-rule-fields="a_partir_de na_compra_de"]');
     const labelPercent = form.querySelector('[data-rule-label-percent]');
     const labelFixed = form.querySelector('[data-rule-label-fixed]');
     const bogoSummary = form.querySelector('[data-bogo-summary]');
-    const minQtyInput = form.querySelector('[name="min_qty"]');
-    const freeQtyInput = form.querySelector('[name="free_qty"]');
+    const packSummary = form.querySelector('[data-pack-summary]');
+    const minQtyInput = form.querySelector('#edit-promo-min-qty');
+    const freeQtyInput = form.querySelector('#edit-promo-free-qty');
+    const packQtyInput = form.querySelector('#edit-promo-pack-qty');
+    const packValueInput = form.querySelector('#edit-promo-pack-value');
+
+    function setBlockEnabled(block, enabled) {
+        if (!block) return;
+        block.querySelectorAll('input, select, textarea').forEach(function (el) {
+            el.disabled = !enabled;
+        });
+    }
+
+    function formatBrl(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return 'R$ 0,00';
+        return 'R$ ' + n.toFixed(2).replace('.', ',');
+    }
 
     function updateRuleFields() {
         if (!ruleSelect) return;
         const val = ruleSelect.value;
-        if (percentFixedFields) percentFixedFields.style.display = (val === 'percent' || val === 'fixed') ? 'flex' : 'none';
-        if (bogoFields) bogoFields.style.display = val === 'bogo' ? 'flex' : 'none';
+        const isPercentFixed = val === 'percent' || val === 'fixed';
+        const isBogo = val === 'bogo';
+        const isPack = val === 'a_partir_de' || val === 'na_compra_de';
+        if (percentFixedFields) percentFixedFields.style.display = isPercentFixed ? 'flex' : 'none';
+        if (bogoFields) bogoFields.style.display = isBogo ? 'flex' : 'none';
+        if (packFields) packFields.style.display = isPack ? 'flex' : 'none';
         if (labelPercent) labelPercent.style.display = val === 'percent' ? '' : 'none';
         if (labelFixed) labelFixed.style.display = val === 'fixed' ? '' : 'none';
+        setBlockEnabled(percentFixedFields, isPercentFixed);
+        setBlockEnabled(bogoFields, isBogo);
+        setBlockEnabled(packFields, isPack);
     }
 
     function updateBogoSummary() {
         if (!bogoSummary || !minQtyInput || !freeQtyInput) return;
-        const min = Math.max(1, parseInt(minQtyInput.value) || 1);
-        const free = Math.max(1, parseInt(freeQtyInput.value) || 1);
+        const min = Math.max(1, parseInt(minQtyInput.value, 10) || 1);
+        const free = Math.max(1, parseInt(freeQtyInput.value, 10) || 1);
         bogoSummary.textContent = `Compre ${min}, leve ${min + free} (${free} grátis)`;
     }
 
+    function updatePackSummary() {
+        if (!packSummary || !packQtyInput || !packValueInput || !ruleSelect) return;
+        const qty = Math.max(1, parseInt(packQtyInput.value, 10) || 1);
+        const total = formatBrl(packValueInput.value);
+        if (ruleSelect.value === 'na_compra_de') {
+            packSummary.textContent = `Na compra de ${qty} unidades por ${total} (pacote fechado)`;
+        } else {
+            packSummary.textContent = `A partir de ${qty} unidades por ${total} (preço equivalente por unidade)`;
+        }
+    }
+
     if (ruleSelect) {
-        ruleSelect.addEventListener('change', updateRuleFields);
+        ruleSelect.addEventListener('change', function () {
+            updateRuleFields();
+            updatePackSummary();
+        });
+        updateRuleFields();
     }
     if (minQtyInput) minQtyInput.addEventListener('input', updateBogoSummary);
     if (freeQtyInput) freeQtyInput.addEventListener('input', updateBogoSummary);
+    if (packQtyInput) packQtyInput.addEventListener('input', updatePackSummary);
+    if (packValueInput) packValueInput.addEventListener('input', updatePackSummary);
+    updatePackSummary();
 
     document.addEventListener('click', function (e) {
         const f = e.target.closest('#formEditPromo');

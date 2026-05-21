@@ -85,7 +85,7 @@
             {% for p in products %}
             <div class="admin-stock__row" data-product-id="{{ p.id }}">
                 <span class="admin-stock__product">
-                    <img class="admin-stock__thumb" src="{{ p.imagem }}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+                    <img class="admin-stock__thumb" src="{{ p.imagem }}" alt="{{ p.nome }}" loading="lazy" onerror="this.style.visibility='hidden'">
                     <span>
                         <strong>{{ p.nome }}</strong>
                         <small class="admin-stock__meta">ID: {{ p.id }} | SKU: <code class="admin-stock__sku-code">{{ p.sku or '—' }}</code></small>

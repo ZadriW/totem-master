@@ -1,7 +1,17 @@
-{# Conteúdo do catálogo (topbar + grid + carrinho). Requer: categories, categories_by_letter, products, catalog_brand_href, catalog_brand_aria #}
+{% extends "base.html" %}
 {% from "macros/admin_brand_logo.html" import admin_brand_logo %}
+
+{% block title %}Catálogo | Odonto Master{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/catalog.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cart.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/idle-timeout.css') }}">
+{% endblock %}
+
+{% block body %}
 <header class="topbar">
-    <a class="topbar__brand" href="{{ catalog_brand_href }}" aria-label="{{ catalog_brand_aria }}">
+    <a class="topbar__brand" href="{{ url_for('welcome') }}" aria-label="Voltar ao início">
         {{ admin_brand_logo() }}
     </a>
 
@@ -47,52 +57,12 @@
     <span class="catalog-toast__text">Produto adicionado ao carrinho!</span>
 </div>
 
-<div class="categories-bar">
-    {% set _letters = categories_by_letter if categories_by_letter is defined else [] %}
-    <nav class="categories" aria-label="Categorias">
-        <div class="categories__scroll">
-        <button class="category-chip category-chip--all is-active" type="button" data-category="todos">Todos</button>
-        {% for letter, names in _letters %}
-        <div class="category-dropdown" data-letter="{{ letter }}">
-            <button
-                type="button"
-                class="category-letter-trigger"
-                aria-expanded="false"
-                aria-haspopup="true"
-                aria-controls="categoryDropdownPanel{{ loop.index0 }}"
-            >
-                {% if letter == '#' %}0-9{% else %}{{ letter }}{% endif %}
-            </button>
-            <div
-                id="categoryDropdownPanel{{ loop.index0 }}"
-                class="category-dropdown__panel"
-                role="menu"
-                hidden
-                aria-label="Categorias — {% if letter == '#' %}0-9 e outros{% else %}{{ letter }}{% endif %}"
-            >
-                {% for category in names %}
-                <button
-                    type="button"
-                    class="category-chip category-dropdown__item"
-                    role="menuitem"
-                    data-category="{{ category }}"
-                >{{ category }}</button>
-                {% endfor %}
-            </div>
-        </div>
-        {% endfor %}
-        </div>
-    </nav>
-    <button
-        type="button"
-        class="categories-clear"
-        id="clearCatalogFilters"
-        aria-label="Limpar filtros de categoria e busca"
-    >
-        <i class="fa-solid fa-filter-circle-xmark" aria-hidden="true"></i>
-        Limpar filtros
-    </button>
-</div>
+<nav class="categories" aria-label="Categorias">
+    <button class="category-chip is-active" type="button" data-category="todos">Todos</button>
+    {% for category in categories %}
+    <button class="category-chip" type="button" data-category="{{ category }}">{{ category }}</button>
+    {% endfor %}
+</nav>
 
 <main class="catalog">
     <div class="catalog__header">
@@ -102,34 +72,14 @@
 
     <div class="product-grid" id="productGrid">
         {% for product in products %}
-        {% set sm = (product.estoque_minimo | default(0)) | int %}
-        {% set q = product.estoque | int %}
-        {% if q <= 0 %}
-            {% set stock_tone = 'empty' %}
-        {% elif sm > 0 and q < sm %}
-            {% set stock_tone = 'low' %}
-        {% else %}
-            {% set stock_tone = 'ok' %}
-        {% endif %}
-        {% set em_promo = product.em_promocao | default(false) %}
         <article
-            class="product-card{% if em_promo %} product-card--promo{% endif %}"
+            class="product-card"
             data-id="{{ product.id }}"
             data-category="{{ product.categoria }}"
             data-name="{{ product.nome|lower }}"
             data-sku="{{ (product.sku or '')|lower }}"
             data-estoque="{{ product.estoque }}"
-            data-estoque-min="{{ sm }}"
-            data-preco="{{ product.preco }}"
         >
-            <div data-promo-badge-root>
-                {% if em_promo and product.promo_badge %}
-                <div class="product-card__promo-badge">
-                    <i class="fa-solid fa-tag" aria-hidden="true"></i>
-                    {{ product.promo_badge }}
-                </div>
-                {% endif %}
-            </div>
             <div class="product-card__image">
                 <img src="{{ product.imagem }}" alt="{{ product.nome }}" loading="lazy">
             </div>
@@ -137,28 +87,9 @@
                 <span class="product-card__category">{{ product.categoria }}</span>
                 <h2 class="product-card__name">{{ product.nome }}</h2>
                 {% if product.sku %}
-                <div class="product-card__meta-line">
-                    <span class="product-card__sku">SKU {{ product.sku }}</span>
-                    <span class="product-card__stock product-card__stock--{{ stock_tone }}" data-stock-display>{{ product.estoque }} no estoque.</span>
-                </div>
-                {% else %}
-                <span class="product-card__stock product-card__stock--{{ stock_tone }} product-card__stock--alone" data-stock-display>{{ product.estoque }} no estoque.</span>
+                <span class="product-card__sku">SKU {{ product.sku }}</span>
                 {% endif %}
-                <div data-catalog-pricing>
-                    {% if em_promo and product.preco_original is defined and product.preco_original != product.preco %}
-                    <div class="product-card__price-wrap">
-                        <span class="product-card__price-original">R$ {{ '%.2f'|format(product.preco_original)|replace('.', ',') }}</span>
-                        <p class="product-card__price product-card__price--promo">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
-                    </div>
-                    {% elif em_promo and product.promo_tipo == 'bogo' %}
-                    <div class="product-card__price-wrap">
-                        <p class="product-card__price">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
-                        <span class="product-card__promo-name">{{ product.promo_nome }}</span>
-                    </div>
-                    {% else %}
-                    <p class="product-card__price">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
-                    {% endif %}
-                </div>
+                <p class="product-card__price">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
             </div>
             <div class="product-card__actions">
                 <div class="product-card__counter" role="group" aria-label="Quantidade">
@@ -241,3 +172,38 @@
         </button>
     </footer>
 </aside>
+
+    <div
+        id="idle-timeout-overlay"
+        class="idle-modal-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="idle-timeout-title"
+        aria-describedby="idle-timeout-desc"
+        aria-hidden="true"
+    >
+        <div class="idle-modal-dialog" role="document">
+            <div class="idle-modal-dialog__icon" aria-hidden="true">
+                <i class="fa-regular fa-clock"></i>
+            </div>
+            <h2 id="idle-timeout-title" class="idle-modal-dialog__title">Ainda está aí?</h2>
+            <p id="idle-timeout-desc" class="idle-modal-dialog__text">
+                Toque no botão abaixo para continuar comprando. Sem interação, o totem voltará à tela inicial em instantes.
+            </p>
+            <div class="idle-modal-dialog__actions">
+                <button type="button" class="idle-modal-dialog__btn" id="idle-timeout-continue">
+                    Continuar comprando
+                </button>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    window.__PRODUCTS__ = {{ products|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/cart.js') }}"></script>
+<script src="{{ url_for('static', filename='js/idle-timeout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/catalog.js') }}"></script>
+{% endblock %}

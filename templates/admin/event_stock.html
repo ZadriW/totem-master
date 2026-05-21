@@ -198,7 +198,7 @@
             <div class="admin-stock__row admin-event__row" data-product-id="{{ p.product_id }}">
 
                 <span class="admin-stock__product">
-                    <img class="admin-stock__thumb" src="{{ p.image or '' }}" alt=""
+                    <img class="admin-stock__thumb" src="{{ p.image or '' }}" alt="{{ p.name }}"
                          loading="lazy" onerror="this.style.visibility='hidden'">
                     <span>
                         <span class="admin-stock__product-name-row">

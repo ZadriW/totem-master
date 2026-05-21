@@ -1,7 +1,8 @@
 {% extends "base.html" %}
+{% from "macros/admin_brand_logo.html" import admin_brand_logo %}
 
 {% block head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+{% include 'partials/totem_theme_head.html' %}
 {% block seller_head %}{% endblock %}
 {% endblock %}
 
@@ -9,7 +10,7 @@
 <div class="admin-shell">
     <header class="admin-topbar">
         <a class="admin-topbar__brand" href="{{ url_for('seller_dashboard') }}">
-            <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
+            {{ admin_brand_logo() }}
             <span class="admin-topbar__badge">Vendedor</span>
         </a>
 
@@ -57,6 +58,16 @@
                 <i class="fa-regular fa-clock" aria-hidden="true"></i>
                 {{ now.strftime('%d/%m/%Y %H:%M') }}
             </span>
+            <button
+                type="button"
+                class="admin-topbar__theme-toggle"
+                data-admin-theme-toggle
+                aria-pressed="false"
+                title="Modo escuro"
+                aria-label="Ativar modo escuro"
+            >
+                <i class="fa-solid fa-moon" aria-hidden="true"></i>
+            </button>
             <form method="post" action="{{ url_for('seller_logout') }}" class="admin-topbar__logout-form">
                 {% include 'partials/csrf_field.html' %}
                 <button
@@ -89,10 +100,13 @@
         {% block seller_body %}{% endblock %}
     </main>
 </div>
+
+{% include 'partials/admin_confirm_dialog.html' %}
 {% endblock %}
 
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/totem-api-errors.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin-theme.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 {% block seller_scripts %}{% endblock %}
 {% endblock %}

@@ -7,18 +7,33 @@ from typing import Dict, List, Optional
 
 from .connection import _now_iso, get_conn
 
-_VALID_RULE_TYPES = {"percent", "fixed", "bogo"}
+_VALID_RULE_TYPES = {"percent", "fixed", "bogo", "a_partir_de", "na_compra_de"}
 
 RULE_TYPE_LABELS = {
     "percent": "Desconto (%)",
     "fixed": "Desconto fixo (R$)",
     "bogo": "Compre X, Leve Y",
+    "a_partir_de": "A partir de",
+    "na_compra_de": "Na compra de",
 }
+
+_PACKAGE_RULE_TYPES = frozenset({"a_partir_de", "na_compra_de"})
 
 
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
+
+def _brl_label(value: float) -> str:
+    return f"R$ {float(value):.2f}".replace(".", ",")
+
+
+def _validate_package_rule(min_qty: int, rule_value: float) -> None:
+    if min_qty < 1:
+        raise ValueError("Informe a quantidade de produtos iguais (mínimo 1).")
+    if rule_value <= 0:
+        raise ValueError("Informe o valor total do conjunto/pacote (maior que zero).")
+
 
 def _compute_effective_subtotal(
     rule_type: str,
@@ -45,6 +60,21 @@ def _compute_effective_subtotal(
         rem = qty % group
         paid = groups * min_q + min(rem, min_q)
         return round(list_price * paid, 2)
+    if rule_type == "a_partir_de":
+        min_q = max(1, int(min_qty))
+        pack_total = max(0.0, float(rule_value))
+        if qty < min_q or pack_total <= 0:
+            return round(list_price * qty, 2)
+        unit_tier = pack_total / min_q
+        return round(unit_tier * qty, 2)
+    if rule_type == "na_compra_de":
+        min_q = max(1, int(min_qty))
+        pack_total = max(0.0, float(rule_value))
+        if pack_total <= 0:
+            return round(list_price * qty, 2)
+        packs = qty // min_q
+        rem = qty % min_q
+        return round(packs * pack_total + rem * list_price, 2)
     return round(list_price * qty, 2)
 
 
@@ -88,6 +118,8 @@ def create_promotion(
             raise ValueError("Quantidade mínima deve ser pelo menos 1.")
         if free_qty < 1:
             raise ValueError("Quantidade grátis deve ser pelo menos 1.")
+    elif rule_type in _PACKAGE_RULE_TYPES:
+        _validate_package_rule(min_qty, rule_value)
     if not product_ids:
         raise ValueError("Selecione ao menos um produto para a promoção.")
 
@@ -144,6 +176,8 @@ def update_promotion(
             raise ValueError("Quantidade mínima deve ser pelo menos 1.")
         if free_qty < 1:
             raise ValueError("Quantidade grátis deve ser pelo menos 1.")
+    elif rule_type in _PACKAGE_RULE_TYPES:
+        _validate_package_rule(min_qty, rule_value)
     if not product_ids:
         raise ValueError("Selecione ao menos um produto para a promoção.")
 
@@ -288,6 +322,10 @@ def _format_promo_tooltip_line(promo: Dict) -> str:
     if rt == "bogo":
         total = min_q + free_q if free_q > 0 else min_q
         return f"{name}: compre {min_q}, leve {total}"
+    if rt == "a_partir_de":
+        return f"{name}: a partir de {min_q} por {_brl_label(rv)}"
+    if rt == "na_compra_de":
+        return f"{name}: na compra de {min_q} por {_brl_label(rv)}"
     return name
 
 
@@ -464,6 +502,12 @@ def enrich_product_with_promo(product: Dict, promo_map: Dict[int, Dict]) -> Dict
         # Preço unitário não muda; desconto é de quantidade
         p["preco"] = list_price
         p["promo_badge"] = f"Compre {min_q} Leve {min_q + free_q}"
+    elif rule == "a_partir_de":
+        p["preco"] = list_price
+        p["promo_badge"] = f"A partir de {min_q} por {_brl_label(val)}"
+    elif rule == "na_compra_de":
+        p["preco"] = list_price
+        p["promo_badge"] = f"Na compra de {min_q} por {_brl_label(val)}"
 
     return p
 

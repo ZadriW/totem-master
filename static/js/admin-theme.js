@@ -1,5 +1,5 @@
 /**
- * Modo escuro do painel administrativo — alternância e persistência (localStorage).
+ * Modo escuro dos painéis Admin e Vendedor — alternância e persistência (localStorage).
  */
 (() => {
     'use strict';

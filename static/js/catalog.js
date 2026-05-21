@@ -239,7 +239,7 @@
         if (em && Number.isFinite(po) && po !== pp) {
             return `<div class="product-card__price-wrap"><span class="product-card__price-original">${formatCatalogPriceBRL(po)}</span><p class="product-card__price product-card__price--promo">${formatCatalogPriceBRL(pp)}</p></div>`;
         }
-        if (em && product.promo_tipo === 'bogo') {
+        if (em && (product.promo_tipo === 'bogo' || product.promo_tipo === 'a_partir_de' || product.promo_tipo === 'na_compra_de')) {
             const nome = escapeCatalogHtml(product.promo_nome || '');
             return `<div class="product-card__price-wrap"><p class="product-card__price">${formatCatalogPriceBRL(pp)}</p><span class="product-card__promo-name">${nome}</span></div>`;
         }

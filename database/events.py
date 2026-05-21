@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import date as _date
 from typing import Dict, List, Optional, Tuple
 
 from .connection import _now_iso, get_conn
@@ -93,6 +94,71 @@ def restore_event(event_id: int) -> None:
             "UPDATE events SET active = 1, updated_at = ? WHERE id = ?",
             (now, event_id),
         )
+
+
+def delete_event(event_id: int) -> Dict:
+    """Remove o evento e todos os dados ligados a ele (irreversível).
+
+    Apaga transações do evento (e itens), movimentações de estoque do evento,
+    produtos/promoções/vínculos com vendedores (CASCADE ao remover ``events``).
+    """
+    eid = int(event_id)
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, name FROM events WHERE id = ?", (eid,)
+        ).fetchone()
+        if row is None:
+            raise ValueError("Evento não encontrado.")
+
+        summary = {
+            "id": eid,
+            "name": row["name"],
+            "products": int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM event_products WHERE event_id = ?", (eid,)
+                ).fetchone()[0]
+            ),
+            "promotions": int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM promotions WHERE event_id = ?", (eid,)
+                ).fetchone()[0]
+            ),
+            "sellers": int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM event_sellers WHERE event_id = ?", (eid,)
+                ).fetchone()[0]
+            ),
+            "transactions": int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM transactions WHERE event_id = ?", (eid,)
+                ).fetchone()[0]
+            ),
+            "stock_movements": int(
+                conn.execute(
+                    "SELECT COUNT(*) FROM stock_movements WHERE event_id = ?", (eid,)
+                ).fetchone()[0]
+            ),
+        }
+
+        tx_ids = [
+            int(r[0])
+            for r in conn.execute(
+                "SELECT id FROM transactions WHERE event_id = ?", (eid,)
+            ).fetchall()
+        ]
+
+        if tx_ids:
+            placeholders = ",".join("?" * len(tx_ids))
+            conn.execute(
+                f"DELETE FROM stock_movements WHERE transaction_id IN ({placeholders})",
+                tx_ids,
+            )
+
+        conn.execute("DELETE FROM stock_movements WHERE event_id = ?", (eid,))
+        conn.execute("DELETE FROM transactions WHERE event_id = ?", (eid,))
+        conn.execute("DELETE FROM events WHERE id = ?", (eid,))
+
+    return summary
 
 
 def find_product_by_sku_or_id(q: str) -> Optional[Dict]:
@@ -634,6 +700,268 @@ def list_transaction_items_for_event_period(
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(r) for r in rows]
+
+# ---------------------------------------------------------------------------
+# Relatório Financeiro do Evento
+# ---------------------------------------------------------------------------
+
+def get_event_financial_report(
+    event_id: int,
+    *,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+) -> Dict:
+    """Relatório financeiro completo de um evento para a seção Financeiro.
+
+    ``date_from`` / ``date_to``: ``YYYY-MM-DD`` (ambos inclusive). Se ambos
+    forem ``None`` retorna o período integral do evento.
+
+    Retorna um dict com:
+    - ``event``          : dados do evento (id, name, active, created_at)
+    - ``period``         : {date_from, date_to, label}
+    - ``kpis``           : {orders, revenue, avg_ticket, refunds_count,
+                            refunds_value, items_sold}
+    - ``payment_methods``: lista {method, orders, revenue}
+    - ``stock_summary``  : {initial_units, entries, exits_manual, sold_units,
+                            refunded_units, losses_units, final_units,
+                            products_count, sem_estoque, below_min, stock_value}
+    - ``top_skus``       : lista (top 10) {rank, sku, product_name, product_id,
+                            units_sold, revenue, refunded_units}
+    - ``sales_by_day``   : lista {day, orders, revenue}
+    - ``sellers``        : lista {name, orders, revenue}
+    """
+    eid = int(event_id)
+
+    # ------------------------------------------------------------------
+    # Predicado de período (usado em WHERE de cada query)
+    # ------------------------------------------------------------------
+    date_params: List = []
+    date_clause = ""
+    if date_from:
+        date_clause += " AND date(t.created_at) >= date(?)"
+        date_params.append(date_from)
+    if date_to:
+        date_clause += " AND date(t.created_at) <= date(?)"
+        date_params.append(date_to)
+
+    # Mesmo predicado para movimentações de estoque
+    mov_date_params: List = []
+    mov_date_clause = ""
+    if date_from:
+        mov_date_clause += " AND date(m.created_at) >= date(?)"
+        mov_date_params.append(date_from)
+    if date_to:
+        mov_date_clause += " AND date(m.created_at) <= date(?)"
+        mov_date_params.append(date_to)
+
+    with get_conn() as conn:
+        # ---------- dados do evento ----------------------------------
+        ev_row = conn.execute(
+            "SELECT id, name, active, created_at, description FROM events WHERE id = ?",
+            (eid,),
+        ).fetchone()
+        event_data = dict(ev_row) if ev_row else {}
+
+        # ---------- KPIs de vendas (confirmadas) ---------------------
+        confirmed_filter = (
+            "FROM transactions t "
+            "WHERE t.status = 'confirmado' AND t.event_id = ?"
+        )
+        agg = conn.execute(
+            f"SELECT COUNT(*) AS orders, COALESCE(SUM(t.total),0) AS revenue, "
+            f"COALESCE(SUM(t.items_count),0) AS items_sold "
+            f"{confirmed_filter}{date_clause}",
+            [eid] + date_params,
+        ).fetchone()
+        orders = int(agg["orders"] or 0)
+        revenue = float(agg["revenue"] or 0.0)
+        items_sold = int(agg["items_sold"] or 0)
+        avg_ticket = (revenue / orders) if orders else 0.0
+
+        # ---------- Estornos -----------------------------------------
+        refund_agg = conn.execute(
+            f"SELECT COUNT(*) AS rc, COALESCE(SUM(t.total),0) AS rv "
+            f"FROM transactions t "
+            f"WHERE t.status = 'estornado' AND t.event_id = ?{date_clause}",
+            [eid] + date_params,
+        ).fetchone()
+        refunds_count = int(refund_agg["rc"] or 0)
+        refunds_value = float(refund_agg["rv"] or 0.0)
+
+        # ---------- Formas de pagamento ------------------------------
+        pm_rows = conn.execute(
+            f"SELECT COALESCE(t.payment_method,'—') AS method, "
+            f"COUNT(*) AS orders, COALESCE(SUM(t.total),0) AS revenue "
+            f"{confirmed_filter}{date_clause} "
+            f"GROUP BY t.payment_method ORDER BY revenue DESC",
+            [eid] + date_params,
+        ).fetchall()
+        payment_methods = [dict(r) for r in pm_rows]
+
+        # ---------- Resumo de estoque via movimentações --------------
+        def _sum_mov(types_tuple, extra_clause="") -> int:
+            placeholders = ",".join("?" * len(types_tuple))
+            row = conn.execute(
+                f"SELECT COALESCE(SUM(ABS(m.delta)),0) AS total "
+                f"FROM stock_movements m "
+                f"WHERE m.event_id = ? AND m.movement_type IN ({placeholders})"
+                f"{extra_clause}{mov_date_clause}",
+                [eid] + list(types_tuple) + mov_date_params,
+            ).fetchone()
+            return int(row["total"] or 0) if row else 0
+
+        initial_units = _sum_mov(("inicial",))
+        entries = _sum_mov(("entrada",))
+        exits_manual = _sum_mov(("saida",))
+        sold_units = _sum_mov(("venda",), " AND m.delta < 0")
+        refunded_units = _sum_mov(("venda",), " AND m.delta > 0")
+        losses_units = _sum_mov(("ajuste",), " AND m.delta < 0")
+
+        # Estoque final (situação atual dos produtos no evento)
+        final_row = conn.execute(
+            "SELECT COALESCE(SUM(ep.stock),0) AS total "
+            "FROM event_products ep WHERE ep.event_id = ?",
+            (eid,),
+        ).fetchone()
+        final_units = int(final_row["total"] or 0) if final_row else 0
+
+        # Valor do estoque e alertas (sempre estado atual, sem filtro de data)
+        sv_row = conn.execute(
+            "SELECT COUNT(ep.id) AS products_count, "
+            "COALESCE(SUM(ep.stock * p.price),0) AS stock_value, "
+            "COALESCE(SUM(CASE WHEN ep.stock=0 THEN 1 ELSE 0 END),0) AS sem_estoque, "
+            "COALESCE(SUM(CASE WHEN ep.stock>0 AND ep.stock<ep.min_stock THEN 1 ELSE 0 END),0) AS below_min "
+            "FROM event_products ep JOIN products p ON p.id = ep.product_id "
+            "WHERE ep.event_id = ?",
+            (eid,),
+        ).fetchone()
+
+        stock_summary = {
+            "initial_units": initial_units,
+            "entries": entries,
+            "exits_manual": exits_manual,
+            "sold_units": sold_units,
+            "refunded_units": refunded_units,
+            "losses_units": losses_units,
+            "final_units": final_units,
+            "products_count": int(sv_row["products_count"] or 0) if sv_row else 0,
+            "sem_estoque": int(sv_row["sem_estoque"] or 0) if sv_row else 0,
+            "below_min": int(sv_row["below_min"] or 0) if sv_row else 0,
+            "stock_value": float(sv_row["stock_value"] or 0.0) if sv_row else 0.0,
+        }
+
+        # ---------- Top 10 SKUs (vendas confirmadas) -----------------
+        top_rows = conn.execute(
+            f"SELECT ti.product_id AS pid_raw, "
+            f"COALESCE(MAX(NULLIF(TRIM(ti.product_sku),'')),MAX(p.sku),'') AS sku, "
+            f"MAX(ti.product_name) AS product_name, "
+            f"SUM(ti.quantity) AS units_sold, "
+            f"SUM(ti.subtotal) AS revenue "
+            f"FROM transaction_items ti "
+            f"JOIN transactions t ON t.id = ti.transaction_id "
+            f"LEFT JOIN products p ON p.id = CAST(ti.product_id AS INTEGER) "
+            f"WHERE t.status = 'confirmado' AND t.event_id = ?{date_clause} "
+            f"GROUP BY ti.product_id "
+            f"ORDER BY units_sold DESC LIMIT 10",
+            [eid] + date_params,
+        ).fetchall()
+
+        # estornos por produto (via movimentação delta > 0)
+        refund_by_pid = {}
+        refund_rows = conn.execute(
+            "SELECT ti.product_id AS pid_raw, SUM(ti.quantity) AS qty "
+            "FROM transaction_items ti "
+            "JOIN transactions t ON t.id = ti.transaction_id "
+            "WHERE t.status = 'estornado' AND t.event_id = ? "
+            "GROUP BY ti.product_id",
+            (eid,),
+        ).fetchall()
+        for r in refund_rows:
+            refund_by_pid[str(r["pid_raw"] or "")] = int(r["qty"] or 0)
+
+        top_skus = []
+        for i, r in enumerate(top_rows, 1):
+            raw = str(r["pid_raw"] or "")
+            pid_int = int(raw) if raw.isdigit() else None
+            top_skus.append({
+                "rank": i,
+                "sku": (r["sku"] or "").strip() or "—",
+                "product_name": (r["product_name"] or "").strip() or "—",
+                "product_id": pid_int,
+                "units_sold": int(r["units_sold"] or 0),
+                "revenue": float(r["revenue"] or 0.0),
+                "refunded_units": refund_by_pid.get(raw, 0),
+            })
+
+        # ---------- Vendas por dia ------------------------------------
+        day_rows = conn.execute(
+            f"SELECT date(t.created_at) AS day, COUNT(*) AS orders, "
+            f"COALESCE(SUM(t.total),0) AS revenue "
+            f"{confirmed_filter}{date_clause} "
+            f"GROUP BY date(t.created_at) ORDER BY day",
+            [eid] + date_params,
+        ).fetchall()
+        sales_by_day = [
+            {"day": str(r["day"]), "orders": int(r["orders"] or 0),
+             "revenue": float(r["revenue"] or 0.0)}
+            for r in day_rows
+        ]
+
+        # ---------- Por vendedor --------------------------------------
+        seller_rows = conn.execute(
+            f"SELECT COALESCE(t.seller_name,'(sem vendedor)') AS name, "
+            f"COUNT(*) AS orders, COALESCE(SUM(t.total),0) AS revenue "
+            f"{confirmed_filter}{date_clause} "
+            f"GROUP BY t.seller_name ORDER BY revenue DESC",
+            [eid] + date_params,
+        ).fetchall()
+        sellers = [
+            {"name": r["name"], "orders": int(r["orders"] or 0),
+             "revenue": float(r["revenue"] or 0.0)}
+            for r in seller_rows
+        ]
+
+    # ---------- label do período ------------------------------------
+    if date_from and date_to:
+        period_label = f"{_fmt_date_label(date_from)} – {_fmt_date_label(date_to)}"
+    elif date_from:
+        period_label = f"A partir de {_fmt_date_label(date_from)}"
+    elif date_to:
+        period_label = f"Até {_fmt_date_label(date_to)}"
+    else:
+        period_label = "Todo o evento"
+
+    return {
+        "event": event_data,
+        "period": {
+            "date_from": date_from or "",
+            "date_to": date_to or "",
+            "label": period_label,
+        },
+        "kpis": {
+            "orders": orders,
+            "revenue": revenue,
+            "avg_ticket": avg_ticket,
+            "items_sold": items_sold,
+            "refunds_count": refunds_count,
+            "refunds_value": refunds_value,
+        },
+        "payment_methods": payment_methods,
+        "stock_summary": stock_summary,
+        "top_skus": top_skus,
+        "sales_by_day": sales_by_day,
+        "sellers": sellers,
+    }
+
+
+def _fmt_date_label(iso: str) -> str:
+    """Converte YYYY-MM-DD para DD/MM/YYYY."""
+    try:
+        d = _date.fromisoformat(iso[:10])
+        return d.strftime("%d/%m/%Y")
+    except (ValueError, AttributeError):
+        return iso
+
 
 # ---------------------------------------------------------------------------
 # Vendedores do evento

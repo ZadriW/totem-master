@@ -1,0 +1,357 @@
+{% extends "admin/_layout.html" %}
+
+{% block title %}Financeiro | Dental Odonto Master{% endblock %}
+
+{% block admin_body %}
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <h1 class="admin-section__title">Financeiro</h1>
+            <p class="admin-section__subtitle">
+                Selecione um evento e o período para gerar o relatório.
+            </p>
+        </div>
+        {% if report %}
+        <a
+            class="admin-btn admin-btn--primary"
+            href="{{ url_for('admin_financeiro_pdf', evento=selected_event_id, de=date_from, ate=date_to) }}"
+            target="_blank"
+            rel="noopener"
+        >
+            <i class="fa-solid fa-print" aria-hidden="true"></i>
+            Imprimir / Gerar PDF
+        </a>
+        {% endif %}
+    </header>
+
+    {# ── Filtros ───────────────────────────────────────────────────────────── #}
+    <form method="get" action="{{ url_for('admin_financeiro') }}" class="admin-filters admin-fin__filters">
+        <label class="admin-filter admin-filter--wide">
+            <span class="admin-filter__label">Evento</span>
+            <select name="evento" class="admin-filter__input" id="fin-evento-sel">
+                {% for ev in all_events %}
+                <option value="{{ ev.id }}"
+                    {% if ev.id == selected_event_id %}selected{% endif %}
+                >
+                    {{ ev.name }}{% if not ev.active %} (arquivado){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label class="admin-filter">
+            <span class="admin-filter__label">De</span>
+            <input type="date" name="de" class="admin-filter__input" value="{{ date_from }}">
+        </label>
+
+        <label class="admin-filter">
+            <span class="admin-filter__label">Até</span>
+            <input type="date" name="ate" class="admin-filter__input" value="{{ date_to }}">
+        </label>
+
+        <div class="admin-filters__actions">
+            <button type="submit" class="admin-btn admin-btn--primary">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                Gerar relatório
+            </button>
+            {% if date_from or date_to %}
+            <a class="admin-btn admin-btn--ghost" href="{{ url_for('admin_financeiro', evento=selected_event_id) }}">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                Limpar datas
+            </a>
+            {% endif %}
+        </div>
+    </form>
+</section>
+
+{% if not all_events %}
+<div class="admin-empty">
+    <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+    <p>Nenhum evento cadastrado. <a href="{{ url_for('admin_events') }}">Crie um evento</a> para começar.</p>
+</div>
+{% elif not report %}
+<div class="admin-empty">
+    <i class="fa-solid fa-chart-pie" aria-hidden="true"></i>
+    <p>Selecione um evento acima para visualizar o relatório financeiro.</p>
+</div>
+{% else %}
+
+{# ── Cabeçalho do relatório ──────────────────────────────────────────────── #}
+<div class="admin-fin__report-header">
+    <span class="admin-fin__event-name">
+        <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+        {{ report.event.name }}
+        {% if not report.event.active %}
+        <span class="admin-badge admin-badge--neutral">Arquivado</span>
+        {% else %}
+        <span class="admin-badge admin-badge--success">Ativo</span>
+        {% endif %}
+    </span>
+    <span class="admin-fin__period-label">
+        <i class="fa-regular fa-calendar" aria-hidden="true"></i>
+        {{ report.period.label }}
+    </span>
+</div>
+
+{# ── KPIs principais ─────────────────────────────────────────────────────── #}
+<section class="admin-section">
+    <div class="admin-kpis admin-kpis--fin">
+
+        <article class="kpi kpi--primary">
+            <span class="kpi__icon"><i class="fa-solid fa-receipt" aria-hidden="true"></i></span>
+            <span class="kpi__label">Pedidos confirmados</span>
+            <span class="kpi__value">{{ report.kpis.orders }}</span>
+            <span class="kpi__hint">{{ report.kpis.items_sold }} unidades vendidas</span>
+        </article>
+
+        <article class="kpi kpi--success">
+            <span class="kpi__icon"><i class="fa-solid fa-sack-dollar" aria-hidden="true"></i></span>
+            <span class="kpi__label">Receita bruta</span>
+            <span class="kpi__value">{{ report.kpis.revenue | brl }}</span>
+            <span class="kpi__hint">No período selecionado</span>
+        </article>
+
+        <article class="kpi">
+            <span class="kpi__icon"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>
+            <span class="kpi__label">Ticket médio</span>
+            <span class="kpi__value">{{ report.kpis.avg_ticket | brl }}</span>
+            <span class="kpi__hint">Por pedido confirmado</span>
+        </article>
+
+        <article class="kpi {% if report.kpis.refunds_count > 0 %}kpi--warn{% endif %}">
+            <span class="kpi__icon"><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i></span>
+            <span class="kpi__label">Estornos</span>
+            <span class="kpi__value">{{ report.kpis.refunds_count }}</span>
+            <span class="kpi__hint">{{ report.kpis.refunds_value | brl }} devolvido</span>
+        </article>
+
+    </div>
+</section>
+
+{# ── Resumo de estoque ───────────────────────────────────────────────────── #}
+<section class="admin-section">
+    <header class="admin-section__header">
+        <h2 class="admin-section__title">
+            <i class="fa-solid fa-warehouse" aria-hidden="true"></i>
+            Resumo de estoque
+        </h2>
+        <p class="admin-section__subtitle">
+            Movimentações e saldo do evento.
+            Saldo final reflete o estado atual do evento.
+        </p>
+    </header>
+
+    <div class="admin-fin__stock-grid">
+
+        <div class="admin-fin__stock-flow">
+            <div class="admin-fin__stock-row admin-fin__stock-row--header">
+                <span>Tipo</span>
+                <span class="admin-table__col--num">Unidades</span>
+            </div>
+            <div class="admin-fin__stock-row">
+                <span><i class="fa-solid fa-flag" aria-hidden="true"></i> Estoque inicial</span>
+                <span class="admin-table__col--num">{{ report.stock_summary.initial_units }}</span>
+            </div>
+            <div class="admin-fin__stock-row admin-fin__stock-row--positive">
+                <span><i class="fa-solid fa-plus" aria-hidden="true"></i> Entradas</span>
+                <span class="admin-table__col--num">+{{ report.stock_summary.entries }}</span>
+            </div>
+            <div class="admin-fin__stock-row admin-fin__stock-row--negative">
+                <span><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i> Saídas por venda</span>
+                <span class="admin-table__col--num">-{{ report.stock_summary.sold_units }}</span>
+            </div>
+            <div class="admin-fin__stock-row admin-fin__stock-row--positive">
+                <span><i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i> Devoluções (estorno)</span>
+                <span class="admin-table__col--num">+{{ report.stock_summary.refunded_units }}</span>
+            </div>
+            <div class="admin-fin__stock-row admin-fin__stock-row--negative">
+                <span><i class="fa-solid fa-hand-holding-box" aria-hidden="true"></i> Saídas manuais</span>
+                <span class="admin-table__col--num">-{{ report.stock_summary.exits_manual }}</span>
+            </div>
+            {% if report.stock_summary.losses_units > 0 %}
+            <div class="admin-fin__stock-row admin-fin__stock-row--negative">
+                <span><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Quebras (ajuste negativo)</span>
+                <span class="admin-table__col--num">-{{ report.stock_summary.losses_units }}</span>
+            </div>
+            {% endif %}
+            <div class="admin-fin__stock-row admin-fin__stock-row--total">
+                <span><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Saldo atual (estoque final)</span>
+                <span class="admin-table__col--num">{{ report.stock_summary.final_units }}</span>
+            </div>
+        </div>
+
+        <div class="admin-fin__stock-kpis">
+            <div class="admin-fin__stock-kpi">
+                <span class="admin-fin__stock-kpi-label">Produtos no evento</span>
+                <span class="admin-fin__stock-kpi-value">{{ report.stock_summary.products_count }}</span>
+            </div>
+            <div class="admin-fin__stock-kpi">
+                <span class="admin-fin__stock-kpi-label">Valor em estoque (atual)</span>
+                <span class="admin-fin__stock-kpi-value admin-fin__stock-kpi-value--hl">{{ report.stock_summary.stock_value | brl }}</span>
+            </div>
+            <div class="admin-fin__stock-kpi {% if report.stock_summary.sem_estoque > 0 %}admin-fin__stock-kpi--warn{% endif %}">
+                <span class="admin-fin__stock-kpi-label">Sem estoque</span>
+                <span class="admin-fin__stock-kpi-value">{{ report.stock_summary.sem_estoque }}</span>
+            </div>
+            <div class="admin-fin__stock-kpi {% if report.stock_summary.below_min > 0 %}admin-fin__stock-kpi--warn{% endif %}">
+                <span class="admin-fin__stock-kpi-label">Abaixo do mínimo</span>
+                <span class="admin-fin__stock-kpi-value">{{ report.stock_summary.below_min }}</span>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+{# ── Top 10 SKUs ─────────────────────────────────────────────────────────── #}
+<section class="admin-section">
+    <header class="admin-section__header">
+        <h2 class="admin-section__title">
+            <i class="fa-solid fa-ranking-star" aria-hidden="true"></i>
+            Top SKUs por volume de vendas
+        </h2>
+    </header>
+
+    {% if report.top_skus %}
+    <div class="admin-table admin-fin__skus-table" role="table" aria-label="Top SKUs">
+        <div class="admin-table__head admin-fin__skus-row" role="row">
+            <span role="columnheader">#</span>
+            <span role="columnheader">SKU</span>
+            <span role="columnheader">Produto</span>
+            <span class="admin-table__col--num" role="columnheader">Unid. vendidas</span>
+            <span class="admin-table__col--num" role="columnheader">Receita</span>
+            <span class="admin-table__col--num" role="columnheader">Estornos (unid.)</span>
+        </div>
+        {% for sku in report.top_skus %}
+        <div class="admin-fin__skus-row" role="row">
+            <span class="admin-fin__rank">{{ sku.rank }}</span>
+            <span><code class="admin-fin__sku-code">{{ sku.sku }}</code></span>
+            <span class="admin-fin__prod-name">
+                {% if sku.product_id %}
+                <a href="{{ url_for('admin_product_detail', product_id=sku.product_id) }}">{{ sku.product_name }}</a>
+                {% else %}
+                {{ sku.product_name }}
+                {% endif %}
+            </span>
+            <span class="admin-table__col--num"><strong>{{ sku.units_sold }}</strong></span>
+            <span class="admin-table__col--num">{{ sku.revenue | brl }}</span>
+            <span class="admin-table__col--num {% if sku.refunded_units > 0 %}admin-fin__refund{% endif %}">
+                {% if sku.refunded_units > 0 %}
+                <i class="fa-solid fa-arrow-rotate-left" aria-hidden="true"></i>
+                {{ sku.refunded_units }}
+                {% else %}—{% endif %}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="admin-empty">
+        <i class="fa-solid fa-ranking-star" aria-hidden="true"></i>
+        <p>Nenhuma venda registrada no período.</p>
+    </div>
+    {% endif %}
+</section>
+
+{# ── Formas de pagamento + Vendas por dia ─────────────────────────────────── #}
+<div class="admin-fin__bottom-grid">
+
+    <section class="admin-section admin-fin__section-half">
+        <header class="admin-section__header">
+            <h2 class="admin-section__title">
+                <i class="fa-solid fa-credit-card" aria-hidden="true"></i>
+                Formas de pagamento
+            </h2>
+        </header>
+        {% if report.payment_methods %}
+        <div class="admin-table" role="table" aria-label="Formas de pagamento">
+            <div class="admin-table__head admin-fin__pm-row" role="row">
+                <span role="columnheader">Método</span>
+                <span class="admin-table__col--num" role="columnheader">Pedidos</span>
+                <span class="admin-table__col--num" role="columnheader">Receita</span>
+            </div>
+            {% for pm in report.payment_methods %}
+            <div class="admin-fin__pm-row" role="row">
+                <span>
+                    {% if pm.method == 'pix' %}
+                    <i class="fa-brands fa-pix" aria-hidden="true"></i>
+                    {% elif pm.method == 'cartao' %}
+                    <i class="fa-solid fa-credit-card" aria-hidden="true"></i>
+                    {% endif %}
+                    {{ pm.method | paymethod(None) }}
+                </span>
+                <span class="admin-table__col--num">{{ pm.orders }}</span>
+                <span class="admin-table__col--num"><strong>{{ pm.revenue | brl }}</strong></span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="admin-empty">
+            <i class="fa-solid fa-credit-card" aria-hidden="true"></i>
+            <p>Sem dados de pagamento.</p>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="admin-section admin-fin__section-half">
+        <header class="admin-section__header">
+            <h2 class="admin-section__title">
+                <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+                Vendas por dia
+            </h2>
+        </header>
+        {% if report.sales_by_day %}
+        <div class="admin-table" role="table" aria-label="Vendas por dia">
+            <div class="admin-table__head admin-fin__day-row" role="row">
+                <span role="columnheader">Data</span>
+                <span class="admin-table__col--num" role="columnheader">Pedidos</span>
+                <span class="admin-table__col--num" role="columnheader">Receita</span>
+            </div>
+            {% for d in report.sales_by_day | reverse %}
+            {% set parts = d.day.split('-') %}
+            <div class="admin-fin__day-row" role="row">
+                <span>{{ parts[2] }}/{{ parts[1] }}/{{ parts[0] }}</span>
+                <span class="admin-table__col--num">{{ d.orders }}</span>
+                <span class="admin-table__col--num"><strong>{{ d.revenue | brl }}</strong></span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="admin-empty">
+            <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+            <p>Sem vendas no período.</p>
+        </div>
+        {% endif %}
+    </section>
+
+</div>
+
+{# ── Por vendedor ─────────────────────────────────────────────────────────── #}
+{% if report.sellers %}
+<section class="admin-section">
+    <header class="admin-section__header">
+        <h2 class="admin-section__title">
+            <i class="fa-solid fa-user-tie" aria-hidden="true"></i>
+            Desempenho por vendedor
+        </h2>
+    </header>
+    <div class="admin-table" role="table" aria-label="Desempenho por vendedor">
+        <div class="admin-table__head admin-fin__seller-row" role="row">
+            <span role="columnheader">Vendedor</span>
+            <span class="admin-table__col--num" role="columnheader">Pedidos</span>
+            <span class="admin-table__col--num" role="columnheader">Receita</span>
+        </div>
+        {% for s in report.sellers %}
+        <div class="admin-fin__seller-row" role="row">
+            <span>
+                <i class="fa-solid fa-user-tie" aria-hidden="true"></i>
+                {{ s.name }}
+            </span>
+            <span class="admin-table__col--num">{{ s.orders }}</span>
+            <span class="admin-table__col--num"><strong>{{ s.revenue | brl }}</strong></span>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+{% endif %}{# /report #}
+{% endblock %}

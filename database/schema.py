@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS promotions (
     event_id    INTEGER NOT NULL,
     name        TEXT    NOT NULL,
     rule_type   TEXT    NOT NULL
-        CHECK (rule_type IN ('percent', 'fixed', 'bogo')),
+        CHECK (rule_type IN ('percent', 'fixed', 'bogo', 'a_partir_de', 'na_compra_de')),
     rule_value  REAL    NOT NULL DEFAULT 0,
     min_qty     INTEGER NOT NULL DEFAULT 1,
     free_qty    INTEGER NOT NULL DEFAULT 0,
@@ -357,6 +357,75 @@ def _ensure_sellers_columns(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_sellers_email ON sellers(email)")
 
 
+def _ensure_products_wake_columns(conn: sqlite3.Connection) -> None:
+    """Colunas Wake em ``products`` (variante principal, nome da variante)."""
+    cols = _table_columns(conn, "products")
+    for field, ddl in {
+        "wake_product_id": "INTEGER",
+        "variant_name": "TEXT",
+        "main_variant": "INTEGER NOT NULL DEFAULT 0",
+    }.items():
+        if field not in cols:
+            conn.execute(f"ALTER TABLE products ADD COLUMN {field} {ddl}")
+
+
+def _ensure_product_sku_aliases_table(conn: sqlite3.Connection) -> None:
+    """Tabela de SKUs alternativos (ERP / legado) por produto."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS product_sku_aliases (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            product_id INTEGER NOT NULL,
+            sku        TEXT    NOT NULL,
+            created_at TEXT    NOT NULL,
+            FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+            UNIQUE (sku)
+        );
+        CREATE INDEX IF NOT EXISTS idx_product_sku_aliases_product
+            ON product_sku_aliases(product_id);
+    """)
+
+
+def _ensure_promotions_rule_types(conn: sqlite3.Connection) -> None:
+    """Amplia ``rule_type`` em ``promotions`` para incluir pacotes por quantidade."""
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='promotions'"
+    ).fetchone()
+    if not row or not row[0]:
+        return
+    ddl = str(row[0])
+    if "a_partir_de" in ddl and "na_compra_de" in ddl:
+        return
+
+    conn.executescript("""
+        PRAGMA foreign_keys=OFF;
+        CREATE TABLE promotions_new (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id    INTEGER NOT NULL,
+            name        TEXT    NOT NULL,
+            rule_type   TEXT    NOT NULL
+                CHECK (rule_type IN (
+                    'percent', 'fixed', 'bogo', 'a_partir_de', 'na_compra_de'
+                )),
+            rule_value  REAL    NOT NULL DEFAULT 0,
+            min_qty     INTEGER NOT NULL DEFAULT 1,
+            free_qty    INTEGER NOT NULL DEFAULT 0,
+            active      INTEGER NOT NULL DEFAULT 1,
+            created_at  TEXT    NOT NULL,
+            updated_at  TEXT    NOT NULL,
+            FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+        );
+        INSERT INTO promotions_new
+            SELECT id, event_id, name, rule_type, rule_value, min_qty, free_qty,
+                   active, created_at, updated_at
+              FROM promotions;
+        DROP TABLE promotions;
+        ALTER TABLE promotions_new RENAME TO promotions;
+        CREATE INDEX IF NOT EXISTS idx_promotions_event
+            ON promotions(event_id, active);
+        PRAGMA foreign_keys=ON;
+    """)
+
+
 # ---------------------------------------------------------------------------
 # Conexão
 # ---------------------------------------------------------------------------
@@ -379,6 +448,9 @@ def init_db() -> None:
         _ensure_transactions_aut(conn)
         _ensure_transactions_event_id(conn)
         _ensure_sellers_columns(conn)
+        _ensure_products_wake_columns(conn)
+        _ensure_product_sku_aliases_table(conn)
+        _ensure_promotions_rule_types(conn)
         _ensure_events_tables(conn)
         _ensure_events_badge_color(conn)
         _ensure_event_extensions(conn)

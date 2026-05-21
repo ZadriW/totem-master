@@ -3,6 +3,7 @@
 {% from "macros/admin_tx_order_cell.html" import admin_tx_order_cell %}
 {% from "macros/admin_tx_receipt_link.html" import admin_tx_receipt_link %}
 {% from "macros/admin_tx_status_badge.html" import admin_tx_status_badge %}
+{% from "macros/admin_tx_pending_actions.html" import admin_tx_pending_actions %}
 
 {% block title %}Dashboard do vendedor - Vendedor | Dental Odonto Master{% endblock %}
 
@@ -143,32 +144,7 @@
                         <span class="admin-tx__status-stack">
                             {{ admin_tx_status_badge(tx) }}
                             {{ admin_tx_receipt_link(tx) }}
-                            {% if tx.status == 'pendente' %}
-                            <a
-                                href="{{ url_for('seller_restore_pending_checkout', tx_id=tx.id) }}"
-                                class="admin-tx__restore-cart"
-                                aria-label="Refazer carrinho e retomar o pagamento deste pedido"
-                                title="Refazer carrinho"
-                            >
-                                <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
-                            </a>
-                            <form
-                                method="post"
-                                action="{{ seller_pending_cancel_url(tx.id) }}"
-                                class="admin-tx__discard-form"
-                                data-confirm="Descartar este pedido pendente? O carrinho não poderá ser refeito por aqui."
-                            >
-                                {% include 'partials/csrf_field.html' %}
-                                <button
-                                    type="submit"
-                                    class="admin-tx__discard-cart"
-                                    aria-label="Apagar carrinho e descartar pedido pendente"
-                                    title="Apagar carrinho"
-                                >
-                                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-                                </button>
-                            </form>
-                            {% endif %}
+                            {{ admin_tx_pending_actions(tx) }}
                         </span>
                     </span>
                 </div>

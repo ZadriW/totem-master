@@ -1,0 +1,11 @@
+{# Inicializa modo escuro (localStorage) + CSS base com variáveis do tema. #}
+<script>
+(function () {
+    try {
+        if (localStorage.getItem('totem-admin-theme') === 'dark') {
+            document.documentElement.classList.add('admin-theme--dark');
+        }
+    } catch (e) { /* ignore */ }
+})();
+</script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">

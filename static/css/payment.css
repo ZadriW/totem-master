@@ -38,8 +38,11 @@ button.payment__back {
     font-family: var(--font-base, inherit);
 }
 
-.payment__brand img {
+.payment__brand img,
+.payment__brand .admin-brand-logo--light,
+.payment__brand .admin-brand-logo--dark {
     height: 44px;
+    width: auto;
 }
 
 .payment__content {

@@ -1,8 +1,10 @@
 {% extends "base.html" %}
+{% from "macros/admin_brand_logo.html" import admin_brand_logo %}
 
 {% block title %}Aguardando pagamento | Dental Odonto Master{% endblock %}
 
 {% block head %}
+{% include 'partials/totem_theme_head.html' %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/payment.css') }}">
 {% endblock %}
 
@@ -14,7 +16,7 @@
             <span id="waitingBackLabel">Voltar ao resumo</span>
         </button>
         <a class="payment__brand" href="{{ payment_home_url }}" aria-label="Odonto Master">
-            <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
+            {{ admin_brand_logo() }}
         </a>
     </header>
 

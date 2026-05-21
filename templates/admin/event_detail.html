@@ -55,6 +55,24 @@
                 </button>
             </form>
             {% endif %}
+            <form
+                method="post"
+                action="{{ url_for('admin_event_delete', event_id=event.id) }}"
+                class="admin-event-header__delete-form"
+                data-confirm="{{ ('Serão removidos produtos do evento, promoções, vínculos com vendedores, transações e movimentações de estoque. Esta ação não pode ser desfeita.') | e }}"
+                data-confirm-title="Excluir evento {{ event.name|e }}?"
+                data-confirm-label="Excluir"
+            >
+                {% include 'partials/csrf_field.html' %}
+                <button
+                    type="submit"
+                    class="admin-btn admin-btn--danger admin-btn--icon-only"
+                    title="Excluir evento"
+                    aria-label="Excluir evento {{ event.name }}"
+                >
+                    <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                </button>
+            </form>
         </div>
     </header>
 

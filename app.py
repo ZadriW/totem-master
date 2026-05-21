@@ -76,6 +76,7 @@ from database import (
     find_product_by_sku_or_id,
     get_active_event_for_seller,
     get_event,
+    get_event_financial_report,
     get_event_sales_dashboard,
     get_event_stats,
     get_event_stock_stats,
@@ -1654,6 +1655,78 @@ def admin_seller_delete(seller_id: int):
     return redirect(url_for("admin_sellers"))
 
 
+# ---------------------------------------------------------------------------
+# Financeiro
+# ---------------------------------------------------------------------------
+
+def _parse_fin_filters():
+    """Lê parâmetros de filtro da rota Financeiro."""
+    event_id_raw = request.args.get("evento") or ""
+    date_from = (request.args.get("de") or "").strip()
+    date_to = (request.args.get("ate") or "").strip()
+    # validação mínima de formato
+    import re
+    _date_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    if date_from and not _date_re.match(date_from):
+        date_from = ""
+    if date_to and not _date_re.match(date_to):
+        date_to = ""
+    try:
+        ev_id = int(event_id_raw) if event_id_raw else None
+    except ValueError:
+        ev_id = None
+    return ev_id, date_from or None, date_to or None
+
+
+@app.route("/admin/financeiro")
+@admin_required
+def admin_financeiro():
+    all_events = list_events(include_archived=True)
+    ev_id, date_from, date_to = _parse_fin_filters()
+    if ev_id is None and all_events:
+        ev_id = int(all_events[0]["id"])
+    report = None
+    selected_event = None
+    if ev_id is not None:
+        selected_event = get_event(ev_id)
+        if selected_event:
+            report = get_event_financial_report(
+                ev_id, date_from=date_from, date_to=date_to
+            )
+    return render_template(
+        "admin/financeiro.html",
+        all_events=all_events,
+        selected_event_id=ev_id,
+        date_from=date_from or "",
+        date_to=date_to or "",
+        report=report,
+        **_admin_shell_context(active_section="financeiro"),
+    )
+
+
+@app.route("/admin/financeiro/pdf")
+@admin_required
+def admin_financeiro_pdf():
+    """Renderiza a versão para impressão/PDF do relatório financeiro."""
+    ev_id, date_from, date_to = _parse_fin_filters()
+    if ev_id is None:
+        return redirect(url_for("admin_financeiro"))
+    event = get_event(ev_id)
+    if event is None:
+        flash("Evento não encontrado.", "error")
+        return redirect(url_for("admin_financeiro"))
+    report = get_event_financial_report(ev_id, date_from=date_from, date_to=date_to)
+    return render_template(
+        "admin/financeiro_pdf.html",
+        report=report,
+        all_events=list_events(include_archived=True),
+        selected_event_id=ev_id,
+        date_from=date_from or "",
+        date_to=date_to or "",
+        now=datetime.now(),
+    )
+
+
 @app.route("/admin/reiniciar-sistema", methods=["POST"])
 @admin_required
 def admin_reset_system():
@@ -2637,6 +2710,35 @@ def admin_event_restore(event_id: int):
         return redirect(url_for("admin_events"))
     restore_event(event_id)
     flash(f"Evento \"{event['name']}\" reativado.", "success")
+    return redirect(url_for("admin_events"))
+
+
+@app.route(
+    "/admin/eventos/<int:event_id>/excluir",
+    methods=["POST"],
+    endpoint="admin_event_delete",
+)
+@admin_required
+def admin_event_delete(event_id: int):
+    from database import delete_event
+
+    event = _event_or_404(event_id)
+    if event is None:
+        return redirect(url_for("admin_events"))
+    try:
+        summary = delete_event(event_id)
+        flash(
+            f"Evento \"{summary['name']}\" excluído permanentemente "
+            f"({summary['transactions']} transação(ões), "
+            f"{summary['stock_movements']} movimentação(ões) de estoque, "
+            f"{summary['products']} produto(s) no evento, "
+            f"{summary['promotions']} promoção(ões), "
+            f"{summary['sellers']} vínculo(s) com vendedores).",
+            "success",
+        )
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("admin_event_detail", event_id=event_id))
     return redirect(url_for("admin_events"))
 
 
