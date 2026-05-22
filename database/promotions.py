@@ -7,33 +7,20 @@ from typing import Dict, List, Optional
 
 from .connection import _now_iso, get_conn
 
-_VALID_RULE_TYPES = {"percent", "fixed", "bogo", "a_partir_de", "na_compra_de"}
+_VALID_RULE_TYPES = {"percent", "fixed", "bogo", "min_bundle", "exact_bundle"}
 
 RULE_TYPE_LABELS = {
     "percent": "Desconto (%)",
     "fixed": "Desconto fixo (R$)",
     "bogo": "Compre X, Leve Y",
-    "a_partir_de": "A partir de",
-    "na_compra_de": "Na compra de",
+    "min_bundle": "A partir de (pacote mínimo)",
+    "exact_bundle": "Na compra de (pacote exato)",
 }
-
-_PACKAGE_RULE_TYPES = frozenset({"a_partir_de", "na_compra_de"})
 
 
 # ---------------------------------------------------------------------------
 # Helpers internos
 # ---------------------------------------------------------------------------
-
-def _brl_label(value: float) -> str:
-    return f"R$ {float(value):.2f}".replace(".", ",")
-
-
-def _validate_package_rule(min_qty: int, rule_value: float) -> None:
-    if min_qty < 1:
-        raise ValueError("Informe a quantidade de produtos iguais (mínimo 1).")
-    if rule_value <= 0:
-        raise ValueError("Informe o valor total do conjunto/pacote (maior que zero).")
-
 
 def _compute_effective_subtotal(
     rule_type: str,
@@ -60,21 +47,30 @@ def _compute_effective_subtotal(
         rem = qty % group
         paid = groups * min_q + min(rem, min_q)
         return round(list_price * paid, 2)
-    if rule_type == "a_partir_de":
-        min_q = max(1, int(min_qty))
-        pack_total = max(0.0, float(rule_value))
-        if qty < min_q or pack_total <= 0:
+    if rule_type == "min_bundle":
+        # "A partir de min_qty unidades": exige atingir o mínimo; cada grupo completo
+        # de min_qty paga rule_value; unidades excedentes pagam preço de lista.
+        min_q = max(2, int(min_qty))
+        bundle_total = max(0.0, float(rule_value))
+        if qty < min_q:
             return round(list_price * qty, 2)
-        unit_tier = pack_total / min_q
-        return round(unit_tier * qty, 2)
-    if rule_type == "na_compra_de":
-        min_q = max(1, int(min_qty))
-        pack_total = max(0.0, float(rule_value))
-        if pack_total <= 0:
+        groups = qty // min_q
+        extra = qty % min_q
+        eff = round(groups * bundle_total + extra * list_price, 2)
+        if eff >= round(list_price * qty, 2):  # conjunto mais caro → sem desconto
             return round(list_price * qty, 2)
-        packs = qty // min_q
-        rem = qty % min_q
-        return round(packs * pack_total + rem * list_price, 2)
+        return eff
+    if rule_type == "exact_bundle":
+        # "Na compra de min_qty": cada grupo completo paga rule_value; extras pagam lista.
+        # Abaixo de min_qty (sem grupo completo) → preço de lista.
+        min_q = max(2, int(min_qty))
+        bundle_total = max(0.0, float(rule_value))
+        groups = qty // min_q
+        extra = qty % min_q
+        eff = round(groups * bundle_total + extra * list_price, 2)
+        if eff >= round(list_price * qty, 2):  # kit mais caro → sem desconto
+            return round(list_price * qty, 2)
+        return eff
     return round(list_price * qty, 2)
 
 
@@ -118,8 +114,11 @@ def create_promotion(
             raise ValueError("Quantidade mínima deve ser pelo menos 1.")
         if free_qty < 1:
             raise ValueError("Quantidade grátis deve ser pelo menos 1.")
-    elif rule_type in _PACKAGE_RULE_TYPES:
-        _validate_package_rule(min_qty, rule_value)
+    elif rule_type in ("min_bundle", "exact_bundle"):
+        if min_qty < 2:
+            raise ValueError("A quantidade do pacote deve ser pelo menos 2.")
+        if rule_value <= 0:
+            raise ValueError("O valor do pacote deve ser maior que zero.")
     if not product_ids:
         raise ValueError("Selecione ao menos um produto para a promoção.")
 
@@ -176,8 +175,11 @@ def update_promotion(
             raise ValueError("Quantidade mínima deve ser pelo menos 1.")
         if free_qty < 1:
             raise ValueError("Quantidade grátis deve ser pelo menos 1.")
-    elif rule_type in _PACKAGE_RULE_TYPES:
-        _validate_package_rule(min_qty, rule_value)
+    elif rule_type in ("min_bundle", "exact_bundle"):
+        if min_qty < 2:
+            raise ValueError("A quantidade do pacote deve ser pelo menos 2.")
+        if rule_value <= 0:
+            raise ValueError("O valor do pacote deve ser maior que zero.")
     if not product_ids:
         raise ValueError("Selecione ao menos um produto para a promoção.")
 
@@ -322,10 +324,12 @@ def _format_promo_tooltip_line(promo: Dict) -> str:
     if rt == "bogo":
         total = min_q + free_q if free_q > 0 else min_q
         return f"{name}: compre {min_q}, leve {total}"
-    if rt == "a_partir_de":
-        return f"{name}: a partir de {min_q} por {_brl_label(rv)}"
-    if rt == "na_compra_de":
-        return f"{name}: na compra de {min_q} por {_brl_label(rv)}"
+    if rt == "min_bundle":
+        brv = f"{rv:.2f}".replace(".", ",")
+        return f"{name}: a partir de {min_q} un. por R$ {brv}"
+    if rt == "exact_bundle":
+        brv = f"{rv:.2f}".replace(".", ",")
+        return f"{name}: kit de {min_q} un. por R$ {brv}"
     return name
 
 
@@ -424,6 +428,115 @@ def apply_promotions_to_items_in_conn(
     return result
 
 
+def apply_list_prices_to_normalized_items(
+    conn: sqlite3.Connection,
+    items: List[Dict],
+) -> None:
+    """Substitui ``unit_price`` pelo preço de lista do catálogo antes de aplicar promoções."""
+    pids = {int(i["product_id"]) for i in items if i.get("product_id") is not None}
+    if not pids:
+        return
+    placeholders = ",".join("?" * len(pids))
+    rows = conn.execute(
+        f"SELECT id, price FROM products WHERE id IN ({placeholders})",
+        list(pids),
+    ).fetchall()
+    prices = {int(r["id"]): float(r["price"] or 0) for r in rows}
+    for item in items:
+        pid = item.get("product_id")
+        if pid is None:
+            continue
+        list_p = prices.get(int(pid))
+        if list_p is None:
+            continue
+        qty = int(item.get("quantity") or 0)
+        item["unit_price"] = list_p
+        item["subtotal"] = round(list_p * qty, 2)
+
+
+def quote_cart_items_for_event(event_id: int, cart_items: List[Dict]) -> Dict:
+    """Calcula preços promocionais para itens do carrinho (mesma lógica da venda).
+
+    ``cart_items``: lista com ``id``/``product_id`` e ``quantidade``/``quantity``.
+    Retorna ``{items, total, subtotal_lista, economia_total}``.
+    """
+    normalized: List[Dict] = []
+    for raw in cart_items or []:
+        pid_raw = raw.get("id") if raw.get("id") is not None else raw.get("product_id")
+        try:
+            product_id = int(pid_raw) if pid_raw is not None else None
+        except (TypeError, ValueError):
+            product_id = None
+        try:
+            qty = int(raw.get("quantidade") or raw.get("quantity") or 0)
+        except (TypeError, ValueError):
+            qty = 0
+        if qty <= 0 or product_id is None:
+            continue
+        list_p = float(raw.get("preco_lista") or raw.get("preco_original") or raw.get("preco") or 0)
+        normalized.append(
+            {
+                "product_id": product_id,
+                "product_id_str": str(product_id),
+                "product_name": str(raw.get("nome") or raw.get("product_name") or "Produto"),
+                "product_sku": raw.get("sku") or raw.get("product_sku"),
+                "category": raw.get("categoria") or raw.get("category"),
+                "unit_price": list_p,
+                "quantity": qty,
+                "subtotal": round(list_p * qty, 2),
+            }
+        )
+
+    if not normalized:
+        return {"items": [], "total": 0.0, "subtotal_lista": 0.0, "economia_total": 0.0}
+
+    promo_names: Dict[int, str] = {}
+    with get_conn() as conn:
+        apply_list_prices_to_normalized_items(conn, normalized)
+        subtotal_lista = round(sum(i["subtotal"] for i in normalized), 2)
+        priced = apply_promotions_to_items_in_conn(conn, int(event_id), normalized)
+        promo_ids = {int(i["promotion_id"]) for i in priced if i.get("promotion_id")}
+        if promo_ids:
+            placeholders = ",".join("?" * len(promo_ids))
+            for r in conn.execute(
+                f"SELECT id, name FROM promotions WHERE id IN ({placeholders})",
+                list(promo_ids),
+            ).fetchall():
+                promo_names[int(r["id"])] = str(r["name"] or "")
+
+    out_items: List[Dict] = []
+    for src, row in zip(normalized, priced):
+        pid = int(row["product_id"])
+        qty = int(row["quantity"])
+        list_p = float(row.get("original_price") or src["unit_price"] or 0)
+        eff_unit = float(row.get("unit_price") or 0)
+        subtotal = float(row.get("subtotal") or 0)
+        promo_id = row.get("promotion_id")
+        has_promo = promo_id is not None and subtotal < round(list_p * qty, 2) - 0.001
+        out_items.append(
+            {
+                "id": pid,
+                "quantidade": qty,
+                "preco_lista": list_p,
+                "preco": eff_unit,
+                "subtotal": subtotal,
+                "em_promocao": has_promo,
+                "promotion_id": int(promo_id) if promo_id is not None else None,
+                "promo_nome": promo_names.get(int(promo_id), "") if promo_id else "",
+                "economia": round(max(0.0, list_p * qty - subtotal), 2),
+            }
+        )
+
+    total = round(sum(i["subtotal"] for i in out_items), 2)
+    economia_total = round(max(0.0, subtotal_lista - total), 2)
+    return {
+        "items": out_items,
+        "total": total,
+        "subtotal_lista": subtotal_lista,
+        "economia_total": economia_total,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Helper de exibição no catálogo
 # ---------------------------------------------------------------------------
@@ -473,6 +586,7 @@ def enrich_product_with_promo(product: Dict, promo_map: Dict[int, Dict]) -> Dict
     p["promo_tipo"] = ""
     p["promo_label"] = ""
     p["promo_badge"] = ""
+    p["promo_min_qty"] = 0
 
     if pid not in promo_map:
         return p
@@ -482,6 +596,9 @@ def enrich_product_with_promo(product: Dict, promo_map: Dict[int, Dict]) -> Dict
     p["promo_nome"] = promo["promo_nome"]
     p["promo_tipo"] = promo["promo_tipo"]
     p["promo_label"] = promo["promo_label"]
+    p["promo_min_qty"] = int(promo.get("min_qty") or 1)
+    p["promo_rule_value"] = float(promo.get("rule_value") or 0)
+    p["promo_free_qty"] = int(promo.get("free_qty") or 0)
 
     list_price = float(p.get("preco") or 0)
     rule = promo["promo_tipo"]
@@ -502,12 +619,23 @@ def enrich_product_with_promo(product: Dict, promo_map: Dict[int, Dict]) -> Dict
         # Preço unitário não muda; desconto é de quantidade
         p["preco"] = list_price
         p["promo_badge"] = f"Compre {min_q} Leve {min_q + free_q}"
-    elif rule == "a_partir_de":
+    elif rule == "min_bundle":
+        # A partir de min_qty: conjuntos completos custam val; excedentes = preço de lista.
         p["preco"] = list_price
-        p["promo_badge"] = f"A partir de {min_q} por {_brl_label(val)}"
-    elif rule == "na_compra_de":
+        if min_q >= 2 and val > 0:
+            val_fmt = f"{val:.2f}".replace(".", ",")
+            p["promo_badge"] = f"A partir de {min_q}: R$ {val_fmt} no conjunto"
+        else:
+            p["promo_badge"] = ""
+    elif rule == "exact_bundle":
+        # Kit exato: cada grupo completo de min_qty custa val; extras pagam preço normal.
+        # Preço de catálogo inalterado — desconto só ao atingir múltiplo do kit.
         p["preco"] = list_price
-        p["promo_badge"] = f"Na compra de {min_q} por {_brl_label(val)}"
+        if min_q >= 2 and val > 0:
+            val_fmt = f"{val:.2f}".replace(".", ",")
+            p["promo_badge"] = f"Kit de {min_q}: R$ {val_fmt}"
+        else:
+            p["promo_badge"] = ""
 
     return p
 

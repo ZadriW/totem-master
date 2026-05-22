@@ -1231,6 +1231,31 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     color: var(--color-text);
 }
 
+.admin-tx__promo-label {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #0d7a4a;
+}
+
+.admin-tx__promo-label i {
+    margin-right: 4px;
+    opacity: 0.85;
+}
+
+.admin-tx__price-original {
+    display: block;
+    text-decoration: line-through;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.admin-tx__summary-row--discount strong {
+    color: #0d7a4a;
+}
+
 .admin-tx__items + .admin-tx__details-title {
     margin-top: 22px;
 }

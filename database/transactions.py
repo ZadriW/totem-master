@@ -9,7 +9,13 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 from .connection import _now_iso, get_conn
 from .event_stock import _apply_event_movement
-from .promotions import apply_promotions_to_items_in_conn
+from .promotions import (
+    apply_list_prices_to_normalized_items,
+    apply_promotions_to_items_in_conn,
+    build_promo_display_map,
+    enrich_product_with_promo,
+    get_active_promotions_for_event,
+)
 from .sku_helpers import _default_sku_for_id
 from .stock import _apply_movement, _normalize_order_reference
 
@@ -81,6 +87,50 @@ def _normalize_card_installments_for_db(
     if n > max_allowed:
         raise ValueError("Número de parcelas inválido para o valor do pedido.")
     return n
+
+
+def _promo_names_for_normalized(conn: sqlite3.Connection, normalized: List[Dict]) -> Dict[int, str]:
+    promo_ids = {int(i["promotion_id"]) for i in normalized if i.get("promotion_id") is not None}
+    if not promo_ids:
+        return {}
+    placeholders = ",".join("?" * len(promo_ids))
+    rows = conn.execute(
+        f"SELECT id, name FROM promotions WHERE id IN ({placeholders})",
+        list(promo_ids),
+    ).fetchall()
+    return {int(r["id"]): str(r["name"] or "") for r in rows}
+
+
+def _public_items_from_normalized(
+    normalized: List[Dict],
+    promo_names: Optional[Dict[int, str]] = None,
+) -> List[Dict]:
+    """Itens formatados para resposta JSON (checkout / cotação)."""
+    names = promo_names or {}
+    out: List[Dict] = []
+    for i in normalized:
+        pid = i.get("product_id")
+        if pid is None:
+            continue
+        qty = int(i.get("quantity") or 0)
+        list_p = float(i.get("original_price") or i.get("unit_price") or 0)
+        subtotal = float(i.get("subtotal") or 0)
+        promo_id = i.get("promotion_id")
+        has_promo = promo_id is not None and subtotal < round(list_p * qty, 2) - 0.001
+        out.append(
+            {
+                "id": int(pid),
+                "quantidade": qty,
+                "preco_lista": list_p,
+                "preco": float(i.get("unit_price") or 0),
+                "subtotal": subtotal,
+                "promotion_id": promo_id,
+                "em_promocao": has_promo,
+                "promo_nome": names.get(int(promo_id), "") if promo_id is not None else "",
+                "economia": round(max(0.0, list_p * qty - subtotal), 2),
+            }
+        )
+    return out
 
 
 def create_transaction(
@@ -227,8 +277,9 @@ def create_transaction(
                         f"disponível {int(row['stock'] or 0)}, pedido {qty}."
                     )
 
-        # Aplica promoções ativas do evento (recalcula unit_price e subtotal).
+        # Preço de lista do catálogo + promoções ativas do evento.
         if event_id is not None:
+            apply_list_prices_to_normalized_items(conn, normalized)
             normalized = apply_promotions_to_items_in_conn(conn, event_id, normalized)
 
         # Recalcula total e items_count após promoções.
@@ -288,6 +339,7 @@ def create_transaction(
 
         # Guarda normalized/demand/event_id no contexto de retorno para uso posterior.
         # O estoque só é baixado em confirm_transaction_with_aut().
+        promo_names = _promo_names_for_normalized(conn, normalized)
 
     return {
         "id": tx_id,
@@ -300,6 +352,27 @@ def create_transaction(
         "payment_method": payment_method,
         "card_installments": card_installments_store,
         "status": "pendente",
+        "items": _public_items_from_normalized(normalized, promo_names),
+        "subtotal_lista": round(
+            sum(
+                float(i.get("original_price") or i.get("unit_price") or 0)
+                * int(i.get("quantity") or 0)
+                for i in normalized
+            ),
+            2,
+        ),
+        "economia_total": round(
+            max(
+                0.0,
+                sum(
+                    float(i.get("original_price") or i.get("unit_price") or 0)
+                    * int(i.get("quantity") or 0)
+                    for i in normalized
+                )
+                - total,
+            ),
+            2,
+        ),
         # Metadados internos necessários para confirm_transaction_with_aut().
         "_normalized": normalized,
         "_demand": demand,
@@ -504,6 +577,18 @@ def update_pending_transaction(
         )
         merged_cro_uf = merged_cro_uf_raw.strip().upper() if merged_cro_uf_raw else None
 
+        # Preço de lista do catálogo + promoções ativas do evento.
+        if event_id is not None:
+            apply_list_prices_to_normalized_items(conn, normalized)
+            normalized = apply_promotions_to_items_in_conn(conn, event_id, normalized)
+
+        total = round(sum(i["subtotal"] for i in normalized), 2)
+        items_count = sum(i["quantity"] for i in normalized)
+        card_installments_store = _normalize_card_installments_for_db(
+            payment_method, total,
+            card_installments if card_installments is not None else 1,
+        )
+
         conn.execute(
             """
             UPDATE transactions
@@ -534,17 +619,6 @@ def update_pending_transaction(
             ),
         )
 
-        # Aplica promoções ativas do evento e recalcula totais.
-        if event_id is not None:
-            normalized = apply_promotions_to_items_in_conn(conn, event_id, normalized)
-
-        total = round(sum(i["subtotal"] for i in normalized), 2)
-        items_count = sum(i["quantity"] for i in normalized)
-        card_installments_store = _normalize_card_installments_for_db(
-            payment_method, total,
-            card_installments if card_installments is not None else 1,
-        )
-
         conn.execute(
             "DELETE FROM transaction_items WHERE transaction_id = ?",
             (int(tx_id),),
@@ -573,6 +647,8 @@ def update_pending_transaction(
             ],
         )
 
+        promo_names = _promo_names_for_normalized(conn, normalized)
+
     return {
         "id": int(tx_id),
         "order_number": tx_row["order_number"],
@@ -584,6 +660,27 @@ def update_pending_transaction(
         "payment_method": payment_method,
         "card_installments": card_installments_store,
         "status": "pendente",
+        "items": _public_items_from_normalized(normalized, promo_names),
+        "subtotal_lista": round(
+            sum(
+                float(i.get("original_price") or i.get("unit_price") or 0)
+                * int(i.get("quantity") or 0)
+                for i in normalized
+            ),
+            2,
+        ),
+        "economia_total": round(
+            max(
+                0.0,
+                sum(
+                    float(i.get("original_price") or i.get("unit_price") or 0)
+                    * int(i.get("quantity") or 0)
+                    for i in normalized
+                )
+                - total,
+            ),
+            2,
+        ),
     }
 
 
@@ -898,6 +995,11 @@ def get_pending_transaction_restore_payload(tx_id: int, seller_id: int) -> Optio
     event_raw = tx.get("event_id")
     event_id = int(event_raw) if event_raw is not None else None
 
+    promo_map: Dict[int, Dict] = {}
+    if event_id is not None:
+        promos = get_active_promotions_for_event(event_id)
+        promo_map = build_promo_display_map(promos)
+
     cart_items: List[Dict] = []
     with get_conn() as conn:
         for it in tx.get("items") or []:
@@ -932,18 +1034,48 @@ def get_pending_transaction_restore_payload(tx_id: int, seller_id: int) -> Optio
             else:
                 estoque = int(pr["stock"] or 0)
 
-            cart_items.append(
-                {
+            list_p = float(it.get("original_price") or pr["price"] or 0)
+            unit_p = float(it.get("unit_price") or list_p)
+            subtotal = float(it.get("subtotal") or round(unit_p * qty, 2))
+            promo_nome = (it.get("promotion_name") or "").strip()
+            has_promo = it.get("promotion_id") is not None and subtotal < round(list_p * qty, 2) - 0.001
+
+            entry: Dict = {
+                "id": pid,
+                "sku": (pr["sku"] or "").strip(),
+                "nome": it.get("product_name") or pr["name"],
+                "categoria": it.get("category") or pr["category"] or "",
+                "preco_lista": list_p,
+                "preco": unit_p,
+                "subtotal": subtotal,
+                "imagem": imagem,
+                "estoque": estoque,
+                "quantidade": qty,
+                "em_promocao": has_promo or bool(promo_nome),
+                "promo_nome": promo_nome,
+                "promo_aplicada": has_promo,
+                "economia": round(max(0.0, list_p * qty - subtotal), 2),
+            }
+
+            if promo_map:
+                stub = {
                     "id": pid,
-                    "sku": (pr["sku"] or "").strip(),
-                    "nome": pr["name"],
-                    "categoria": pr["category"] or "",
-                    "preco": float(pr["price"] or 0),
-                    "imagem": imagem,
-                    "estoque": estoque,
-                    "quantidade": qty,
+                    "preco": list_p,
+                    "preco_original": list_p,
+                    "em_promocao": False,
                 }
-            )
+                enriched = enrich_product_with_promo(stub, promo_map)
+                if enriched.get("em_promocao"):
+                    entry["em_promocao"] = True
+                    entry["promo_tipo"] = enriched.get("promo_tipo") or ""
+                    entry["promo_rule_value"] = enriched.get("promo_rule_value") or 0
+                    entry["promo_min_qty"] = enriched.get("promo_min_qty") or 1
+                    entry["promo_free_qty"] = enriched.get("promo_free_qty") or 0
+                    entry["promo_badge"] = enriched.get("promo_badge") or ""
+                    if not entry["promo_nome"]:
+                        entry["promo_nome"] = enriched.get("promo_nome") or ""
+
+            cart_items.append(entry)
 
     pm = (tx.get("payment_method") or "cartao").strip().lower()
     if pm not in ("pix", "cartao"):
@@ -1000,11 +1132,14 @@ def cancel_pending_transaction_for_seller(tx_id: int, seller_id: int) -> Dict:
 def _items_for(conn: sqlite3.Connection, tx_id: int) -> List[Dict]:
     rows = conn.execute(
         """
-        SELECT id, product_id, product_name, category,
-               unit_price, quantity, subtotal, product_sku
-          FROM transaction_items
-         WHERE transaction_id = ?
-         ORDER BY id
+        SELECT ti.id, ti.product_id, ti.product_name, ti.category,
+               ti.unit_price, ti.quantity, ti.subtotal, ti.product_sku,
+               ti.original_price, ti.promotion_id,
+               pr.name AS promotion_name
+          FROM transaction_items ti
+          LEFT JOIN promotions pr ON pr.id = ti.promotion_id
+         WHERE ti.transaction_id = ?
+         ORDER BY ti.id
         """,
         (tx_id,),
     ).fetchall()

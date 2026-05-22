@@ -7,13 +7,16 @@
  * telas se mantenham em sincronia sem acoplamento.
  *
  * Estrutura de cada item:
- * { id, sku, nome, categoria, preco, imagem, estoque?, quantidade }
+ * { id, sku, nome, categoria, preco, preco_lista, imagem, estoque?, quantidade,
+ *   subtotal, em_promocao, promo_tipo, promo_rule_value, promo_min_qty,
+ *   promo_free_qty, promo_nome, promo_badge, promo_aplicada, economia }
  */
 (() => {
     'use strict';
 
     const STORAGE_KEY = 'totem_cart_v1';
     const EVENT_NAME = 'cart:changed';
+    const PromoPricing = () => window.PromoPricing;
 
     function readRaw() {
         try {
@@ -43,81 +46,125 @@
         return n;
     }
 
+    function itemFromProduct(product, qty) {
+        const PP = PromoPricing();
+        const listPrice = Number(product.preco_original ?? product.preco) || 0;
+        const promo = PP ? PP.promoMetaFromProduct(product) : null;
+        const base = {
+            id: product.id,
+            sku: product.sku || '',
+            nome: product.nome,
+            categoria: product.categoria,
+            preco_lista: listPrice,
+            preco: Number(product.preco) || listPrice,
+            imagem: product.imagem,
+            estoque: Number.isFinite(product.estoque) ? product.estoque : undefined,
+            quantidade: qty,
+            em_promocao: !!product.em_promocao,
+            promo_tipo: promo ? promo.promo_tipo : '',
+            promo_rule_value: promo ? promo.promo_rule_value : 0,
+            promo_min_qty: promo ? promo.promo_min_qty : 1,
+            promo_free_qty: promo ? promo.promo_free_qty : 0,
+            promo_nome: promo ? promo.promo_nome : '',
+            promo_badge: promo ? promo.promo_badge : '',
+        };
+        return PP ? PP.applyPromoToItem(base) : base;
+    }
+
+    function mergeProductMeta(item, product) {
+        const PP = PromoPricing();
+        const listPrice = Number(product.preco_original ?? product.preco) || item.preco_lista || item.preco;
+        const promo = PP ? PP.promoMetaFromProduct(product) : null;
+        const merged = {
+            ...item,
+            sku: product.sku || item.sku,
+            nome: product.nome || item.nome,
+            categoria: product.categoria || item.categoria,
+            imagem: product.imagem || item.imagem,
+            estoque: Number.isFinite(product.estoque) ? product.estoque : item.estoque,
+            preco_lista: listPrice,
+            em_promocao: !!product.em_promocao,
+            promo_tipo: promo ? promo.promo_tipo : '',
+            promo_rule_value: promo ? promo.promo_rule_value : 0,
+            promo_min_qty: promo ? promo.promo_min_qty : 1,
+            promo_free_qty: promo ? promo.promo_free_qty : 0,
+            promo_nome: promo ? promo.promo_nome : '',
+            promo_badge: promo ? promo.promo_badge : '',
+        };
+        return PP ? PP.applyPromoToItem(merged) : merged;
+    }
+
+    function recalculateAll(items) {
+        const PP = PromoPricing();
+        if (!PP) return items;
+        return PP.recalculateItems(items);
+    }
+
     const Cart = {
         KEY: STORAGE_KEY,
         EVENT: EVENT_NAME,
 
         getItems() {
-            return readRaw();
+            return recalculateAll(readRaw());
         },
 
         setItems(items) {
-            writeRaw(Array.isArray(items) ? items : []);
+            writeRaw(recalculateAll(Array.isArray(items) ? items : []));
         },
 
         add(product, qty = 1) {
             if (!product || product.id === undefined || product.id === null) return;
             const quantidade = clampQty(qty, product.estoque);
-            const items = readRaw();
+            const items = recalculateAll(readRaw());
             const idStr = String(product.id);
             const existing = items.find(i => String(i.id) === idStr);
             if (existing) {
                 existing.quantidade = clampQty(
                     existing.quantidade + quantidade,
-                    product.estoque
+                    product.estoque,
                 );
+                Object.assign(existing, mergeProductMeta(existing, product));
             } else {
-                items.push({
-                    id: product.id,
-                    sku: product.sku || '',
-                    nome: product.nome,
-                    categoria: product.categoria,
-                    preco: Number(product.preco) || 0,
-                    imagem: product.imagem,
-                    estoque: Number.isFinite(product.estoque) ? product.estoque : undefined,
-                    quantidade,
-                });
+                items.push(itemFromProduct(product, quantidade));
             }
-            writeRaw(items);
+            writeRaw(recalculateAll(items));
         },
 
         updateQty(id, qty) {
-            const items = readRaw();
+            const items = recalculateAll(readRaw());
             const idStr = String(id);
             const item = items.find(i => String(i.id) === idStr);
             if (!item) return;
             item.quantidade = clampQty(qty, item.estoque);
-            writeRaw(items);
+            writeRaw(recalculateAll(items));
         },
 
         increment(id, step = 1) {
-            const items = readRaw();
+            const items = recalculateAll(readRaw());
             const idStr = String(id);
             const item = items.find(i => String(i.id) === idStr);
             if (!item) return;
             item.quantidade = clampQty(item.quantidade + step, item.estoque);
-            writeRaw(items);
+            writeRaw(recalculateAll(items));
         },
 
         decrement(id, step = 1) {
-            const items = readRaw();
+            const items = recalculateAll(readRaw());
             const idStr = String(id);
             const item = items.find(i => String(i.id) === idStr);
             if (!item) return;
             const next = item.quantidade - step;
             if (next <= 0) {
-                const filtered = items.filter(i => String(i.id) !== idStr);
-                writeRaw(filtered);
+                writeRaw(items.filter(i => String(i.id) !== idStr));
             } else {
                 item.quantidade = clampQty(next, item.estoque);
-                writeRaw(items);
+                writeRaw(recalculateAll(items));
             }
         },
 
         remove(id) {
             const idStr = String(id);
-            const items = readRaw().filter(i => String(i.id) !== idStr);
-            writeRaw(items);
+            writeRaw(readRaw().filter(i => String(i.id) !== idStr));
         },
 
         clear() {
@@ -128,14 +175,37 @@
         },
 
         count() {
-            return readRaw().reduce((acc, i) => acc + (Number(i.quantidade) || 0), 0);
+            return this.getItems().reduce((acc, i) => acc + (Number(i.quantidade) || 0), 0);
         },
 
         total() {
-            return readRaw().reduce(
-                (acc, i) => acc + (Number(i.preco) || 0) * (Number(i.quantidade) || 0),
-                0
+            return this.getItems().reduce(
+                (acc, i) => acc + (Number(i.subtotal != null ? i.subtotal : i.preco * i.quantidade) || 0),
+                0,
             );
+        },
+
+        subtotalLista() {
+            return this.getItems().reduce(
+                (acc, i) => acc + (Number(i.preco_lista ?? i.preco) || 0) * (Number(i.quantidade) || 0),
+                0,
+            );
+        },
+
+        economiaTotal() {
+            return Math.max(0, this.subtotalLista() - this.total());
+        },
+
+        getTotals() {
+            const PP = PromoPricing();
+            if (PP) return PP.getTotals(readRaw());
+            return {
+                items: this.getItems(),
+                total: this.total(),
+                subtotalLista: this.subtotalLista(),
+                economiaTotal: this.economiaTotal(),
+                count: this.count(),
+            };
         },
 
         isEmpty() {
@@ -150,7 +220,7 @@
             });
         },
 
-        /** Atualiza ``preco`` dos itens do carrinho a partir do mapa id→produto do catálogo (polling de promoções). */
+        /** Atualiza metadados e preços a partir do mapa id→produto do catálogo. */
         syncPricesFromProductMap(productMap) {
             if (!productMap || typeof productMap.forEach !== 'function') return;
             const items = readRaw();
@@ -158,13 +228,31 @@
             const next = items.map(item => {
                 const p = productMap.get(String(item.id));
                 if (!p) return item;
-                const np = Number(p.preco);
-                if (!Number.isFinite(np)) return item;
-                if (Number(item.preco) === np) return item;
-                changed = true;
-                return { ...item, preco: np };
+                const merged = mergeProductMeta(item, p);
+                if (JSON.stringify(merged) !== JSON.stringify(item)) changed = true;
+                return merged;
             });
-            if (changed) writeRaw(next);
+            if (changed) writeRaw(recalculateAll(next));
+        },
+
+        /** Aplica cotação do servidor (POST /api/carrinho/cotacao). */
+        applyServerQuote(quote) {
+            if (!quote || !Array.isArray(quote.items)) return;
+            const byId = new Map(quote.items.map(row => [String(row.id), row]));
+            const items = readRaw().map(item => {
+                const row = byId.get(String(item.id));
+                if (!row) return item;
+                return {
+                    ...item,
+                    preco_lista: Number(row.preco_lista ?? item.preco_lista) || item.preco_lista,
+                    preco: Number(row.preco) || item.preco,
+                    subtotal: Number(row.subtotal) || item.subtotal,
+                    economia: Number(row.economia) || 0,
+                    promo_aplicada: !!row.em_promocao,
+                    promo_nome: row.promo_nome || item.promo_nome || '',
+                };
+            });
+            writeRaw(items);
         },
 
         subscribe(handler) {

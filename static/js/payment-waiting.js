@@ -17,6 +17,7 @@
         Number.isFinite(Number(RESUME.transaction_id));
 
     const Cart = window.Cart;
+    const PromoPricing = window.PromoPricing;
     if (!isResumeMode && !Cart) return;
     if (isResumeMode && (!Cart || typeof Cart.getItems !== 'function')) {
         window.location.assign(CATALOG_URL);
@@ -87,7 +88,10 @@
     }
 
     function renderItem(item) {
-        const subtotal = Cart.formatBRL(item.preco * item.quantidade);
+        if (PromoPricing && typeof PromoPricing.renderLineItemHtml === 'function') {
+            return PromoPricing.renderLineItemHtml(item, Cart.formatBRL.bind(Cart), 'payment-item');
+        }
+        const subtotal = Cart.formatBRL(item.subtotal != null ? item.subtotal : item.preco * item.quantidade);
         const unit     = Cart.formatBRL(item.preco);
         return `
             <article class="payment-item" data-id="${item.id}">
@@ -112,10 +116,17 @@
             window.location.replace(CATALOG_URL);
             return;
         }
+        const totals = Cart.getTotals();
         itemsEl.innerHTML = items.map(renderItem).join('');
-        countEl.textContent = Cart.count();
-        totalEl.textContent = Cart.formatBRL(Cart.total());
+        countEl.textContent = totals.count;
+        totalEl.textContent = Cart.formatBRL(totals.total);
         syncWaitingPaymentMethodUi();
+    }
+
+    function applyTxQuote(data) {
+        if (data && Array.isArray(data.items) && typeof Cart.applyServerQuote === 'function') {
+            Cart.applyServerQuote(data);
+        }
     }
 
     /** Etapa 1: cria transação pendente. Retorna o id. */
@@ -134,6 +145,7 @@
             credentials: 'same-origin',
             body: JSON.stringify(payload),
         });
+        applyTxQuote(data);
         return data.id;
     }
 
@@ -147,12 +159,14 @@
                 ? clientData.payment_method
                 : 'cartao',
         };
-        return window.TotemApiErrors.fetchJson(`/api/transacoes/${txId}`, {
+        const data = await window.TotemApiErrors.fetchJson(`/api/transacoes/${txId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
             body: JSON.stringify(payload),
         });
+        applyTxQuote(data);
+        return data;
     }
 
     /** Etapa 2: confirma com AUT. Retorna order_number. */
@@ -169,12 +183,10 @@
     }
 
     function showAutScreen() {
-        // Oculta tela de espera.
         if (content) {
             content.hidden = true;
             content.setAttribute('aria-hidden', 'true');
         }
-        // Exibe tela de AUT.
         if (autSection) {
             autSection.hidden = false;
             autSection.removeAttribute('aria-hidden');
@@ -197,12 +209,10 @@
         successOrder.textContent = `Pedido #${orderNumber}`;
         document.querySelector('.payment')?.classList.add('payment--success-only');
 
-        // Oculta tela de AUT (se visível).
         if (autSection) {
             autSection.hidden = true;
             autSection.setAttribute('aria-hidden', 'true');
         }
-        // Oculta tela de espera (por precaução).
         if (content) {
             content.hidden = true;
             content.setAttribute('aria-hidden', 'true');
@@ -234,7 +244,6 @@
         }, SUCCESS_REDIRECT_MS);
     }
 
-    /** Click em "Pagamento realizado": cria pedido pendente e abre tela de AUT. */
     confirmBtn?.addEventListener('click', async () => {
         if (!Cart || Cart.isEmpty()) return;
         const originalLabel = confirmBtn.innerHTML;
@@ -243,6 +252,7 @@
             '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Aguarde...';
         try {
             pendingTxId = await createPendingTransaction();
+            renderWaiting();
             confirmBtn.innerHTML = originalLabel;
             showAutScreen();
         } catch (err) {
@@ -252,7 +262,6 @@
         }
     });
 
-    /** Click em "Salvar AUT": confirma venda e exibe sucesso. */
     if (autSave) {
         autSave.addEventListener('click', async () => {
             const aut = (autInput ? autInput.value : '').trim();
@@ -277,6 +286,7 @@
                     && Number(resumeKey) === Number(pendingTxId)
                 ) {
                     await patchPendingTransaction(pendingTxId);
+                    renderWaiting();
                 }
                 const orderNumber = await confirmWithAut(pendingTxId, aut);
                 autSave.innerHTML = originalLabel;
@@ -300,9 +310,6 @@
             print: '1',
         });
         const path = `/nota/${encodeURIComponent(confirmedOrderNumber)}?${qs.toString()}`;
-        // ``window.open(..., 'noopener')`` devolve ``null`` nos navegadores atuais; o fallback
-        // ``location.assign`` roubava a aba do fluxo de compra. Abrir via ``<a target=_blank>``
-        // mantém esta aba na tela de sucesso e isola a nova com noopener/noreferrer.
         const a = document.createElement('a');
         a.href = path;
         a.target = '_blank';
@@ -335,6 +342,7 @@
         (async () => {
             try {
                 await patchPendingTransaction(pendingTxId);
+                renderWaiting();
             } catch (err) {
                 window.alert(err.message || 'Não foi possível atualizar o pedido. Verifique o carrinho e tente novamente.');
                 window.location.assign(SUMMARY_URL);

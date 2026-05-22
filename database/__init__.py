@@ -31,6 +31,7 @@ from .promotions import (
     get_promotion,
     list_promotions_for_event,
     product_ids_with_active_promotions_for_event,
+    quote_cart_items_for_event,
     toggle_promotion_active,
     update_promotion,
 )
@@ -147,6 +148,7 @@ __all__ = [
     "get_promotion",
     "list_promotions_for_event",
     "product_ids_with_active_promotions_for_event",
+    "quote_cart_items_for_event",
     "toggle_promotion_active",
     "update_promotion",
     "EXPORT_MOVEMENTS_CSV_CAP",

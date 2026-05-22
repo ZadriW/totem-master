@@ -46,12 +46,12 @@
                     {% elif promo.rule_type == 'bogo' %}
                         <i class="fa-solid fa-gift" aria-hidden="true"></i>
                         Compre {{ promo.min_qty }} Leve {{ promo.min_qty + promo.free_qty }}
-                    {% elif promo.rule_type == 'a_partir_de' %}
+                    {% elif promo.rule_type == 'min_bundle' %}
                         <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
-                        A partir de {{ promo.min_qty }} por R$ {{ '%.2f'|format(promo.rule_value)|replace('.',',') }}
-                    {% elif promo.rule_type == 'na_compra_de' %}
-                        <i class="fa-solid fa-box-open" aria-hidden="true"></i>
-                        Na compra de {{ promo.min_qty }} por R$ {{ '%.2f'|format(promo.rule_value)|replace('.',',') }}
+                        A partir de {{ promo.min_qty }} un. — R$ {{ '%.2f'|format(promo.rule_value)|replace('.',',') }}
+                    {% elif promo.rule_type == 'exact_bundle' %}
+                        <i class="fa-solid fa-box" aria-hidden="true"></i>
+                        Kit de {{ promo.min_qty }} un. — R$ {{ '%.2f'|format(promo.rule_value)|replace('.',',') }}
                     {% endif %}
                 </span>
             </span>
@@ -152,7 +152,7 @@
                         <span data-rule-label-percent>Percentual (%)</span>
                         <span data-rule-label-fixed style="display:none;">Valor fixo (R$)</span>
                     </label>
-                    <input id="promo-rule-value" type="number" name="rule_value"
+                    <input id="promo-rule-value" type="number" name="rule_value_pf"
                            class="admin-field__input"
                            min="0.01" step="0.01" value="10"
                            placeholder="Ex.: 15">
@@ -163,7 +163,7 @@
             <div class="admin-promo-rule-fields" data-rule-fields="bogo" style="display:none; gap:16px; flex-wrap:wrap;">
                 <div class="admin-field" style="flex:1; min-width:130px;">
                     <label class="admin-field__label" for="promo-min-qty">Compre (qtd. paga)</label>
-                    <input id="promo-min-qty" type="number" name="min_qty"
+                    <input id="promo-min-qty" type="number" name="min_qty_bogo"
                            class="admin-field__input"
                            min="1" step="1" value="2"
                            placeholder="Ex.: 2">
@@ -181,25 +181,28 @@
                 </div>
             </div>
 
-            {# Campos condicional: pacote por quantidade (a_partir_de / na_compra_de) #}
-            <div class="admin-promo-rule-fields" data-rule-fields="a_partir_de na_compra_de" style="display:none; gap:16px; flex-wrap:wrap;">
-                <div class="admin-field" style="flex:1; min-width:130px;">
-                    <label class="admin-field__label" for="promo-pack-qty">Quantidade de produtos iguais</label>
-                    <input id="promo-pack-qty" type="number" name="min_qty"
+            {# Campos condicional: min_bundle / exact_bundle #}
+            <div class="admin-promo-rule-fields" data-rule-fields="min_bundle exact_bundle" style="display:none; gap:16px; flex-wrap:wrap;">
+                <div class="admin-field" style="flex:1; min-width:140px;">
+                    <label class="admin-field__label" for="promo-bundle-qty">
+                        <span data-rule-label-min-bundle>A partir de (qtd. mínima)</span>
+                        <span data-rule-label-exact-bundle style="display:none;">Qtd. exata do pacote</span>
+                    </label>
+                    <input id="promo-bundle-qty" type="number" name="min_qty_bundle"
                            class="admin-field__input"
-                           min="1" step="1" value="3"
+                           min="2" step="1" value="3"
                            placeholder="Ex.: 3">
                 </div>
                 <div class="admin-field" style="flex:1; min-width:160px;">
-                    <label class="admin-field__label" for="promo-pack-value">Valor total (R$)</label>
-                    <input id="promo-pack-value" type="number" name="rule_value"
+                    <label class="admin-field__label" for="promo-bundle-value">Valor total do pacote (R$)</label>
+                    <input id="promo-bundle-value" type="number" name="rule_value_bundle"
                            class="admin-field__input"
-                           min="0.01" step="0.01" value="99.90"
-                           placeholder="Ex.: 99,90">
+                           min="0.01" step="0.01" value=""
+                           placeholder="Ex.: 50,00">
                 </div>
-                <div class="admin-promo-bogo-preview admin-field__hint" aria-live="polite" style="width:100%;">
+                <div class="admin-promo-bundle-preview admin-field__hint" aria-live="polite" style="width:100%;">
                     <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
-                    <span data-pack-summary>A partir de 3 unidades por R$ 99,90</span>
+                    <span data-bundle-summary></span>
                 </div>
             </div>
 
@@ -267,6 +270,7 @@
 
 {% block admin_scripts %}
 <script src="{{ url_for('static', filename='js/admin-promo-product-filter.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin-promo-rule-fields.js') }}"></script>
 <script>
 (function () {
     'use strict';
@@ -275,76 +279,64 @@
     const ruleSelect = document.querySelector('[data-promo-rule-select]');
     const percentFixedFields = document.querySelector('[data-rule-fields="percent fixed"]');
     const bogoFields = document.querySelector('[data-rule-fields="bogo"]');
-    const packFields = document.querySelector('[data-rule-fields="a_partir_de na_compra_de"]');
+    const bundleFields = document.querySelector('[data-rule-fields="min_bundle exact_bundle"]');
     const labelPercent = document.querySelector('[data-rule-label-percent]');
     const labelFixed = document.querySelector('[data-rule-label-fixed]');
+    const labelMinBundle = document.querySelector('[data-rule-label-min-bundle]');
+    const labelExactBundle = document.querySelector('[data-rule-label-exact-bundle]');
     const bogoSummary = document.querySelector('[data-bogo-summary]');
-    const packSummary = document.querySelector('[data-pack-summary]');
+    const bundleSummary = document.querySelector('[data-bundle-summary]');
     const minQtyInput = document.getElementById('promo-min-qty');
     const freeQtyInput = document.getElementById('promo-free-qty');
-    const packQtyInput = document.getElementById('promo-pack-qty');
-    const packValueInput = document.getElementById('promo-pack-value');
-    const formNovaPromo = document.getElementById('formNovaPromo');
-
-    function setBlockEnabled(block, enabled) {
-        if (!block) return;
-        block.querySelectorAll('input, select, textarea').forEach(function (el) {
-            el.disabled = !enabled;
-        });
-    }
-
-    function formatBrl(value) {
-        const n = Number(value);
-        if (!Number.isFinite(n)) return 'R$ 0,00';
-        return 'R$ ' + n.toFixed(2).replace('.', ',');
-    }
+    const bundleQtyInput = document.getElementById('promo-bundle-qty');
+    const bundleValueInput = document.getElementById('promo-bundle-value');
 
     function updateRuleFields() {
         if (!ruleSelect) return;
         const val = ruleSelect.value;
-        const isPercentFixed = val === 'percent' || val === 'fixed';
-        const isBogo = val === 'bogo';
-        const isPack = val === 'a_partir_de' || val === 'na_compra_de';
-        if (percentFixedFields) percentFixedFields.style.display = isPercentFixed ? 'flex' : 'none';
-        if (bogoFields) bogoFields.style.display = isBogo ? 'flex' : 'none';
-        if (packFields) packFields.style.display = isPack ? 'flex' : 'none';
+        if (percentFixedFields) percentFixedFields.style.display = (val === 'percent' || val === 'fixed') ? 'flex' : 'none';
+        if (bogoFields) bogoFields.style.display = val === 'bogo' ? 'flex' : 'none';
+        if (bundleFields) bundleFields.style.display = (val === 'min_bundle' || val === 'exact_bundle') ? 'flex' : 'none';
         if (labelPercent) labelPercent.style.display = val === 'percent' ? '' : 'none';
         if (labelFixed) labelFixed.style.display = val === 'fixed' ? '' : 'none';
-        setBlockEnabled(percentFixedFields, isPercentFixed);
-        setBlockEnabled(bogoFields, isBogo);
-        setBlockEnabled(packFields, isPack);
+        if (labelMinBundle) labelMinBundle.style.display = val === 'min_bundle' ? '' : 'none';
+        if (labelExactBundle) labelExactBundle.style.display = val === 'exact_bundle' ? '' : 'none';
+        updateBundleSummary();
     }
 
     function updateBogoSummary() {
         if (!bogoSummary || !minQtyInput || !freeQtyInput) return;
-        const min = Math.max(1, parseInt(minQtyInput.value, 10) || 1);
-        const free = Math.max(1, parseInt(freeQtyInput.value, 10) || 1);
+        const min = Math.max(1, parseInt(minQtyInput.value) || 1);
+        const free = Math.max(1, parseInt(freeQtyInput.value) || 1);
         bogoSummary.textContent = `Compre ${min}, leve ${min + free} (${free} grátis)`;
     }
 
-    function updatePackSummary() {
-        if (!packSummary || !packQtyInput || !packValueInput || !ruleSelect) return;
-        const qty = Math.max(1, parseInt(packQtyInput.value, 10) || 1);
-        const total = formatBrl(packValueInput.value);
-        if (ruleSelect.value === 'na_compra_de') {
-            packSummary.textContent = `Na compra de ${qty} unidades por ${total} (pacote fechado)`;
-        } else {
-            packSummary.textContent = `A partir de ${qty} unidades por ${total} (preço equivalente por unidade)`;
+    function updateBundleSummary() {
+        if (!bundleSummary || !bundleQtyInput || !bundleValueInput || !ruleSelect) return;
+        const type = ruleSelect.value;
+        const qty = Math.max(2, parseInt(bundleQtyInput.value) || 2);
+        const val = parseFloat(bundleValueInput.value) || 0;
+        const valFmt = val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const unitFmt = qty > 0 ? (val / qty).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
+        if (type === 'min_bundle') {
+            bundleSummary.textContent = val > 0
+                ? `A partir de ${qty} unidades, cada conjunto de ${qty} por R$ ${valFmt} — excedentes pagam preço normal`
+                : `Informe a quantidade mínima e o valor total do conjunto`;
+        } else if (type === 'exact_bundle') {
+            bundleSummary.textContent = val > 0
+                ? `Kit de ${qty} unidades por R$ ${valFmt} — unidades excedentes pagam preço normal`
+                : `Informe a quantidade exata e o valor total do kit`;
         }
     }
 
     if (ruleSelect) {
-        ruleSelect.addEventListener('change', function () {
-            updateRuleFields();
-            updatePackSummary();
-        });
+        ruleSelect.addEventListener('change', updateRuleFields);
         updateRuleFields();
     }
     if (minQtyInput) minQtyInput.addEventListener('input', updateBogoSummary);
     if (freeQtyInput) freeQtyInput.addEventListener('input', updateBogoSummary);
-    if (packQtyInput) packQtyInput.addEventListener('input', updatePackSummary);
-    if (packValueInput) packValueInput.addEventListener('input', updatePackSummary);
-    updatePackSummary();
+    if (bundleQtyInput) { bundleQtyInput.addEventListener('input', updateBundleSummary); }
+    if (bundleValueInput) { bundleValueInput.addEventListener('input', updateBundleSummary); }
 
     document.addEventListener('click', function (e) {
         const form = e.target.closest('#formNovaPromo') || e.target.closest('#formEditPromo');

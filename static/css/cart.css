@@ -196,6 +196,25 @@
     font-weight: 700;
 }
 
+.line-item__price-original {
+    text-decoration: line-through;
+    color: var(--color-text-muted);
+    font-size: 0.92em;
+    margin-right: 4px;
+}
+
+.line-item__promo {
+    margin: 4px 0 8px;
+    font-size: 12px;
+    color: #0d7a4a;
+    font-weight: 600;
+}
+
+.line-item__promo i {
+    margin-right: 4px;
+    opacity: 0.85;
+}
+
 .cart-item__side {
     display: flex;
     flex-direction: column;

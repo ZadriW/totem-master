@@ -307,6 +307,10 @@
                         <span>Subtotal</span>
                         <strong id="paymentSubtotal">R$ 0,00</strong>
                     </div>
+                    <div class="payment__summary-row payment__summary-row--discount" id="paymentDiscountRow" hidden>
+                        <span>Descontos</span>
+                        <strong id="paymentDiscount">-R$ 0,00</strong>
+                    </div>
                 </div>
 
                 <div class="payment__summary-total">
@@ -344,6 +348,7 @@
 <script>
 window.__TOTEM_FLOW__ = {{ (totem_flow or {}) | tojson }};
 </script>
+<script src="{{ url_for('static', filename='js/promo-pricing.js') }}"></script>
 <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
 <script src="{{ url_for('static', filename='js/payment-form.js') }}"></script>
 <script src="{{ url_for('static', filename='js/payment.js') }}"></script>

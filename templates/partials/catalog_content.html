@@ -145,15 +145,18 @@
                 <span class="product-card__stock product-card__stock--{{ stock_tone }} product-card__stock--alone" data-stock-display>{{ product.estoque }} no estoque.</span>
                 {% endif %}
                 <div data-catalog-pricing>
-                    {% if em_promo and product.preco_original is defined and product.preco_original != product.preco %}
+                    {% set promo_tipo = product.promo_tipo | default('') %}
+                    {% if em_promo and promo_tipo in ('percent', 'fixed') and product.preco_original is defined and product.preco_original > product.preco + 0.001 %}
+                    {# percent / fixed: preço unitário efetivamente reduzido — exibe riscado + novo #}
                     <div class="product-card__price-wrap">
                         <span class="product-card__price-original">R$ {{ '%.2f'|format(product.preco_original)|replace('.', ',') }}</span>
                         <p class="product-card__price product-card__price--promo">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
                     </div>
-                    {% elif em_promo and product.promo_tipo == 'bogo' %}
+                    {% elif em_promo and promo_tipo in ('bogo', 'min_bundle', 'exact_bundle') %}
+                    {# Desconto por quantidade: exibe preço de lista + nome da promo #}
                     <div class="product-card__price-wrap">
                         <p class="product-card__price">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
-                        <span class="product-card__promo-name">{{ product.promo_nome }}</span>
+                        {% if product.promo_nome %}<span class="product-card__promo-name">{{ product.promo_nome }}</span>{% endif %}
                     </div>
                     {% else %}
                     <p class="product-card__price">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>

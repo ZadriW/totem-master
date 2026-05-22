@@ -8,15 +8,7 @@
 #}
 
 {% block head %}
-<script>
-(function () {
-    try {
-        if (localStorage.getItem('totem-admin-theme') === 'dark') {
-            document.documentElement.classList.add('admin-theme--dark');
-        }
-    } catch (e) { /* ignore */ }
-})();
-</script>
+{% include 'partials/theme_init.html' %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
 {% block admin_head %}{% endblock %}
 {% endblock %}

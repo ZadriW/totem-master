@@ -23,6 +23,7 @@ window.__PRODUCTS__ = {{ products|tojson }};
 window.__CATALOG_STOCK_API__ = {{ catalog_stock_api_url | tojson }};
 window.__CATALOG_PROMO_REFRESH_API__ = {{ catalog_promo_refresh_api_url | tojson }};
 </script>
+<script src="{{ url_for('static', filename='js/promo-pricing.js') }}"></script>
 <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
 <script src="{{ url_for('static', filename='js/catalog.js') }}"></script>
 {% endblock %}

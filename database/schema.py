@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS promotions (
     event_id    INTEGER NOT NULL,
     name        TEXT    NOT NULL,
     rule_type   TEXT    NOT NULL
-        CHECK (rule_type IN ('percent', 'fixed', 'bogo', 'a_partir_de', 'na_compra_de')),
+        CHECK (rule_type IN ('percent', 'fixed', 'bogo', 'min_bundle', 'exact_bundle')),
     rule_value  REAL    NOT NULL DEFAULT 0,
     min_qty     INTEGER NOT NULL DEFAULT 1,
     free_qty    INTEGER NOT NULL DEFAULT 0,
@@ -385,27 +385,30 @@ def _ensure_product_sku_aliases_table(conn: sqlite3.Connection) -> None:
     """)
 
 
-def _ensure_promotions_rule_types(conn: sqlite3.Connection) -> None:
-    """Amplia ``rule_type`` em ``promotions`` para incluir pacotes por quantidade."""
+def _ensure_promotions_extended_rule_types(conn: sqlite3.Connection) -> None:
+    """Recria promotions com CHECK ampliado para incluir min_bundle e exact_bundle.
+
+    Em bases existentes o DDL ``CREATE TABLE IF NOT EXISTS`` não altera a restrição
+    CHECK — por isso recriamos a tabela preservando os dados.
+    """
     row = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='promotions'"
     ).fetchone()
-    if not row or not row[0]:
-        return
-    ddl = str(row[0])
-    if "a_partir_de" in ddl and "na_compra_de" in ddl:
-        return
+    if row is None:
+        return  # tabela ainda não existe; _SCHEMA criará com CHECK correto
+    if 'min_bundle' in (row[0] or ''):
+        return  # já migrada
 
-    conn.executescript("""
-        PRAGMA foreign_keys=OFF;
-        CREATE TABLE promotions_new (
+    conn.execute("PRAGMA foreign_keys = OFF")
+    conn.execute("DROP TABLE IF EXISTS promotions_v2")
+    conn.execute(
+        """
+        CREATE TABLE promotions_v2 (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             event_id    INTEGER NOT NULL,
             name        TEXT    NOT NULL,
             rule_type   TEXT    NOT NULL
-                CHECK (rule_type IN (
-                    'percent', 'fixed', 'bogo', 'a_partir_de', 'na_compra_de'
-                )),
+                CHECK (rule_type IN ('percent','fixed','bogo','min_bundle','exact_bundle')),
             rule_value  REAL    NOT NULL DEFAULT 0,
             min_qty     INTEGER NOT NULL DEFAULT 1,
             free_qty    INTEGER NOT NULL DEFAULT 0,
@@ -413,17 +416,29 @@ def _ensure_promotions_rule_types(conn: sqlite3.Connection) -> None:
             created_at  TEXT    NOT NULL,
             updated_at  TEXT    NOT NULL,
             FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
-        );
-        INSERT INTO promotions_new
-            SELECT id, event_id, name, rule_type, rule_value, min_qty, free_qty,
-                   active, created_at, updated_at
-              FROM promotions;
-        DROP TABLE promotions;
-        ALTER TABLE promotions_new RENAME TO promotions;
-        CREATE INDEX IF NOT EXISTS idx_promotions_event
-            ON promotions(event_id, active);
-        PRAGMA foreign_keys=ON;
-    """)
+        )
+        """
+    )
+    # Normaliza nomes legados de rule_type que possam existir de tentativas anteriores
+    conn.execute(
+        "INSERT INTO promotions_v2 "
+        "SELECT id, event_id, name, "
+        "CASE rule_type "
+        "  WHEN 'a_partir_de' THEN 'min_bundle' "
+        "  WHEN 'na_compra_de' THEN 'exact_bundle' "
+        "  WHEN 'min_bundle' THEN 'min_bundle' "
+        "  WHEN 'exact_bundle' THEN 'exact_bundle' "
+        "  ELSE rule_type END, "
+        "rule_value, min_qty, free_qty, active, created_at, updated_at "
+        "FROM promotions"
+    )
+    conn.execute("DROP TABLE promotions")
+    conn.execute("ALTER TABLE promotions_v2 RENAME TO promotions")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_promotions_event "
+        "ON promotions(event_id, active)"
+    )
+    conn.execute("PRAGMA foreign_keys = ON")
 
 
 # ---------------------------------------------------------------------------
@@ -450,8 +465,8 @@ def init_db() -> None:
         _ensure_sellers_columns(conn)
         _ensure_products_wake_columns(conn)
         _ensure_product_sku_aliases_table(conn)
-        _ensure_promotions_rule_types(conn)
         _ensure_events_tables(conn)
+        _ensure_promotions_extended_rule_types(conn)
         _ensure_events_badge_color(conn)
         _ensure_event_extensions(conn)
         _ensure_transaction_items_promo_columns(conn)

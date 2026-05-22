@@ -59,6 +59,7 @@ from database import (
     get_promotion,
     list_promotions_for_event,
     product_ids_with_active_promotions_for_event,
+    quote_cart_items_for_event,
     toggle_promotion_active,
     update_promotion,
     add_product_to_event,
@@ -424,6 +425,26 @@ def _is_admin_logged_in() -> bool:
 
 def _is_seller_logged_in() -> bool:
     return bool(_seller_auth())
+
+
+def _totem_theme_scope() -> str | None:
+    """Escopo de preferência visual: admin ou vendedor, por login."""
+    path = (request.path or "").lower()
+    if path.startswith("/admin"):
+        if _is_admin_logged_in():
+            return f"admin:{_current_admin_user()}"
+        return "admin:_guest"
+    if path.startswith("/vendedor"):
+        auth = _seller_auth()
+        if auth and auth.get("seller_id"):
+            return f"seller:{int(auth['seller_id'])}"
+        return "seller:_guest"
+    return None
+
+
+@app.context_processor
+def _inject_totem_theme_scope():
+    return {"totem_theme_scope": _totem_theme_scope()}
 
 
 def _clear_admin_session() -> None:
@@ -1339,6 +1360,22 @@ def seller_api_event_catalog_promos_refresh():
     promo_map = build_promo_display_map(promos)
     products = [enrich_product_with_promo(p, promo_map) for p in products]
     return jsonify({"products": products})
+
+
+@app.route("/api/carrinho/cotacao", methods=["POST"])
+@seller_required
+def api_cart_promo_quote():
+    """Cotação promocional do carrinho (mesma lógica da criação de transação)."""
+    seller_ev = _get_seller_event()
+    if seller_ev is None:
+        return jsonify({"error": "Cotação disponível apenas para vendas em evento."}), 404
+    payload = request.get_json(silent=True) or {}
+    items = payload.get("items") or payload.get("itens") or []
+    try:
+        quote = quote_cart_items_for_event(int(seller_ev["id"]), items)
+    except (TypeError, ValueError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(quote)
 
 
 @app.route("/vendedor/api/dashboard")
@@ -3227,6 +3264,30 @@ def admin_event_promotions(event_id: int):
     )
 
 
+def _parse_promotion_form_fields(form) -> tuple[str, float, int, int]:
+    """Extrai parâmetros da regra a partir do POST do admin.
+
+    Cada tipo de promoção usa campos com nomes distintos no formulário para evitar
+    colisão entre seções ocultas (ex.: ``rule_value`` de percent vs. bundle).
+    """
+    rule_type = (form.get("rule_type") or "").strip()
+    if rule_type in ("percent", "fixed"):
+        rule_value = float(form.get("rule_value_pf") or 0)
+        min_qty = 1
+        free_qty = 0
+    elif rule_type == "bogo":
+        rule_value = 0.0
+        min_qty = int(form.get("min_qty_bogo") or 1)
+        free_qty = int(form.get("free_qty") or 0)
+    elif rule_type in ("min_bundle", "exact_bundle"):
+        rule_value = float(form.get("rule_value_bundle") or 0)
+        min_qty = int(form.get("min_qty_bundle") or 2)
+        free_qty = 0
+    else:
+        raise ValueError(f"Tipo de regra inválido: {rule_type}")
+    return rule_type, rule_value, min_qty, free_qty
+
+
 @app.route("/admin/eventos/<int:event_id>/promocoes/nova", methods=["POST"])
 @admin_required
 def admin_event_promotion_create(event_id: int):
@@ -3235,10 +3296,7 @@ def admin_event_promotion_create(event_id: int):
         return redirect(url_for("admin_events"))
     try:
         name = (request.form.get("name") or "").strip()
-        rule_type = (request.form.get("rule_type") or "").strip()
-        rule_value = float(request.form.get("rule_value") or 0)
-        min_qty = int(request.form.get("min_qty") or 1)
-        free_qty = int(request.form.get("free_qty") or 0)
+        rule_type, rule_value, min_qty, free_qty = _parse_promotion_form_fields(request.form)
         product_ids = [int(p) for p in request.form.getlist("product_ids") if p]
         create_promotion(
             event_id, name, rule_type,
@@ -3285,10 +3343,7 @@ def admin_event_promotion_edit(event_id: int, promo_id: int):
         return redirect(url_for("admin_event_promotions", event_id=event_id))
     try:
         name = (request.form.get("name") or "").strip()
-        rule_type = (request.form.get("rule_type") or "").strip()
-        rule_value = float(request.form.get("rule_value") or 0)
-        min_qty = int(request.form.get("min_qty") or 1)
-        free_qty = int(request.form.get("free_qty") or 0)
+        rule_type, rule_value, min_qty, free_qty = _parse_promotion_form_fields(request.form)
         # Ativar/desativar é só pelo botão dedicado (admin_event_promotion_toggle).
         active = bool(int(promo.get("active") or 0))
         product_ids = [int(p) for p in request.form.getlist("product_ids") if p]
