@@ -50,6 +50,7 @@ from data.products import CATEGORIES
 from database import (
     EXPORT_MOVEMENTS_CSV_CAP,
     RULE_TYPE_LABELS,
+    active_promotion_names_by_product_id,
     active_promotion_tooltip_by_product_id,
     build_promo_display_map,
     create_promotion,
@@ -1010,6 +1011,7 @@ def seller_stock():
         )
         promo_product_ids = product_ids_with_active_promotions_for_event(ev_id)
         promo_tooltips = active_promotion_tooltip_by_product_id(ev_id)
+        promo_names = active_promotion_names_by_product_id(ev_id)
         return render_template(
             "seller/stock.html",
             products=products,
@@ -1021,6 +1023,7 @@ def seller_stock():
             stock_api_url=stock_api_url,
             promo_product_ids=promo_product_ids,
             promo_tooltips=promo_tooltips,
+            promo_names=promo_names,
             **_seller_shell_context(active_section="estoque"),
         )
     products, filters, pagination = _admin_stock_page_view()
@@ -1038,6 +1041,7 @@ def seller_stock():
                               per_page=filters["per_page"], page=pagination["page"]),
         promo_product_ids=frozenset(),
         promo_tooltips={},
+        promo_names={},
         **_seller_shell_context(active_section="estoque"),
     )
 
@@ -1287,6 +1291,7 @@ def seller_api_event_stock():
     ev_stats = get_event_stock_stats(ev_id)
     promo_ids = product_ids_with_active_promotions_for_event(ev_id)
     promo_tooltips = active_promotion_tooltip_by_product_id(ev_id)
+    promo_names = active_promotion_names_by_product_id(ev_id)
     stock = {
         "products_count": ev_stats["products_count"],
         "products_active": ev_stats["products_count"],
@@ -1313,6 +1318,7 @@ def seller_api_event_stock():
                 }),
                 "active_promo": int(p["id"]) in promo_ids,
                 "promo_tooltip": promo_tooltips.get(int(p["id"]), ""),
+                "promo_name": promo_names.get(int(p["id"]), ""),
             }
             for p in products
         ],
@@ -2793,6 +2799,7 @@ def admin_event_stock(event_id: int):
     stats = get_event_stock_stats(event_id)
     promo_product_ids = product_ids_with_active_promotions_for_event(event_id)
     promo_tooltips = active_promotion_tooltip_by_product_id(event_id)
+    promo_names = active_promotion_names_by_product_id(event_id)
     return render_template(
         "admin/event_stock.html",
         event=event,
@@ -2802,6 +2809,7 @@ def admin_event_stock(event_id: int):
         pagination=pagination,
         promo_product_ids=promo_product_ids,
         promo_tooltips=promo_tooltips,
+        promo_names=promo_names,
         categories=_admin_stock_library_category_options(),
         allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
         active_event_tab="estoque",
@@ -3589,6 +3597,7 @@ def admin_api_event_stock(event_id: int):
     products, _filters, pagination = _admin_event_stock_page_view(event_id)
     promo_ids = product_ids_with_active_promotions_for_event(event_id)
     promo_tooltips = active_promotion_tooltip_by_product_id(event_id)
+    promo_names = active_promotion_names_by_product_id(event_id)
     return jsonify({
         "stats": get_event_stock_stats(event_id),
         "pagination": {
@@ -3606,6 +3615,7 @@ def admin_api_event_stock(event_id: int):
                 "status": _event_product_status(p),
                 "active_promo": int(p["product_id"]) in promo_ids,
                 "promo_tooltip": promo_tooltips.get(int(p["product_id"]), ""),
+                "promo_name": promo_names.get(int(p["product_id"]), ""),
             }
             for p in products
         ],

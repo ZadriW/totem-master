@@ -41,7 +41,6 @@
         const attrStyle = eventBadgeInline(movement);
         if (hasId && ename) {
             return `<span class="admin-mov__event-cell"><span class="admin-nav__event-badge admin-mov__event-badge"${attrStyle} title="Evento #${escapeHtml(eid)}">
-                <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
                 ${escapeHtml(ename)}
             </span></span>`;
         }

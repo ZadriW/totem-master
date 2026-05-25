@@ -144,7 +144,6 @@
                         {% if m.event_id and (m.event_name or event.name) %}
                             {% set row_ev_style = (m.event_badge_color or event.badge_color) | event_badge_style %}
                             <span class="admin-nav__event-badge admin-mov__event-badge" title="Evento #{{ m.event_id }}"{% if row_ev_style %} style="{{ row_ev_style }}"{% endif %}>
-                                <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
                                 {{ m.event_name or event.name }}
                             </span>
                         {% elif m.event_id %}

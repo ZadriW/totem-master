@@ -31,6 +31,28 @@
         return `<span class="admin-badge admin-badge--${escapeHtml(status.kind)}">${escapeHtml(status.label)}</span>`;
     }
 
+    function updateStockStatusCell(row, product) {
+        const statusCell = row.querySelector('[data-stock-status]');
+        if (!statusCell || !product.status) return;
+        const statusBadge = statusCell.querySelector('[data-stock-status-badge]');
+        if (statusBadge) {
+            statusBadge.className = `admin-badge admin-badge--${product.status.kind}`;
+            statusBadge.textContent = product.status.label;
+        }
+        const promoBadge = statusCell.querySelector('[data-stock-promo-badge]');
+        const promoBadgeText = statusCell.querySelector('[data-stock-promo-badge-text]');
+        if (promoBadge && promoBadgeText && Object.prototype.hasOwnProperty.call(product, 'active_promo')) {
+            const promoName = String(product.promo_name ?? '').trim();
+            if (product.active_promo && promoName) {
+                promoBadge.removeAttribute('hidden');
+                promoBadgeText.textContent = promoName;
+            } else {
+                promoBadge.setAttribute('hidden', '');
+                promoBadgeText.textContent = '';
+            }
+        }
+    }
+
     function flash(message, category = 'success') {
         const main = document.querySelector('.admin-main');
         if (!main || !message) return;
@@ -231,12 +253,11 @@
                 const product = byId.get(String(row.dataset.productId));
                 if (!product) return;
                 const qty = row.querySelector('[data-stock-qty]');
-                const status = row.querySelector('[data-stock-status]');
                 const promoWrap = row.querySelector('[data-stock-promo-wrap]');
                 const promoIcon = row.querySelector('[data-stock-promo-icon]');
                 const promoTipPanel = row.querySelector('[data-stock-promo-tooltip-panel]');
                 if (qty) qty.innerHTML = `<strong>${escapeHtml(product.estoque)}</strong>`;
-                if (status) status.innerHTML = badge(product.status);
+                updateStockStatusCell(row, product);
                 const promoRoot = promoWrap || promoIcon;
                 if (promoRoot && promoIcon && Object.prototype.hasOwnProperty.call(product, 'active_promo')) {
                     if (product.active_promo) {

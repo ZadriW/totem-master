@@ -320,12 +320,13 @@
     background: var(--color-bg);
     display: flex;
     flex-direction: column;
+    --admin-topbar-height: 74px;
 }
 
 .admin-topbar {
     position: sticky;
     top: 0;
-    z-index: 30;
+    z-index: 110;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -386,6 +387,36 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     color: var(--color-text);
     font-size: 14px;
     flex-wrap: wrap;
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+.admin-topbar__event-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    background: var(--color-primary);
+    color: #fff;
+    border-radius: var(--radius-pill);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    max-width: 130px;
+    min-width: 0;
+    overflow: hidden;
+    flex-shrink: 1;
+}
+
+.admin-topbar__event-badge--in-brand {
+    display: none;
+}
+
+.admin-topbar__event-badge-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 
 .admin-topbar__user,
@@ -490,8 +521,30 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     margin-right: auto;
 }
 
-.admin-main.admin-main--catalog-embed .topbar {
-    top: 68px;
+/* Desktop: topbar do painel fixa no topo (sticky quebra com overflow-x no body) */
+@media (min-width: 901px) {
+    .admin-shell > .admin-topbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+    }
+
+    .admin-shell > .admin-main {
+        padding-top: calc(var(--admin-topbar-height) + 32px);
+    }
+
+    .admin-shell > .admin-main.admin-main--catalog-embed {
+        padding-top: var(--admin-topbar-height);
+    }
+
+    /* Catálogo embutido: busca/carrinho grudam abaixo da barra do vendedor */
+    .admin-main.admin-main--catalog-embed .topbar {
+        position: sticky;
+        top: var(--admin-topbar-height);
+        z-index: 100;
+    }
 }
 
 .admin-section {
@@ -1390,19 +1443,22 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 .admin-nav {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 8px;
     flex: 1;
     justify-content: center;
     flex-wrap: wrap;
+    min-height: 44px;
 }
 
 .admin-nav__item {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
+    justify-content: center;
+    gap: 10px;
+    padding: 11px 18px;
+    min-height: 44px;
     border-radius: var(--radius-pill);
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--color-text-muted);
     transition: background var(--transition), color var(--transition);
@@ -1419,7 +1475,28 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 }
 
 .admin-nav__item i {
-    font-size: 13px;
+    font-size: 15px;
+}
+
+.admin-nav__label {
+    min-width: 0;
+}
+
+.admin-nav__viewport,
+.admin-nav__track {
+    min-width: 0;
+}
+
+.admin-nav__slide-btn,
+.admin-nav__pager {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .admin-nav__viewport,
+    .admin-nav__track {
+        display: contents;
+    }
 }
 
 /* ==========================================================================
@@ -1937,12 +2014,27 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     font-size: 14px;
 }
 
+/* Promoções: tooltips sobem acima da linha — não clipar na .admin-table (overflow:hidden global) */
+.admin-stock.admin-table {
+    overflow: visible;
+}
+
+.admin-stock .admin-stock__row {
+    overflow: visible;
+}
+
+.admin-stock__product,
+.admin-stock__product > span:last-child {
+    overflow: visible;
+}
+
 /* Desktop: ganha um pouco de largura usando o padding lateral do .admin-main */
 @media (min-width: 901px) {
     .admin-stock.admin-table {
         width: calc(100% + 32px);
         margin-left: -16px;
         margin-right: -16px;
+        overflow: visible;
     }
 }
 
@@ -1967,6 +2059,12 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 
 /* Desktop (≥901px): colunas proporcionais na largura da linha; produto com faixa estável para não invadir as demais colunas. */
 @media (min-width: 901px) {
+    .admin-stock__row:has(.admin-stock__promo-wrap:not([hidden]):hover),
+    .admin-stock__row:has(.admin-stock__promo-wrap:not([hidden]):focus-within) {
+        position: relative;
+        z-index: 40;
+    }
+
     .admin-stock .admin-stock__row {
         column-gap: 24px;
     }
@@ -1995,6 +2093,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-stock__row > :nth-child(1) {
         min-width: 0;
         padding-right: 28px;
+        overflow: visible;
     }
 
     /* Texto do produto (nome + meta) pode encolher dentro da célula para o ellipsis funcionar */
@@ -2076,7 +2175,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 }
 
 .admin-stock__product-name-row {
-    display: inline-flex;
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
@@ -2111,17 +2209,19 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 }
 
 /* Coluna invisível entre ícone e tooltip — sem isso o cursor “cai no buraco” e o hover some */
-.admin-stock__promo-wrap:not([hidden]):has(
-        .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty)
-    )::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    bottom: 100%;
-    width: 44px;
-    height: 72px;
-    transform: translateX(-50%);
-    z-index: 1;
+@media (min-width: 901px) {
+    .admin-stock__promo-wrap:not([hidden]):has(
+            .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty)
+        )::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        bottom: 100%;
+        width: 44px;
+        height: 72px;
+        transform: translateX(-50%);
+        z-index: 1;
+    }
 }
 
 /* Ícone de promoção ao lado do nome (estoque admin/vendedor — sem position:absolute do card) */
@@ -2150,7 +2250,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     left: 50%;
     bottom: calc(100% + 10px);
     transform: translateX(-50%);
-    z-index: 3;
+    z-index: 50;
     box-sizing: border-box;
     max-width: min(300px, 78vw);
     width: max-content;
@@ -2184,13 +2284,42 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     border-top-color: #1e1b4b;
 }
 
-.admin-stock__promo-wrap:not([hidden]):hover
-    .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty),
-.admin-stock__promo-wrap:not([hidden]):focus-within
-    .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty) {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
+@media (min-width: 901px) {
+    .admin-stock__promo-wrap:not([hidden]):hover
+        .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty),
+    .admin-stock__promo-wrap:not([hidden]):focus-within
+        .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty) {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+}
+
+.admin-stock__status-cell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.admin-badge--promo-stock {
+    background: rgba(124, 58, 237, 0.10);
+    color: #6d28d9;
+    border: 1px solid rgba(124, 58, 237, 0.20);
+    display: none;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    max-width: min(160px, 100%);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-stock__promo-name-badge[hidden] {
+    display: none !important;
 }
 
 .admin-stock__product .admin-stock__meta {
@@ -2778,7 +2907,13 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         flex-wrap: nowrap;
         align-items: center;
         justify-content: flex-end;
-        gap: 10px 12px;
+        gap: 8px 10px;
+    }
+    .admin-topbar__event-badge {
+        max-width: 92px;
+        font-size: 10px;
+        padding: 3px 7px;
+        flex-shrink: 1;
     }
     .admin-topbar__user {
         min-width: 0;
@@ -2786,7 +2921,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         text-overflow: ellipsis;
         white-space: nowrap;
         flex: 1 1 auto;
-        max-width: 42%;
+        max-width: 36%;
     }
     .admin-topbar__clock {
         flex-shrink: 0;
@@ -2820,27 +2955,210 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-topbar__logout-label {
         display: none;
     }
-    /* Nav em grade 2×2: duas colunas, duas linhas (itens 1–2 à esq., 3–4 à dir.). */
+
     .admin-nav {
         order: 3;
         flex: 0 0 auto;
         flex-basis: 100%;
         width: 100%;
         max-width: 100%;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        grid-template-rows: auto auto;
-        grid-auto-flow: column;
-        gap: 8px 10px;
-        justify-content: stretch;
-        align-items: stretch;
+        min-height: 0;
+        padding-top: 4px;
+        border-top: 1px solid var(--color-border);
     }
-    .admin-nav__item {
-        justify-content: center;
-        width: 100%;
-        min-width: 0;
-        box-sizing: border-box;
+
+    /* Mobile estreito (≤767px): evento na marca + nav em slide (2 itens por página) */
+    @media (max-width: 767px) {
+        .admin-topbar {
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px 10px;
+        }
+
+        .admin-topbar__brand {
+            flex: 1 1 auto;
+            width: auto;
+            max-width: 100%;
+            min-width: 0;
+            justify-content: center;
+            flex-wrap: nowrap;
+            gap: 6px 8px;
+        }
+
+        .admin-topbar__brand img,
+        .admin-topbar__brand .admin-brand-logo {
+            height: 32px;
+            flex-shrink: 0;
+        }
+
+        .admin-topbar__badge {
+            flex-shrink: 0;
+            font-size: 9px;
+            padding: 3px 6px;
+            letter-spacing: 0.06em;
+        }
+
+        .admin-topbar__event-badge--in-brand {
+            display: inline-flex;
+            max-width: 76px;
+            font-size: 9px;
+            padding: 2px 6px;
+            flex-shrink: 1;
+        }
+
+        .admin-topbar__event-badge--in-meta {
+            display: none !important;
+        }
+
+        .admin-topbar__meta {
+            order: 2;
+            width: auto;
+            max-width: none;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .admin-topbar__user {
+            flex: 0 1 auto;
+            max-width: none;
+            font-size: 12px;
+            gap: 5px;
+        }
+
+        .admin-topbar__clock {
+            font-size: 11px;
+        }
+
+        .admin-topbar__theme-toggle {
+            width: 34px;
+            height: 34px;
+            flex-shrink: 0;
+        }
+
+        .admin-shell {
+            --admin-topbar-height: 154px;
+        }
+
+        .admin-nav {
+            display: grid;
+            grid-template-columns: 34px minmax(0, 1fr) 34px;
+            grid-template-rows: auto auto;
+            align-items: center;
+            gap: 6px 4px;
+            padding: 6px 0 4px;
+        }
+
+        .admin-nav__slide-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 40px;
+            padding: 0;
+            border: 1.5px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            background: var(--color-bg);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: border-color var(--transition), color var(--transition), background var(--transition);
+        }
+
+        .admin-nav__slide-btn--prev {
+            grid-column: 1;
+            grid-row: 1;
+        }
+
+        .admin-nav__slide-btn--next {
+            grid-column: 3;
+            grid-row: 1;
+        }
+
+        .admin-nav__slide-btn:not(:disabled):hover {
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+            background: rgba(14, 22, 122, 0.06);
+        }
+
+        .admin-nav__slide-btn:disabled {
+            opacity: 0.35;
+            cursor: default;
+        }
+
+        .admin-nav__slide-btn:focus-visible {
+            outline: 2px solid var(--color-primary);
+            outline-offset: 2px;
+        }
+
+        .admin-nav__slide-btn i {
+            font-size: 12px;
+        }
+
+        .admin-nav__viewport {
+            display: block;
+            grid-column: 2;
+            grid-row: 1;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .admin-nav__track {
+            display: flex;
+            width: max-content;
+            min-width: 100%;
+            transition: transform 0.28s ease;
+            will-change: transform;
+        }
+
+        .admin-nav__track .admin-nav__item {
+            flex: 0 0 auto;
+            box-sizing: border-box;
+            min-height: 46px;
+            padding: 10px 8px;
+            font-size: 13px;
+            gap: 6px;
+        }
+
+        .admin-nav__track .admin-nav__item i {
+            font-size: 14px;
+        }
+
+        .admin-nav__pager {
+            display: flex;
+            grid-column: 1 / -1;
+            grid-row: 2;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            min-height: 10px;
+        }
+
+        .admin-nav__pager-dot {
+            width: 6px;
+            height: 6px;
+            padding: 0;
+            border: none;
+            border-radius: 999px;
+            background: var(--color-border);
+            cursor: pointer;
+            transition: width var(--transition), background var(--transition);
+        }
+
+        .admin-nav__pager-dot.is-active {
+            width: 18px;
+            background: var(--color-primary);
+        }
+
+        .admin-nav__pager-dot:focus-visible {
+            outline: 2px solid var(--color-primary);
+            outline-offset: 2px;
+        }
+
+        .admin-main.admin-main--catalog-embed .topbar {
+            top: var(--admin-topbar-height, 154px);
+        }
     }
+
     .admin-card__form {
         grid-template-columns: 1fr;
     }
@@ -3001,8 +3319,29 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         display: block;
         background: transparent;
         box-shadow: none;
+        overflow: visible;
+    }
+    .admin-stock .admin-stock__row {
+        overflow: visible;
     }
     .admin-stock .admin-table__head { display: none; }
+
+    /* Estoque ≤900px (mobile + tablet): badge roxo na situação; sem ícone/tooltip ao lado do nome */
+    .admin-stock .admin-stock__promo-wrap {
+        display: none !important;
+    }
+
+    .admin-stock__promo-name-badge:not([hidden]) {
+        display: inline-flex;
+    }
+
+    .admin-stock__status-cell {
+        width: 100%;
+    }
+
+    .admin-badge--promo-stock {
+        max-width: min(220px, 100%);
+    }
 
     /* Movimentações — mesmo “card” visual do estoque (mobile) */
     .admin-table:has(.admin-mov__wrapper),
@@ -3515,8 +3854,128 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-table > .admin-mov__row.admin-table__head { display: none; }
 }
 
+/* Tablet (768px–900px): topbar do vendedor — marca + meta na 1ª linha, nav distribuída na 2ª */
+@media (min-width: 768px) and (max-width: 900px) {
+    .admin-shell {
+        --admin-topbar-height: 128px;
+    }
+
+    .admin-topbar {
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 16px 8px;
+        gap: 8px 12px;
+    }
+
+    .admin-topbar__brand {
+        order: 1;
+        flex: 0 1 auto;
+        width: auto;
+        max-width: 42%;
+        justify-content: flex-start;
+    }
+
+    .admin-topbar__brand img,
+    .admin-topbar__brand .admin-brand-logo {
+        height: 36px;
+    }
+
+    .admin-topbar__badge {
+        font-size: 10px;
+        padding: 3px 8px;
+    }
+
+    .admin-topbar__meta {
+        order: 2;
+        flex: 1 1 auto;
+        width: auto;
+        max-width: none;
+        justify-content: flex-end;
+        flex-wrap: nowrap;
+        gap: 8px;
+    }
+
+    .admin-topbar__event-badge {
+        max-width: 108px;
+        font-size: 10px;
+        padding: 3px 8px;
+    }
+
+    .admin-topbar__user {
+        max-width: 26%;
+        font-size: 12px;
+        gap: 6px;
+    }
+
+    .admin-topbar__clock {
+        font-size: 11px;
+        gap: 5px;
+    }
+
+    .admin-topbar__theme-toggle {
+        width: 36px;
+        height: 36px;
+        flex-shrink: 0;
+    }
+
+    .admin-topbar__logout {
+        padding: 8px 12px;
+        border: 1.5px solid var(--color-border);
+        background: var(--color-bg);
+        color: var(--color-text);
+    }
+
+    .admin-topbar__logout-label {
+        display: inline;
+        font-size: 12px;
+    }
+
+    .admin-nav {
+        order: 3;
+        flex: 0 0 100%;
+        width: 100%;
+        display: flex;
+        flex-wrap: nowrap;
+        justify-content: space-between;
+        align-items: stretch;
+        gap: 6px;
+        min-height: 48px;
+        padding: 6px 0 2px;
+        border-top: 1px solid var(--color-border);
+    }
+
+    .admin-nav__item {
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 46px;
+        justify-content: center;
+        padding: 10px 6px;
+        font-size: 13px;
+        gap: 6px;
+    }
+
+    .admin-nav__item i {
+        font-size: 14px;
+    }
+
+    .admin-nav__label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .admin-main.admin-main--catalog-embed .topbar {
+        top: var(--admin-topbar-height, 128px);
+    }
+}
+
 /* ---------- Responsivo ---------- */
 @media (max-width: 900px) {
+    .admin-shell {
+        --admin-topbar-height: 136px;
+    }
+
     .admin-topbar {
         padding: 12px 16px;
     }
@@ -3530,7 +3989,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         padding: 16px 16px 0;
     }
     .admin-main.admin-main--catalog-embed .topbar {
-        top: 112px;
+        top: var(--admin-topbar-height, 136px);
     }
     .admin-kpis {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3750,6 +4209,17 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-tx__items-row > :nth-child(4) { grid-column: 2; font-size: 12px; color: var(--color-text-muted); }
     .admin-tx__items-row > :nth-child(5) { grid-column: 2; font-size: 12px; color: var(--color-text-muted); }
     .admin-tx__items-row > :nth-child(6) { grid-column: 2; }
+}
+
+/* Restaura altura da topbar em tablet (após regras gerais de max-width: 900px) */
+@media (min-width: 768px) and (max-width: 900px) {
+    .admin-shell {
+        --admin-topbar-height: 128px;
+    }
+
+    .admin-main.admin-main--catalog-embed .topbar {
+        top: var(--admin-topbar-height, 128px);
+    }
 }
 
 .admin-mov__wrapper {
@@ -4390,10 +4860,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     text-overflow: ellipsis;
 }
 
-.admin-nav__event-badge i {
-    color: currentColor;
-}
-
 .admin-field__hint-row {
     display: flex;
     align-items: center;
@@ -4870,6 +5336,18 @@ html.admin-theme--dark .admin-nav__item.is-active {
     color: var(--color-primary-light);
 }
 
+html.admin-theme--dark .admin-nav__slide-btn {
+    background: var(--color-bg);
+    border-color: var(--color-border);
+    color: var(--color-text-muted);
+}
+
+html.admin-theme--dark .admin-nav__slide-btn:not(:disabled):hover {
+    background: var(--admin-tint);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
 html.admin-theme--dark .admin-event-subnav__item:hover {
     color: var(--color-primary);
     background: transparent;
@@ -5044,6 +5522,12 @@ html.admin-theme--dark .admin-badge--promo-type {
     color: var(--color-primary-light);
 }
 
+html.admin-theme--dark .admin-badge--promo-stock {
+    background: rgba(167, 139, 250, 0.14);
+    color: #c4b5fd;
+    border-color: rgba(167, 139, 250, 0.28);
+}
+
 /* Flashes */
 html.admin-theme--dark .admin-flash {
     border-left-color: var(--color-primary);
@@ -5209,7 +5693,8 @@ html.admin-theme--dark .admin-stock__promo-tooltip-panel:not(.admin-stock__promo
     border-top-color: #0a0d26;
 }
 
-/* Badge de evento na nav do vendedor */
+/* Badge de evento na meta do vendedor */
+html.admin-theme--dark .admin-topbar__event-badge,
 html.admin-theme--dark .admin-nav__event-badge {
     color: #03051a;
 }
@@ -5629,7 +6114,7 @@ html.admin-theme--dark .seller-restore-msg {
     color: #c62828;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: center;
     gap: 5px;
 }
 

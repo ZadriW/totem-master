@@ -1,6 +1,17 @@
 {% extends "base.html" %}
 {% from "macros/admin_brand_logo.html" import admin_brand_logo %}
 
+{% macro seller_event_badge(extra_class='') -%}
+{% if seller_event %}
+{% set seller_ev_badge = seller_event.badge_color | event_badge_style %}
+<span class="admin-topbar__event-badge {{ extra_class }}"
+      title="{{ seller_event.name }} — evento ativo"
+      {% if seller_ev_badge %} style="{{ seller_ev_badge }}"{% endif %}>
+    <span class="admin-topbar__event-badge-text">{{ seller_event.name }}</span>
+</span>
+{% endif %}
+{%- endmacro %}
+
 {% block head %}
 {% include 'partials/totem_theme_head.html' %}
 {% block seller_head %}{% endblock %}
@@ -12,44 +23,50 @@
         <a class="admin-topbar__brand" href="{{ url_for('seller_dashboard') }}">
             {{ admin_brand_logo() }}
             <span class="admin-topbar__badge">Vendedor</span>
+            {{ seller_event_badge('admin-topbar__event-badge--in-brand') }}
         </a>
 
-        <nav class="admin-nav" aria-label="Seções do painel do vendedor">
-            {% if seller_event %}
-            {% set seller_ev_badge = seller_event.badge_color | event_badge_style %}
-            <span class="admin-nav__event-badge" title="Você está operando no contexto deste evento"{% if seller_ev_badge %} style="{{ seller_ev_badge }}"{% endif %}>
-                <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
-                {{ seller_event.name }}
-            </span>
-            {% endif %}
+        <nav class="admin-nav" aria-label="Seções do painel do vendedor" data-admin-nav-slide>
+            <button type="button" class="admin-nav__slide-btn admin-nav__slide-btn--prev" data-admin-nav-prev aria-label="Seções anteriores" hidden>
+                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+            </button>
+            <div class="admin-nav__viewport" data-admin-nav-viewport>
+                <div class="admin-nav__track" data-admin-nav-track>
             <a class="admin-nav__item {% if active_section == 'dashboard' %}is-active{% endif %}"
                href="{{ url_for('seller_dashboard') }}">
                 <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
-                Dashboard
+                <span class="admin-nav__label">Dashboard</span>
             </a>
             <a class="admin-nav__item {% if active_section == 'venda' %}is-active{% endif %}"
                href="{{ seller_venda_url|default('/vendedor/venda', true) }}">
                 <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
-                Catálogo
+                <span class="admin-nav__label">Catálogo</span>
             </a>
             <a class="admin-nav__item {% if active_section == 'estoque' %}is-active{% endif %}"
                href="{{ url_for('seller_stock') }}">
                 <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
-                Estoque
+                <span class="admin-nav__label">Estoque</span>
             </a>
             <a class="admin-nav__item {% if active_section == 'movimentacoes' %}is-active{% endif %}"
                href="{{ url_for('seller_movements') }}">
                 <i class="fa-solid fa-right-left" aria-hidden="true"></i>
-                Movimentações
+                <span class="admin-nav__label">Movimentações</span>
             </a>
             <a class="admin-nav__item {% if active_section == 'transacoes' %}is-active{% endif %}"
                href="{{ url_for('seller_transactions') }}">
                 <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
-                Transações
+                <span class="admin-nav__label">Transações</span>
             </a>
+                </div>
+            </div>
+            <button type="button" class="admin-nav__slide-btn admin-nav__slide-btn--next" data-admin-nav-next aria-label="Próximas seções" hidden>
+                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            </button>
+            <div class="admin-nav__pager" data-admin-nav-pager hidden aria-hidden="true"></div>
         </nav>
 
         <div class="admin-topbar__meta">
+            {{ seller_event_badge('admin-topbar__event-badge--in-meta') }}
             <span class="admin-topbar__user">
                 <i class="fa-solid fa-user" aria-hidden="true"></i>
                 {{ seller_name }}
@@ -108,5 +125,6 @@
 <script src="{{ url_for('static', filename='js/totem-api-errors.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin-theme.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin-nav-slide.js') }}"></script>
 {% block seller_scripts %}{% endblock %}
 {% endblock %}

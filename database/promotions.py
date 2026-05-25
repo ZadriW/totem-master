@@ -345,6 +345,18 @@ def active_promotion_tooltip_by_product_id(event_id: int) -> Dict[int, str]:
     return {pid: " · ".join(lines) for pid, lines in lines_by_pid.items()}
 
 
+def active_promotion_names_by_product_id(event_id: int) -> Dict[int, str]:
+    """Por produto, nomes das promoções ativas que o cobrem (separador · )."""
+    promos = get_active_promotions_for_event(event_id)
+    promos_sorted = sorted(promos, key=lambda p: int(p.get("id") or 0))
+    names_by_pid: Dict[int, List[str]] = defaultdict(list)
+    for pr in promos_sorted:
+        name = (pr.get("name") or "").strip() or "Promoção"
+        for pid in pr.get("product_ids") or []:
+            names_by_pid[int(pid)].append(name)
+    return {pid: " · ".join(names) for pid, names in names_by_pid.items()}
+
+
 # ---------------------------------------------------------------------------
 # Aplicação de promoções aos itens da transação
 # ---------------------------------------------------------------------------
