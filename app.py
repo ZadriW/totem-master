@@ -2702,7 +2702,8 @@ def admin_event_detail(event_id: int):
     if event is None:
         return redirect(url_for("admin_events"))
     stats = get_event_stock_stats(event_id)
-    sales_dashboard = get_event_sales_dashboard(event_id)
+    sales_day_page = max(1, _parse_int(request.args.get("sales_day_page"), 1))
+    sales_dashboard = get_event_sales_dashboard(event_id, sales_days_page=sales_day_page)
     recent_movements = list_event_stock_movements(event_id, limit=5)
     sellers = list_event_sellers(event_id)
     return render_template(

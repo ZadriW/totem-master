@@ -528,14 +528,23 @@ def get_event_stock_stats(event_id: int) -> Dict:
         }
 
 
-def get_event_sales_dashboard(event_id: int, *, sales_days_limit: int = 120) -> Dict:
+def get_event_sales_dashboard(
+    event_id: int,
+    *,
+    sales_days_limit: int = 120,
+    sales_days_page: int = 1,
+    sales_days_per_page: int = 10,
+) -> Dict:
     """Vendas do evento: pedidos confirmados com movimento ``venda`` neste ``event_id``.
 
-    Retorna receita total, ticket médio, até ``sales_days_limit`` dias distintos com vendas
-    (mais recentes primeiro) e os 5 produtos mais vendidos por quantidade de unidades.
+    Retorna receita total, ticket médio, dias distintos com vendas paginados
+    (``sales_days_per_page`` por página, mais recentes primeiro, até ``sales_days_limit`` dias)
+    e os 5 produtos mais vendidos por quantidade de unidades.
     """
     eid = int(event_id)
     lim_days = max(1, min(int(sales_days_limit), 366))
+    per_page = max(1, min(int(sales_days_per_page), 50))
+    page = max(1, int(sales_days_page))
     tx_filter = (
         "FROM transactions t "
         "WHERE t.status = 'confirmado' "
@@ -554,20 +563,49 @@ def get_event_sales_dashboard(event_id: int, *, sales_days_limit: int = 120) -> 
         revenue_total = float(agg["revenue_total"] or 0.0)
         avg_ticket = (revenue_total / orders_count) if orders_count else 0.0
 
+        count_row = conn.execute(
+            f"""
+            SELECT COUNT(*) AS c FROM (
+                SELECT date(t.created_at) AS day
+                {tx_filter}
+                GROUP BY date(t.created_at)
+                LIMIT ?
+            )
+            """,
+            (eid, lim_days),
+        ).fetchone()
+        days_total = int(count_row["c"] or 0)
+        total_pages = max(1, (days_total + per_page - 1) // per_page) if days_total > 0 else 1
+        page = min(page, total_pages)
+        offset = (page - 1) * per_page
+
         day_rows = conn.execute(
             f"""
             SELECT date(t.created_at) AS day, COUNT(*) AS orders_count
             {tx_filter}
             GROUP BY date(t.created_at)
             ORDER BY day DESC
-            LIMIT ?
+            LIMIT ? OFFSET ?
             """,
-            (eid, lim_days),
+            (eid, per_page, offset),
         ).fetchall()
         sales_by_day = [
             {"day": str(r["day"]), "orders_count": int(r["orders_count"] or 0)}
             for r in day_rows
         ]
+
+        showing_from = offset + 1 if days_total > 0 else 0
+        showing_to = min(offset + len(sales_by_day), days_total) if days_total > 0 else 0
+        sales_by_day_pagination = {
+            "page": page,
+            "per_page": per_page,
+            "total": days_total,
+            "total_pages": total_pages,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
+            "showing_from": showing_from,
+            "showing_to": showing_to,
+        }
 
         top_rows = conn.execute(
             """
@@ -618,6 +656,7 @@ def get_event_sales_dashboard(event_id: int, *, sales_days_limit: int = 120) -> 
         "revenue_total": revenue_total,
         "avg_ticket": avg_ticket,
         "sales_by_day": sales_by_day,
+        "sales_by_day_pagination": sales_by_day_pagination,
         "top_products": top_products,
         "sales_days_limit": lim_days,
     }
