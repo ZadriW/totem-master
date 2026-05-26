@@ -1624,7 +1624,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     transform: translateY(-1px);
 }
 
-/* Botão destrutivo compacto — só ícone, fundo vermelho translúcido */
+/* Botão compacto — só ícone, quadrado levemente arredondado em azul */
 .admin-btn--icon-only {
     width: 36px;
     height: 36px;
@@ -1634,8 +1634,36 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     align-items: center;
     justify-content: center;
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-sm);
     line-height: 1;
+    background: rgba(14, 22, 122, 0.10);
+    color: var(--color-primary);
+    box-shadow: none;
+}
+
+.admin-btn--icon-only:hover,
+.admin-btn--icon-only:focus-visible {
+    background: rgba(14, 22, 122, 0.16);
+    color: var(--color-primary-dark);
+    transform: translateY(-1px);
+}
+
+.admin-btn--icon-only:active {
+    transform: translateY(0);
+    background: rgba(14, 22, 122, 0.20);
+}
+
+.admin-btn--ghost.admin-btn--icon-only {
+    background: rgba(14, 22, 122, 0.10);
+    color: var(--color-primary);
+    border: none;
+}
+
+.admin-btn--ghost.admin-btn--icon-only:hover,
+.admin-btn--ghost.admin-btn--icon-only:focus-visible {
+    background: rgba(14, 22, 122, 0.16);
+    color: var(--color-primary-dark);
+    border: none;
 }
 
 .admin-btn--icon-only.admin-btn--sm,
@@ -4347,6 +4375,31 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     opacity: 0.72;
 }
 
+.admin-events-list .admin-events-list__created {
+    text-align: left;
+    justify-self: start;
+}
+
+.admin-table__head.admin-events-list__row .admin-events-list__created {
+    text-align: left;
+    justify-self: start;
+}
+
+.admin-events-list__stat--products,
+.admin-events-list__stat--sellers {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-events-list__stat--products::before,
+.admin-events-list__stat--sellers::before {
+    content: none;
+}
+
+.admin-events-list__meta {
+    display: contents;
+}
+
 /* Seção "arquivados" colapsada */
 .admin-events-archived__summary {
     cursor: pointer;
@@ -4423,10 +4476,39 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         padding: 12px 16px;
     }
     .admin-events-list__row > :nth-child(1) { grid-area: name; }
-    .admin-events-list__row > :nth-child(2),
-    .admin-events-list__row > :nth-child(3),
-    .admin-events-list__row > :nth-child(4) { grid-area: meta; font-size: 12px; color: var(--color-text-muted); }
-    .admin-events-list__row > :nth-child(5) { grid-area: actions; justify-self: end; }
+    .admin-events-list__meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 6px 12px;
+        grid-area: meta;
+        min-width: 0;
+        width: 100%;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-events-list__meta .admin-events-list__stat--products,
+    .admin-events-list__meta .admin-events-list__stat--sellers,
+    .admin-events-list__meta .admin-events-list__created {
+        display: inline;
+        width: auto;
+        flex: 0 1 auto;
+        min-width: 0;
+        text-align: left;
+        white-space: nowrap;
+    }
+    .admin-events-list__stat--products::before {
+        content: "Produtos: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
+    }
+    .admin-events-list__stat--sellers::before {
+        content: "Vendedores: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
+    }
+    .admin-events-list__row > :nth-child(3) { grid-area: actions; justify-self: end; }
     .admin-table__head.admin-events-list__row { display: none; }
 
     .admin-event__row {
@@ -4443,7 +4525,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-event__row > :nth-child(1) { grid-area: product; }
     .admin-event__row > :nth-child(2) { grid-area: category; font-size: 12px; color: var(--color-text-muted); }
     .admin-event__row > :nth-child(3) { display: none; }
-    .admin-event__row > :nth-child(4) { grid-area: stock; }
     .admin-event__row > :nth-child(5) { grid-area: min; justify-self: end; }
     .admin-event__row > :nth-child(6) { grid-area: status; }
     .admin-event__row > :nth-child(7) { grid-area: actions; justify-self: end; align-self: start; }
@@ -4868,6 +4949,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 @media (max-width: 900px) {
     .admin-event-subnav {
         padding: 0 12px;
+        gap: 15px;
     }
     .admin-event-subnav .admin-event-subnav__event-badge {
         max-width: 140px;
@@ -5626,6 +5708,17 @@ html.admin-theme--dark .admin-btn--danger.admin-btn--icon-only:hover,
 html.admin-theme--dark .admin-btn--danger.admin-btn--icon-only:focus-visible {
     background: rgba(240, 113, 120, 0.24);
     color: #ffb4b8;
+}
+
+html.admin-theme--dark .admin-btn--icon-only:not(.admin-btn--danger) {
+    background: var(--admin-tint);
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-btn--icon-only:not(.admin-btn--danger):hover,
+html.admin-theme--dark .admin-btn--icon-only:not(.admin-btn--danger):focus-visible {
+    background: var(--admin-tint-strong);
+    color: var(--color-primary-light);
 }
 
 html.admin-theme--dark .admin-confirm__icon--destructive {

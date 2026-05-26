@@ -95,20 +95,58 @@
         `;
     }
 
-    function renderProductMovements(table, movements) {
-        Array.from(table.children).forEach(child => {
-            if (!child.classList.contains('admin-table__head')) child.remove();
+    function readLatestMovementIdFromDom(table) {
+        let max = 0;
+        if (!table) return max;
+        table.querySelectorAll('[data-movement-id]').forEach(el => {
+            const id = Number(el.dataset.movementId);
+            if (Number.isFinite(id) && id > max) max = id;
         });
-        if (!movements.length) {
-            table.insertAdjacentHTML('beforeend', `
-                <div class="admin-empty">
-                    <i class="fa-regular fa-folder-open" aria-hidden="true"></i>
-                    <p>Nenhuma movimentação registrada.</p>
-                </div>
-            `);
-            return;
+        return max;
+    }
+
+    const productMovementsLatestByTable = new WeakMap();
+
+    function mergeProductMovements(table, movements) {
+        if (!table) return;
+
+        const head = table.querySelector('.admin-table__head');
+        if (!head) return;
+
+        let prevLatest = productMovementsLatestByTable.get(table);
+        if (prevLatest === undefined) {
+            prevLatest = readLatestMovementIdFromDom(table);
+            productMovementsLatestByTable.set(table, prevLatest);
         }
-        table.insertAdjacentHTML('beforeend', movements.map(renderProductMovementRow).join(''));
+
+        const list = movements || [];
+        const nextLatest = list.reduce(
+            (max, movement) => Math.max(max, Number(movement.id) || 0),
+            prevLatest,
+        );
+
+        if (nextLatest <= prevLatest) return;
+
+        const newItems = [];
+        for (let i = 0; i < list.length; i += 1) {
+            const movement = list[i];
+            const mid = Number(movement.id);
+            if (!Number.isFinite(mid) || mid <= prevLatest) break;
+            if (table.querySelector(`.admin-mov__wrapper[data-movement-id="${mid}"]`)) continue;
+            newItems.push(movement);
+        }
+
+        productMovementsLatestByTable.set(table, nextLatest);
+        if (!newItems.length) return;
+
+        table.querySelector('.admin-empty')?.remove();
+        head.insertAdjacentHTML('afterend', newItems.map(renderProductMovementRow).join(''));
+
+        const trimCap = 120;
+        while (table.querySelectorAll('.admin-mov__wrapper').length > trimCap) {
+            const wrappers = table.querySelectorAll('.admin-mov__wrapper');
+            wrappers[wrappers.length - 1].remove();
+        }
     }
 
     function isEditingLiveStockForm(root) {
@@ -171,7 +209,7 @@
                 }
             }
         }
-        if (movementsTable) renderProductMovements(movementsTable, payload.movements || []);
+        if (movementsTable) mergeProductMovements(movementsTable, payload.movements || []);
     }
 
     async function refreshProduct() {
