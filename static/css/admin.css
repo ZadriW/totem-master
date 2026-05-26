@@ -1499,6 +1499,23 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     }
 }
 
+/* Painel administrativo — nav mais compacta que a do vendedor */
+.admin-nav--admin {
+    gap: 6px;
+    min-height: 38px;
+}
+
+.admin-nav--admin .admin-nav__item {
+    gap: 7px;
+    padding: 8px 14px;
+    min-height: 38px;
+    font-size: 13px;
+}
+
+.admin-nav--admin .admin-nav__item i {
+    font-size: 13px;
+}
+
 /* ==========================================================================
    Flash messages
    ========================================================================== */
@@ -3123,6 +3140,17 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
             font-size: 14px;
         }
 
+        .admin-nav--admin .admin-nav__track .admin-nav__item {
+            min-height: 42px;
+            padding: 8px 6px;
+            font-size: 12px;
+            gap: 5px;
+        }
+
+        .admin-nav--admin .admin-nav__track .admin-nav__item i {
+            font-size: 12px;
+        }
+
         .admin-nav__pager {
             display: flex;
             grid-column: 1 / -1;
@@ -3957,6 +3985,22 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 
     .admin-nav__item i {
         font-size: 14px;
+    }
+
+    .admin-nav--admin {
+        min-height: 42px;
+        gap: 4px;
+    }
+
+    .admin-nav--admin .admin-nav__item {
+        min-height: 40px;
+        padding: 8px 5px;
+        font-size: 12px;
+        gap: 5px;
+    }
+
+    .admin-nav--admin .admin-nav__item i {
+        font-size: 12px;
     }
 
     .admin-nav__label {
