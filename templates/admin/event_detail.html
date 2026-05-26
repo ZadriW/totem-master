@@ -229,7 +229,7 @@
                     </div>
                     {% for item in sales_dashboard.top_products %}
                     <div class="admin-event-dash-sales__row admin-event-dash-sales__row--top" role="row">
-                        <span class="admin-event-dash-sales__rank">{{ loop.index }}</span>
+                        <span class="admin-event-dash-sales__rank{% if loop.index == 1 %} admin-event-dash-sales__rank--gold{% elif loop.index == 2 %} admin-event-dash-sales__rank--silver{% elif loop.index == 3 %} admin-event-dash-sales__rank--bronze{% endif %}">{{ loop.index }}</span>
                         <span><code class="admin-event-dash-sales__sku">{{ item.sku }}</code></span>
                         <span class="admin-event-dash-sales__prod-name">
                             {% if item.product_id %}

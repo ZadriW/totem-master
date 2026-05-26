@@ -943,6 +943,49 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     text-align: center;
 }
 
+/* Top 3 — medalhas (ouro, prata, bronze) */
+.admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--gold,
+.admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--silver,
+.admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--bronze {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--gold {
+    background: linear-gradient(145deg, #ffe566 0%, #f5c518 48%, #d4a017 100%);
+    color: #5c4500;
+    border: 1.5px solid #c9a018;
+    box-shadow:
+        0 1px 4px rgba(212, 160, 23, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--silver {
+    background: linear-gradient(145deg, #f4f4f4 0%, #c8c8c8 48%, #9a9a9a 100%);
+    color: #3d3d3d;
+    border: 1.5px solid #a0a0a0;
+    box-shadow:
+        0 1px 4px rgba(120, 120, 120, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--bronze {
+    background: linear-gradient(145deg, #e8a86a 0%, #cd7f32 48%, #a0522d 100%);
+    color: #3d1f08;
+    border: 1.5px solid #9a5520;
+    box-shadow:
+        0 1px 4px rgba(160, 82, 45, 0.32),
+        inset 0 1px 0 rgba(255, 220, 180, 0.35);
+}
+
 /* Top-SKUs — mobile ≤900px: card com rank à esquerda, nome + sku à direita, métricas em pills */
 @media (max-width: 900px) {
     .admin-event-dash-sales__table--top-skus > .admin-table__head.admin-event-dash-sales__row.admin-event-dash-sales__row--top {
@@ -962,7 +1005,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         align-items: start;
     }
 
-    .admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank {
+    .admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank:not(.admin-event-dash-sales__rank--gold):not(.admin-event-dash-sales__rank--silver):not(.admin-event-dash-sales__rank--bronze) {
         grid-area: rank;
         align-self: start;
         margin-top: 3px;
@@ -976,6 +1019,16 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         font-size: 13px;
         font-weight: 800;
         color: var(--color-primary);
+    }
+
+    .admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--gold,
+    .admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--silver,
+    .admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--bronze {
+        grid-area: rank;
+        align-self: start;
+        margin-top: 3px;
+        width: 30px;
+        height: 30px;
     }
 
     /* SKU — 2ª célula */
@@ -1063,7 +1116,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     }
 
     .admin-sellers__row {
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         grid-template-areas:
             "person status"
             "events events"
@@ -1085,13 +1138,31 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         grid-area: status;
         justify-self: end;
     }
-    .admin-sellers__row > :nth-child(4) {
+    .admin-sellers__row:not(.admin-table__head) > :nth-child(4).admin-table__col--num {
         grid-area: sales;
         justify-self: start;
+        align-self: center;
+        text-align: left;
+        font-size: 13px;
+        min-width: 0;
     }
-    .admin-sellers__row > :nth-child(5) {
+    .admin-sellers__row:not(.admin-table__head) > :nth-child(4).admin-table__col--num::before {
+        content: "Vendas: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
+    }
+    .admin-sellers__row:not(.admin-table__head) > :nth-child(5).admin-table__col--num {
         grid-area: revenue;
         justify-self: end;
+        align-self: center;
+        text-align: right;
+        font-size: 13px;
+        min-width: 0;
+    }
+    .admin-sellers__row:not(.admin-table__head) > :nth-child(5).admin-table__col--num::before {
+        content: "Faturamento: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
     }
     .admin-sellers__row > :nth-child(6) {
         grid-area: login;
@@ -2345,7 +2416,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     word-break: break-word;
 }
 
-/* Promo no estoque: wrapper mantém :hover ao mover o cursor para o balão (filho), evitando sumir com pseudo-elemento + pointer-events:none */
+/* Promo no estoque: tooltip só ao passar o cursor (ou foco) sobre o ícone */
 .admin-stock__promo-wrap {
     position: relative;
     display: inline-flex;
@@ -2359,22 +2430,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 
 .admin-stock__promo-tag-icon[hidden] {
     display: none !important;
-}
-
-/* Coluna invisível entre ícone e tooltip — sem isso o cursor “cai no buraco” e o hover some */
-@media (min-width: 901px) {
-    .admin-stock__promo-wrap:not([hidden]):has(
-            .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty)
-        )::before {
-        content: "";
-        position: absolute;
-        left: 50%;
-        bottom: 100%;
-        width: 44px;
-        height: 72px;
-        transform: translateX(-50%);
-        z-index: 1;
-    }
 }
 
 /* Ícone de promoção ao lado do nome (estoque admin/vendedor — sem position:absolute do card) */
@@ -2438,13 +2493,12 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 }
 
 @media (min-width: 901px) {
-    .admin-stock__promo-wrap:not([hidden]):hover
-        .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty),
-    .admin-stock__promo-wrap:not([hidden]):focus-within
-        .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty) {
+    .admin-stock__promo-tag-icon:hover
+        + .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty),
+    .admin-stock__promo-tag-icon:focus-visible
+        + .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty) {
         opacity: 1;
         visibility: visible;
-        pointer-events: auto;
     }
 }
 
@@ -4109,15 +4163,17 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     }
     .admin-mov__note-btn {
         position: absolute;
+        justify-content: flex-end !important;
+        align-items: end !important;
         bottom: 12px;
         right: 12px;
         width: 48px;
         height: 48px;
-        font-size: 1.375rem;
+        font-size: 1.1rem;
         z-index: 2;
     }
     .admin-mov__note-btn i {
-        font-size: 1.375rem;
+        font-size: 1.1rem;
         line-height: 1;
     }
 
@@ -4423,6 +4479,9 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         right: 16px;
         bottom: 12px;
     }
+    .admin-tx__row.is-open .admin-mov__note-btn {
+        display: none;
+    }
     .admin-table--tx-wide .admin-tx__row.is-open > .admin-table__col--toggle,
     .admin-table--with-payment:not(.admin-table--tx-wide) .admin-tx__row.is-open > .admin-table__col--toggle {
         top: 16px;
@@ -4485,14 +4544,43 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         padding: 12px 14px;
     }
     .admin-tx__items-row > :nth-child(1) { grid-column: 1 / -1; }
-    .admin-tx__items-row > :nth-child(2) { grid-column: 1; font-size: 12px; color: var(--color-text-muted); }
-    .admin-tx__items-row > :nth-child(3) { grid-column: 1; font-size: 12px; color: var(--color-text-muted); }
+    .admin-tx__items-row > :nth-child(2) {
+        grid-column: 1;
+        font-size: 12px;
+        color: var(--color-text-muted);
+        text-align: left;
+    }
+    .admin-tx__items-row > :nth-child(2)::before {
+        content: "SKU: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
+    }
+    .admin-tx__items-row > :nth-child(3) {
+        grid-column: 1;
+        font-size: 12px;
+        color: var(--color-text-muted);
+        text-align: left;
+    }
+    .admin-tx__items-row > :nth-child(3)::before {
+        content: "Categoria: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
+    }
     .admin-tx__items-row > :nth-child(4),
     .admin-tx__items-row > :nth-child(5),
     .admin-tx__items-row > :nth-child(6) {
         text-align: right;
     }
-    .admin-tx__items-row > :nth-child(4) { grid-column: 2; font-size: 12px; color: var(--color-text-muted); }
+    .admin-tx__items-row > :nth-child(4).admin-table__col--num {
+        grid-column: 2;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-tx__items-row > :nth-child(4).admin-table__col--num::before {
+        content: "Qtd: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
+    }
     .admin-tx__items-row > :nth-child(5) { grid-column: 2; font-size: 12px; color: var(--color-text-muted); }
     .admin-tx__items-row > :nth-child(6) { grid-column: 2; }
 }
