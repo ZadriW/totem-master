@@ -356,6 +356,17 @@ body.cart-open {
     overflow: hidden;
 }
 
+/* Mobile: drawer acima das topbars (admin-topbar 110, catálogo embed 100, dropdowns ~500) */
+@media (max-width: 900px) {
+    .cart-backdrop {
+        z-index: 1200;
+    }
+
+    .cart-drawer {
+        z-index: 1201;
+    }
+}
+
 @media (max-width: 480px) {
     .cart-drawer {
         width: 100%;

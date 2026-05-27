@@ -320,7 +320,8 @@
     background: var(--color-bg);
     display: flex;
     flex-direction: column;
-    --admin-topbar-height: 74px;
+    /* Altura da barra fixa (desktop): padding 14×2 + conteúdo ~40px; JS refina em admin.js */
+    --admin-topbar-height: 68px;
 }
 
 .admin-topbar {
@@ -521,6 +522,13 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     margin-right: auto;
 }
 
+/* Catálogo embutido: busca/carrinho grudam abaixo da admin-topbar (mobile + desktop) */
+.admin-main.admin-main--catalog-embed .topbar {
+    position: sticky;
+    top: var(--admin-topbar-height);
+    z-index: 100;
+}
+
 /* Desktop: topbar do painel fixa no topo (sticky quebra com overflow-x no body) */
 @media (min-width: 901px) {
     .admin-shell > .admin-topbar {
@@ -537,13 +545,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 
     .admin-shell > .admin-main.admin-main--catalog-embed {
         padding-top: var(--admin-topbar-height);
-    }
-
-    /* Catálogo embutido: busca/carrinho grudam abaixo da barra do vendedor */
-    .admin-main.admin-main--catalog-embed .topbar {
-        position: sticky;
-        top: var(--admin-topbar-height);
-        z-index: 100;
     }
 }
 
@@ -1622,22 +1623,22 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 .admin-nav {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex: 1;
     justify-content: center;
     flex-wrap: wrap;
-    min-height: 44px;
+    min-height: 36px;
 }
 
 .admin-nav__item {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
-    padding: 11px 18px;
-    min-height: 44px;
+    gap: 8px;
+    padding: 8px 13px;
+    min-height: 36px;
     border-radius: var(--radius-pill);
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--color-text-muted);
     transition: background var(--transition), color var(--transition);
@@ -1654,7 +1655,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 }
 
 .admin-nav__item i {
-    font-size: 15px;
+    font-size: 13px;
 }
 
 .admin-nav__label {
@@ -1676,23 +1677,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-nav__track {
         display: contents;
     }
-}
-
-/* Painel administrativo — nav mais compacta que a do vendedor */
-.admin-nav--admin {
-    gap: 6px;
-    min-height: 38px;
-}
-
-.admin-nav--admin .admin-nav__item {
-    gap: 7px;
-    padding: 8px 14px;
-    min-height: 38px;
-    font-size: 13px;
-}
-
-.admin-nav--admin .admin-nav__item i {
-    font-size: 13px;
 }
 
 /* ==========================================================================
@@ -3393,10 +3377,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
             outline: 2px solid var(--color-primary);
             outline-offset: 2px;
         }
-
-        .admin-main.admin-main--catalog-embed .topbar {
-            top: var(--admin-topbar-height, 154px);
-        }
     }
 
     .admin-card__form {
@@ -4323,10 +4303,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         text-overflow: ellipsis;
         white-space: nowrap;
     }
-
-    .admin-main.admin-main--catalog-embed .topbar {
-        top: var(--admin-topbar-height, 128px);
-    }
 }
 
 /* ---------- Responsivo ---------- */
@@ -4347,8 +4323,9 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-main.admin-main--catalog-embed .admin-flashes {
         padding: 16px 16px 0;
     }
-    .admin-main.admin-main--catalog-embed .topbar {
-        top: var(--admin-topbar-height, 136px);
+    /* Catálogo embutido: logo duplicada — mantém admin-topbar__brand, oculta topbar__brand ao lado da busca */
+    .admin-main.admin-main--catalog-embed .topbar__brand {
+        display: none;
     }
     .admin-kpis {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4607,9 +4584,16 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-shell {
         --admin-topbar-height: 128px;
     }
+}
 
-    .admin-main.admin-main--catalog-embed .topbar {
-        top: var(--admin-topbar-height, 128px);
+/* Desktop: catálogo embutido — offset do main (admin-topbar fixa) + logo na topbar do catálogo */
+@media (min-width: 901px) {
+    .admin-shell > .admin-main.admin-main--catalog-embed {
+        padding-top: var(--admin-topbar-height);
+    }
+
+    .admin-main.admin-main--catalog-embed .topbar__brand {
+        display: inline-flex;
     }
 }
 

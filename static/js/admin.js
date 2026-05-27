@@ -255,4 +255,25 @@
             setTimeout(() => el.remove(), 450);
         }, 6000);
     });
+
+    // --- 4. Altura real da admin-topbar — sticky do catálogo embutido (mobile + desktop) ---
+    const adminShell = document.querySelector('.admin-shell');
+    const adminTopbar = adminShell?.querySelector(':scope > .admin-topbar');
+
+    if (adminShell && adminTopbar) {
+        const syncAdminTopbarHeight = () => {
+            adminShell.style.setProperty(
+                '--admin-topbar-height',
+                `${Math.round(adminTopbar.getBoundingClientRect().height)}px`
+            );
+        };
+
+        syncAdminTopbarHeight();
+
+        if (typeof ResizeObserver !== 'undefined') {
+            new ResizeObserver(syncAdminTopbarHeight).observe(adminTopbar);
+        } else {
+            window.addEventListener('resize', syncAdminTopbarHeight, { passive: true });
+        }
+    }
 })();
