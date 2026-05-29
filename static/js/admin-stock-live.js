@@ -68,6 +68,27 @@
         setTimeout(() => el.remove(), 4500);
     }
 
+    function eventBadgeInline(movement) {
+        const bg = movement.event_badge_bg;
+        const fg = movement.event_badge_fg;
+        if (!bg || !fg) return '';
+        return ` style="background-color:${escapeHtml(bg)};color:${escapeHtml(fg)};"`;
+    }
+
+    function eventCell(movement) {
+        const eid = movement.event_id;
+        const ename = String(movement.event_name ?? '').trim();
+        const hasId = eid !== undefined && eid !== null && eid !== '';
+        const attrStyle = eventBadgeInline(movement);
+        if (hasId && ename) {
+            return `<span class="admin-mov__event-cell"><span class="admin-nav__event-badge admin-mov__event-badge"${attrStyle} title="Evento #${escapeHtml(eid)}">${escapeHtml(ename)}</span></span>`;
+        }
+        if (hasId) {
+            return `<span class="admin-mov__event-cell"><span class="admin-mov__event-unknown" title="Evento #${escapeHtml(eid)} (cadastro indisponível)">#${escapeHtml(eid)}</span></span>`;
+        }
+        return '<span class="admin-mov__event-cell"><span class="admin-mov__event-none" title="Movimentação no estoque global do catálogo (sem evento)">—</span></span>';
+    }
+
     function renderProductMovementRow(movement) {
         const reasonParts = [];
         if (movement.reference) reasonParts.push(`<code>${escapeHtml(movement.reference)}</code>`);
@@ -75,13 +96,14 @@
 
         return `
             <div class="admin-mov__wrapper" data-movement-id="${escapeHtml(movement.id)}">
-                <div class="admin-mov__row" role="row">
+                <div class="admin-mov__row admin-mov__row--with-event" role="row">
                     <span>${escapeHtml(movement.created_at_display)}</span>
                     <span class="admin-mov__type-cell">
                         <span class="admin-badge admin-mov__badge admin-mov__badge--${escapeHtml(movement.movement_type)}">
                             ${escapeHtml(movement.movement_label)}
                         </span>
                     </span>
+                    ${eventCell(movement)}
                     <span class="admin-table__col--num admin-mov__delta admin-mov__delta--${escapeHtml(movement.delta_kind)}">
                         ${escapeHtml(movement.delta_display)}
                     </span>

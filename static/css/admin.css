@@ -2716,6 +2716,11 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     min-width: 640px;
 }
 
+.admin-product__movements-table .admin-mov__row--with-event {
+    grid-template-columns: 1.1fr 0.9fr minmax(104px, 1.15fr) 0.5fr 0.65fr 1.35fr 0.65fr;
+    min-width: 720px;
+}
+
 .admin-card {
     background: var(--color-surface);
     border-radius: var(--radius-md);
@@ -3499,7 +3504,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     }
     .admin-stock__product strong {
         display: -webkit-box;
-        -webkit-line-clamp: 2;
         line-clamp: 2;
         -webkit-box-orient: vertical;
         white-space: normal;
@@ -4034,6 +4038,118 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         color: var(--color-text-muted);
     }
     .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(6)::before {
+        content: "Usuário";
+        display: block;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+
+    /* Biblioteca — histórico do produto com coluna Evento (7 colunas) */
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event {
+        grid-template-areas:
+            "date type"
+            "event event"
+            "delta balance"
+            "reason reason"
+            "user user";
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(3) {
+        grid-area: event;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 10px;
+        justify-self: stretch;
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        text-align: left;
+        min-width: 0;
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(3) .admin-mov__event-badge,
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(3) .admin-mov__event-none,
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(3) .admin-mov__event-unknown {
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(4) {
+        grid-area: delta;
+        justify-self: start;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(5) {
+        grid-area: balance;
+        justify-self: end;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(6) {
+        grid-area: reason;
+        white-space: normal;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(7) {
+        grid-area: user;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(4).admin-table__col--num,
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(5).admin-table__col--num {
+        text-align: center;
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(3)::before {
+        content: "Evento";
+        display: block;
+        margin-bottom: 0;
+        flex-shrink: 0;
+        line-height: 1;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(4)::before {
+        content: "Delta";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(5)::before {
+        content: "Saldo";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(6)::before {
+        content: "Motivo / ref.";
+        display: block;
+        margin-bottom: 4px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(7)::before {
         content: "Usuário";
         display: block;
         font-size: 10px;
@@ -5246,6 +5362,84 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+/* Prévia de estoque ao selecionar evento no modal "Adicionar ao Evento" */
+.add-event-stock-preview {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-top: -4px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    font-size: 12px;
+}
+
+.add-event-stock-preview[hidden] {
+    display: none !important;
+}
+
+.add-event-stock-preview__item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1;
+}
+
+.add-event-stock-preview__label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.add-event-stock-preview__value {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+
+.add-event-stock-preview__sep {
+    width: 1px;
+    height: 32px;
+    background: var(--color-border);
+    margin: 0 14px;
+    flex-shrink: 0;
+}
+
+/* Mensagem "produto novo neste evento" */
+.add-event-stock-preview--new {
+    display: flex !important;
+    align-items: center;
+    gap: 7px;
+    margin-top: -4px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    background: rgba(14, 22, 122, 0.05);
+    border: 1px solid rgba(14, 22, 122, 0.12);
+    font-size: 12px;
+    color: var(--color-primary);
+    line-height: 1.4;
+}
+
+.add-event-stock-preview--new[hidden] {
+    display: none !important;
+}
+
+.add-event-stock-preview--new i {
+    flex-shrink: 0;
+    font-size: 13px;
+    opacity: 0.8;
+}
+
+/* Spinner enquanto carrega */
+.add-event-stock-preview[aria-busy="true"] .add-event-stock-preview__value {
+    opacity: 0.4;
 }
 
 /* Responsivo da sub-nav do evento */
