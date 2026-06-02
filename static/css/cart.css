@@ -27,7 +27,8 @@
     right: 0;
     z-index: 100;
     width: min(460px, 100%);
-    height: 100vh;
+    height: 100vh;   /* fallback: browsers sem suporte a dvh */
+    height: 100dvh;  /* iOS Safari 15.4+: ajusta ao viewport real (sem barra do browser) */
     background: var(--color-surface);
     box-shadow: -18px 0 48px rgba(14, 22, 122, 0.18);
     transform: translateX(100%);
