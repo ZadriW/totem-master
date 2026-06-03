@@ -11,9 +11,6 @@
 {% block title %}Estoque — {{ event.name }} | Dental Odonto Master{% endblock %}
 
 {% block admin_body %}
-
-{% include "admin/_event_subnav.html" %}
-
 <section class="admin-section">
     <header class="admin-section__header admin-section__header--row">
         <div>
@@ -235,16 +232,22 @@
 
                 <span class="admin-table__col--num">{{ p.min_stock }}</span>
 
-                <span data-stock-status>
+                <span class="admin-stock__status-cell" data-stock-status>
                     {% if not p.product_active %}
-                        <span class="admin-badge admin-badge--neutral">Inativo no catálogo</span>
+                        <span class="admin-badge admin-badge--neutral" data-stock-status-badge>Inativo no catálogo</span>
                     {% elif p.stock == 0 %}
-                        <span class="admin-badge admin-badge--danger">Sem estoque</span>
+                        <span class="admin-badge admin-badge--danger" data-stock-status-badge>Sem estoque</span>
                     {% elif p.min_stock > 0 and p.stock < p.min_stock %}
-                        <span class="admin-badge admin-badge--warn">Abaixo do mínimo</span>
+                        <span class="admin-badge admin-badge--warn" data-stock-status-badge>Abaixo do mínimo</span>
                     {% else %}
-                        <span class="admin-badge admin-badge--success">OK</span>
+                        <span class="admin-badge admin-badge--success" data-stock-status-badge>OK</span>
                     {% endif %}
+                    {% set promo_name = promo_names.get(p.product_id, '') %}
+                    <span class="admin-badge admin-badge--promo-stock admin-stock__promo-name-badge"
+                          data-stock-promo-badge
+                          {% if p.product_id not in promo_product_ids %}hidden{% endif %}>
+                        <span data-stock-promo-badge-text>{{ promo_name }}</span>
+                    </span>
                 </span>
 
                 {% if event.active %}

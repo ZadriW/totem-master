@@ -3,16 +3,7 @@
 {% block title %}Restaurar pedido | Dental Odonto Master{% endblock %}
 
 {% block head %}
-<script>
-(function () {
-    try {
-        if (localStorage.getItem('totem-admin-theme') === 'dark') {
-            document.documentElement.classList.add('admin-theme--dark');
-        }
-    } catch (e) { /* ignore */ }
-})();
-</script>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+{% include 'partials/totem_theme_head.html' %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/seller-restore.css') }}">
 {% endblock %}
 
@@ -21,7 +12,7 @@
 <script>
 window.__SELLER_RESTORE_CHECKOUT__ = {{ restore_payload | tojson }};
 window.__SELLER_RESTORE_PAYMENT_URL__ = {{ payment_url | tojson }};
-window.__SELLER_RESTORE_FALLBACK_URL__ = {{ url_for('seller_dashboard') | tojson }};
+window.__SELLER_RESTORE_FALLBACK_URL__ = {{ url_for('seller_sale') | tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/seller-restore-checkout.js') }}"></script>
 {% endblock %}

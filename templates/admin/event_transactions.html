@@ -3,13 +3,11 @@
 {% from "macros/admin_tx_order_cell.html" import admin_tx_order_cell %}
 {% from "macros/admin_tx_receipt_link.html" import admin_tx_receipt_link %}
 {% from "macros/admin_tx_status_badge.html" import admin_tx_status_badge %}
+{% from "macros/admin_tx_item_cells.html" import admin_tx_item_cells, admin_tx_discount_summary %}
 
 {% block title %}Transações — {{ event.name }} | Dental Odonto Master{% endblock %}
 
 {% block admin_body %}
-
-{% include "admin/_event_subnav.html" %}
-
 <section class="admin-section">
     <header class="admin-section__header admin-section__header--row">
         <div>
@@ -110,14 +108,14 @@
                     name="pedido"
                     value="{{ filters.pedido }}"
                     class="admin-filter__input"
-                    placeholder="Ex.: OM260422-1234 ou parte do número"
+                    placeholder="Código do pedido ou nome do cliente…"
                     autocomplete="off"
                     inputmode="search"
                     aria-describedby="hint-filtro-pedido-event-tx"
                 >
             </span>
             <span id="hint-filtro-pedido-event-tx" class="admin-filter__hint">
-                Busca no número do pedido; útil para localizar uma venda específica no evento.
+                Busca pelo número do pedido (ex.: OM260422-1234) ou pelo nome do cliente.
             </span>
         </label>
 
@@ -171,7 +169,7 @@
                     <span class="admin-table__col admin-table__col--toggle">
                         <i class="fa-solid fa-chevron-right admin-tx__chevron" aria-hidden="true"></i>
                     </span>
-                    {{ admin_tx_order_cell(tx.order_number) }}
+                    {{ admin_tx_order_cell(tx.order_number, tx.client_name) }}
                     <span class="admin-table__col">{{ tx.created_at | datahora }}</span>
                     <span class="admin-table__col admin-table__col--num">{{ tx.items_count }}</span>
                     <span class="admin-table__col admin-table__col--num">
@@ -215,12 +213,7 @@
                             </div>
                             {% for it in tx_items %}
                             <div class="admin-tx__items-row">
-                                <span class="admin-tx__product">{{ it.product_name }}</span>
-                                <span>{% if it.product_sku %}<code>{{ it.product_sku }}</code>{% else %}—{% endif %}</span>
-                                <span>{{ it.category or '-' }}</span>
-                                <span class="admin-table__col--num">{{ it.quantity }}</span>
-                                <span class="admin-table__col--num">{{ it.unit_price | brl }}</span>
-                                <span class="admin-table__col--num"><strong>{{ it.subtotal | brl }}</strong></span>
+                                {{ admin_tx_item_cells(it) }}
                             </div>
                             {% endfor %}
                         </div>
@@ -243,6 +236,7 @@
                                 <strong><code class="admin-mov__aut">{{ tx.aut }}</code></strong>
                             </div>
                             {% endif %}
+                            {{ admin_tx_discount_summary(tx_items, tx.total) }}
                             <div class="admin-tx__summary-row admin-tx__summary-row--total">
                                 <span>Total da transação</span>
                                 <strong>{{ tx.total | brl }}</strong>

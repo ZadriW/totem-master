@@ -38,8 +38,11 @@ button.payment__back {
     font-family: var(--font-base, inherit);
 }
 
-.payment__brand img {
+.payment__brand img,
+.payment__brand .admin-brand-logo--light,
+.payment__brand .admin-brand-logo--dark {
     height: 44px;
+    width: auto;
 }
 
 .payment__content {
@@ -188,6 +191,34 @@ button.payment__back {
 .payment__summary-row strong {
     color: var(--color-text);
     font-weight: 700;
+}
+
+.payment__summary-row--discount strong {
+    color: #0d7a4a;
+}
+
+.line-item__price-original {
+    text-decoration: line-through;
+    color: var(--color-text-muted);
+    font-size: 0.92em;
+    margin-right: 4px;
+}
+
+.line-item__promo {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: #0d7a4a;
+    font-weight: 600;
+}
+
+.line-item__promo i {
+    margin-right: 4px;
+    opacity: 0.85;
+}
+
+.payment-item__meta .line-item__price-original,
+.payment-item__meta .line-item__promo {
+    display: inline;
 }
 
 .payment__summary-total {

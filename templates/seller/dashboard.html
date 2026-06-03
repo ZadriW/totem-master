@@ -3,6 +3,8 @@
 {% from "macros/admin_tx_order_cell.html" import admin_tx_order_cell %}
 {% from "macros/admin_tx_receipt_link.html" import admin_tx_receipt_link %}
 {% from "macros/admin_tx_status_badge.html" import admin_tx_status_badge %}
+{% from "macros/admin_tx_pending_actions.html" import admin_tx_pending_actions %}
+{% from "macros/admin_tx_item_cells.html" import admin_tx_item_cells, admin_tx_discount_summary %}
 
 {% block title %}Dashboard do vendedor - Vendedor | Dental Odonto Master{% endblock %}
 
@@ -19,9 +21,9 @@
         <h1 class="admin-section__title">Dashboard do vendedor</h1>
         <p class="admin-section__subtitle">
             {% if seller_event %}
-                Vendas confirmadas, estoque e movimentações do evento <strong>{{ seller_event.name }}</strong>.
+                Suas vendas confirmadas no evento <strong>{{ seller_event.name }}</strong>.
             {% else %}
-                Visão somente leitura das vendas confirmadas, estoque atual e movimentações dos totens.
+                Suas vendas confirmadas registradas no sistema.
             {% endif %}
         </p>
     </header>
@@ -29,23 +31,23 @@
     <div class="admin-kpis">
         <article class="kpi kpi--primary">
             <span class="kpi__icon"><i class="fa-solid fa-receipt" aria-hidden="true"></i></span>
-            <span class="kpi__label">Minhas vendas{% if seller_event %} (evento){% endif %}</span>
+            <span class="kpi__label">Minhas vendas{% if seller_event %}{% endif %}</span>
             <span class="kpi__value" data-dash-kpi="transactions_count">{{ stats.transactions_count }}</span>
             <span class="kpi__hint" data-dash-kpi="transactions_today">{{ stats.transactions_today }} hoje</span>
         </article>
 
         <article class="kpi kpi--success">
             <span class="kpi__icon"><i class="fa-solid fa-sack-dollar" aria-hidden="true"></i></span>
-            <span class="kpi__label">Montante arrecadado{% if seller_event %} (evento){% endif %}</span>
+            <span class="kpi__label">Montante arrecadado{% if seller_event %} (Vendedor){% endif %}</span>
             <span class="kpi__value" data-dash-kpi="total_revenue">{{ stats.total_revenue | brl }}</span>
             <span class="kpi__hint" data-dash-kpi="revenue_today">{{ stats.revenue_today | brl }} hoje</span>
         </article>
 
         <article class="kpi">
             <span class="kpi__icon"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i></span>
-            <span class="kpi__label">Itens vendidos{% if seller_event %} (evento){% endif %}</span>
+            <span class="kpi__label">Itens vendidos</span>
             <span class="kpi__value" data-dash-kpi="items_sold">{{ stats.items_sold }}</span>
-            <span class="kpi__hint">Unidades totais</span>
+            <span class="kpi__hint">Unidades vendidas por você</span>
         </article>
 
         <article class="kpi {% if stock.below_min > 0 %}kpi--warn{% endif %}" data-dash-kpi-card="below_min">
@@ -53,48 +55,6 @@
             <span class="kpi__label">Abaixo do mínimo{% if seller_event %} no evento{% endif %}</span>
             <span class="kpi__value" data-dash-kpi="below_min">{{ stock.below_min }}</span>
             <span class="kpi__hint" data-dash-kpi="out_of_stock">{{ stock.out_of_stock }} sem estoque</span>
-        </article>
-    </div>
-</section>
-
-<section class="admin-section">
-    <header class="admin-section__header admin-section__header--row">
-        <div>
-            <h2 class="admin-section__title">Estoque{% if seller_event %} do evento{% endif %}</h2>
-            <p class="admin-section__subtitle">
-                {% if seller_event %}
-                    Situação atual dos produtos no evento <strong>{{ seller_event.name }}</strong>. Somente leitura.
-                {% else %}
-                    Situação atual do catálogo físico, sem ações de alteração.
-                {% endif %}
-            </p>
-        </div>
-        <a class="admin-btn admin-btn--ghost" href="{{ url_for('seller_stock') }}">
-            <i class="fa-solid fa-arrow-right-long" aria-hidden="true"></i>
-            Ver estoque
-        </a>
-    </header>
-
-    <div class="admin-kpis">
-        <article class="kpi">
-            <span class="kpi__icon"><i class="fa-solid fa-tags" aria-hidden="true"></i></span>
-            <span class="kpi__label">Produtos{% if seller_event %} no evento{% else %} cadastrados{% endif %}</span>
-            <span class="kpi__value" data-dash-kpi="products_count">{{ stock.products_count }}</span>
-            <span class="kpi__hint" data-dash-kpi="products_active">{{ stock.products_active }} ativos</span>
-        </article>
-
-        <article class="kpi">
-            <span class="kpi__icon"><i class="fa-solid fa-warehouse" aria-hidden="true"></i></span>
-            <span class="kpi__label">Unidades em estoque</span>
-            <span class="kpi__value" data-dash-kpi="units_in_stock">{{ stock.units_in_stock }}</span>
-            <span class="kpi__hint">Somatório dos produtos</span>
-        </article>
-
-        <article class="kpi kpi--success">
-            <span class="kpi__icon"><i class="fa-solid fa-coins" aria-hidden="true"></i></span>
-            <span class="kpi__label">Valor em estoque</span>
-            <span class="kpi__value" data-dash-kpi="stock_value">{{ stock.stock_value | brl }}</span>
-            <span class="kpi__hint">A preço de venda</span>
         </article>
     </div>
 </section>
@@ -143,32 +103,7 @@
                         <span class="admin-tx__status-stack">
                             {{ admin_tx_status_badge(tx) }}
                             {{ admin_tx_receipt_link(tx) }}
-                            {% if tx.status == 'pendente' %}
-                            <a
-                                href="{{ url_for('seller_restore_pending_checkout', tx_id=tx.id) }}"
-                                class="admin-tx__restore-cart"
-                                aria-label="Refazer carrinho e retomar o pagamento deste pedido"
-                                title="Refazer carrinho"
-                            >
-                                <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
-                            </a>
-                            <form
-                                method="post"
-                                action="{{ seller_pending_cancel_url(tx.id) }}"
-                                class="admin-tx__discard-form"
-                                data-confirm="Descartar este pedido pendente? O carrinho não poderá ser refeito por aqui."
-                            >
-                                {% include 'partials/csrf_field.html' %}
-                                <button
-                                    type="submit"
-                                    class="admin-tx__discard-cart"
-                                    aria-label="Apagar carrinho e descartar pedido pendente"
-                                    title="Apagar carrinho"
-                                >
-                                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-                                </button>
-                            </form>
-                            {% endif %}
+                            {{ admin_tx_pending_actions(tx) }}
                         </span>
                     </span>
                 </div>
@@ -193,12 +128,7 @@
                             </div>
                             {% for it in tx_items %}
                             <div class="admin-tx__items-row">
-                                <span class="admin-tx__product">{{ it.product_name }}</span>
-                                <span>{% if it.product_sku %}<code>{{ it.product_sku }}</code>{% else %}—{% endif %}</span>
-                                <span>{{ it.category or '-' }}</span>
-                                <span class="admin-table__col--num">{{ it.quantity }}</span>
-                                <span class="admin-table__col--num">{{ it.unit_price | brl }}</span>
-                                <span class="admin-table__col--num"><strong>{{ it.subtotal | brl }}</strong></span>
+                                {{ admin_tx_item_cells(it) }}
                             </div>
                             {% endfor %}
                         </div>
@@ -221,6 +151,7 @@
                                 <strong><code class="admin-mov__aut">{{ tx.aut }}</code></strong>
                             </div>
                             {% endif %}
+                            {{ admin_tx_discount_summary(tx_items, tx.total) }}
                             <div class="admin-tx__summary-row admin-tx__summary-row--total">
                                 <span>Total da transação</span>
                                 <strong>{{ tx.total | brl }}</strong>

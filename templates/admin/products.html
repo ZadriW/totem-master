@@ -205,6 +205,23 @@
                 </select>
             </div>
 
+            {# Prévia de estoque do produto no evento selecionado #}
+            <div class="add-event-stock-preview" id="add-to-event-stock-preview" hidden>
+                <span class="add-event-stock-preview__item">
+                    <span class="add-event-stock-preview__label">Estoque atual</span>
+                    <strong class="add-event-stock-preview__value" id="add-to-event-preview-qty">—</strong>
+                </span>
+                <span class="add-event-stock-preview__sep" aria-hidden="true"></span>
+                <span class="add-event-stock-preview__item">
+                    <span class="add-event-stock-preview__label">Mínimo</span>
+                    <strong class="add-event-stock-preview__value" id="add-to-event-preview-min">—</strong>
+                </span>
+            </div>
+            <p class="add-event-stock-preview add-event-stock-preview--new" id="add-to-event-stock-new" hidden>
+                <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                Produto ainda não cadastrado neste evento — será adicionado com o estoque inicial informado.
+            </p>
+
             {% if not events_for_modal %}
             <p class="admin-modal__hint">
                 <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
@@ -290,15 +307,90 @@
     const stockIn   = document.getElementById('add-to-event-initial-stock');
     const minIn     = document.getElementById('add-to-event-min-stock');
     const motivoRef = document.getElementById('add-to-event-motivo-ref');
+    const previewEl  = document.getElementById('add-to-event-stock-preview');
+    const previewQty = document.getElementById('add-to-event-preview-qty');
+    const previewMin = document.getElementById('add-to-event-preview-min');
+    const newMsgEl   = document.getElementById('add-to-event-stock-new');
 
     if (!modal) return;
 
     let currentAddUrl = '';
     let currentProductId = '';
+    let previewController = null;
 
     function escHtml(s) {
         return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
+
+    function hidePreview() {
+        if (previewEl)  previewEl.setAttribute('hidden', '');
+        if (newMsgEl)   newMsgEl.setAttribute('hidden', '');
+        if (previewQty) previewQty.textContent = '—';
+        if (previewMin) previewMin.textContent = '—';
+        if (previewEl)  previewEl.removeAttribute('aria-busy');
+    }
+
+    function showPreviewLoading() {
+        if (!previewEl) return;
+        previewEl.removeAttribute('hidden');
+        newMsgEl && newMsgEl.setAttribute('hidden', '');
+        previewEl.setAttribute('aria-busy', 'true');
+        if (previewQty) previewQty.textContent = '…';
+        if (previewMin) previewMin.textContent = '…';
+    }
+
+    function showPreviewData(qty, min) {
+        if (!previewEl) return;
+        previewEl.removeAttribute('hidden');
+        previewEl.removeAttribute('aria-busy');
+        newMsgEl && newMsgEl.setAttribute('hidden', '');
+        if (previewQty) previewQty.textContent = String(qty);
+        if (previewMin) previewMin.textContent = String(min);
+    }
+
+    function showPreviewNew() {
+        if (previewEl)  previewEl.setAttribute('hidden', '');
+        if (newMsgEl) {
+            newMsgEl.removeAttribute('hidden');
+            newMsgEl.removeAttribute('aria-busy');
+        }
+    }
+
+    async function fetchEventProductPreview(eventId, productId) {
+        if (previewController) previewController.abort();
+        previewController = new AbortController();
+        const signal = previewController.signal;
+
+        showPreviewLoading();
+        try {
+            const res = await fetch(`/admin/api/eventos/${eventId}/estoque/${productId}`, {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+                signal,
+            });
+            if (signal.aborted) return;
+            if (res.status === 404) {
+                showPreviewNew();
+                return;
+            }
+            if (!res.ok) { hidePreview(); return; }
+            const data = await res.json();
+            const p = data.product || {};
+            const qty = p.estoque ?? p.stock ?? '—';
+            const min = p.estoque_minimo ?? p.min_stock ?? '—';
+            showPreviewData(qty, min);
+        } catch (err) {
+            if (err.name === 'AbortError') return;
+            hidePreview();
+        }
+    }
+
+    selectEv.addEventListener('change', () => {
+        const eventId   = selectEv.value;
+        const productId = currentProductId;
+        if (!eventId || !productId) { hidePreview(); return; }
+        fetchEventProductPreview(eventId, productId);
+    });
 
     function hideFeedback() {
         if (!feedbackEl) return;
@@ -358,12 +450,15 @@
         stockIn.value  = '0';
         minIn.value    = '0';
         if (motivoRef) motivoRef.value = '';
+        hidePreview();
         hideFeedback();
         modal.showModal();
         if (motivoRef) motivoRef.focus(); else selectEv.focus();
     }
 
     function closeModal() {
+        if (previewController) { previewController.abort(); previewController = null; }
+        hidePreview();
         hideFeedback();
         modal.close();
         currentAddUrl    = '';

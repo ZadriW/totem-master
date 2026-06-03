@@ -183,16 +183,22 @@
                 <span class="admin-table__col--num">{{ p.preco | brl }}</span>
                 <span class="admin-table__col--num admin-stock__qty" data-stock-qty><strong>{{ p.estoque }}</strong></span>
                 <span class="admin-table__col--num">{{ p.estoque_minimo }}</span>
-                <span data-stock-status>
+                <span class="admin-stock__status-cell" data-stock-status>
                     {% if not p.ativo %}
-                        <span class="admin-badge admin-badge--neutral">Inativo</span>
+                        <span class="admin-badge admin-badge--neutral" data-stock-status-badge>Inativo</span>
                     {% elif p.sem_estoque %}
-                        <span class="admin-badge admin-badge--danger">Sem estoque</span>
+                        <span class="admin-badge admin-badge--danger" data-stock-status-badge>Sem estoque</span>
                     {% elif p.abaixo_minimo %}
-                        <span class="admin-badge admin-badge--warn">Abaixo do mínimo</span>
+                        <span class="admin-badge admin-badge--warn" data-stock-status-badge>Abaixo do mínimo</span>
                     {% else %}
-                        <span class="admin-badge admin-badge--success">OK</span>
+                        <span class="admin-badge admin-badge--success" data-stock-status-badge>OK</span>
                     {% endif %}
+                    {% set promo_name = promo_names.get(p.id, '') %}
+                    <span class="admin-badge admin-badge--promo-stock admin-stock__promo-name-badge"
+                          data-stock-promo-badge
+                          {% if p.id not in promo_product_ids %}hidden{% endif %}>
+                        <span data-stock-promo-badge-text>{{ promo_name }}</span>
+                    </span>
                 </span>
             </div>
             {% endfor %}

@@ -3,9 +3,7 @@
  *
  * - Histórico de transações: copiar código do pedido; apenas um detalhe expandido por tabela (acordeão).
  * - Toggle do painel “Dados e acesso” no detalhe do vendedor (aria-expanded + hidden).
- * - Confirmação opcional antes de submeter formulários sensíveis
- *   (entrada/saída/ajuste/ativação de produto) via `data-confirm`.
- * - Confirmação em botões isolados via `data-confirm`.
+ * - Confirmação via diálogo interno (`data-confirm` em forms/botões).
  */
 (() => {
     'use strict';
@@ -139,29 +137,116 @@
         toggleAdminTxRowAccordion(btn);
     });
 
-    // --- 2. Confirmação de formulários sensíveis -----------------------------
+    // --- 2. Diálogo de confirmação (substitui window.confirm) ---------------
+    const confirmDialog = document.getElementById('admin-confirm-dialog');
+    const confirmMessageEl = document.getElementById('admin-confirm-message');
+    const confirmTitleEl = document.getElementById('admin-confirm-title');
+    const confirmOkBtn = document.getElementById('admin-confirm-ok');
+    const confirmCancelBtn = document.getElementById('admin-confirm-cancel');
+    const confirmCloseBtn = document.getElementById('admin-confirm-close');
+    const confirmIconWrap = confirmDialog?.querySelector('.admin-confirm__icon');
+
+    let confirmResolve = null;
+
+    function finishConfirmDialog(result) {
+        if (!confirmDialog) return;
+        if (confirmDialog.open) {
+            confirmDialog.close();
+        }
+        const resolve = confirmResolve;
+        confirmResolve = null;
+        if (resolve) resolve(result);
+    }
+
+    function readConfirmOptions(el) {
+        return {
+            title: el.getAttribute('data-confirm-title') || 'Confirmar ação',
+            confirmLabel: el.getAttribute('data-confirm-label') || 'Confirmar',
+            destructive: el.getAttribute('data-confirm-destructive') !== 'false',
+            message: el.getAttribute('data-confirm') || 'Deseja continuar?',
+        };
+    }
+
+    function openAdminConfirm(options) {
+        const message = options.message || 'Deseja continuar?';
+        if (!confirmDialog || !confirmMessageEl || !confirmTitleEl) {
+            return Promise.resolve(window.confirm(message));
+        }
+
+        confirmTitleEl.textContent = options.title || 'Confirmar ação';
+        confirmMessageEl.textContent = message;
+
+        if (confirmOkBtn) {
+            confirmOkBtn.textContent = options.confirmLabel || 'Confirmar';
+            confirmOkBtn.className = options.destructive === false
+                ? 'admin-btn admin-btn--primary'
+                : 'admin-btn admin-btn--danger-solid';
+        }
+
+        if (confirmIconWrap) {
+            confirmIconWrap.classList.toggle(
+                'admin-confirm__icon--destructive',
+                options.destructive !== false
+            );
+        }
+
+        return new Promise(resolve => {
+            confirmResolve = resolve;
+            confirmDialog.showModal();
+            confirmCancelBtn?.focus();
+        });
+    }
+
+    confirmCancelBtn?.addEventListener('click', () => finishConfirmDialog(false));
+    confirmCloseBtn?.addEventListener('click', () => finishConfirmDialog(false));
+    confirmOkBtn?.addEventListener('click', () => finishConfirmDialog(true));
+    confirmDialog?.addEventListener('cancel', event => {
+        event.preventDefault();
+        finishConfirmDialog(false);
+    });
+    confirmDialog?.addEventListener('close', () => {
+        if (confirmResolve) finishConfirmDialog(false);
+    });
+    confirmDialog?.addEventListener('click', event => {
+        if (event.target === confirmDialog) finishConfirmDialog(false);
+    });
+
     document.querySelectorAll('form[data-confirm]').forEach(form => {
         form.addEventListener('submit', event => {
-            const message = form.getAttribute('data-confirm') || 'Confirmar?';
-            if (!window.confirm(message)) {
-                event.preventDefault();
+            if (form.dataset.adminConfirmSubmitting === '1') {
+                delete form.dataset.adminConfirmSubmitting;
+                return;
             }
+            event.preventDefault();
+            openAdminConfirm(readConfirmOptions(form)).then(ok => {
+                if (!ok) return;
+                form.dataset.adminConfirmSubmitting = '1';
+                form.requestSubmit();
+            });
         });
     });
 
-    // --- 3. Confirmação em botões isolados -----------------------------------
-    // Útil para botões de ativar/desativar que ficam em um <form> sem data-confirm
-    // próprio mas precisam perguntar antes.
     document.querySelectorAll('button[data-confirm]').forEach(btn => {
         btn.addEventListener('click', event => {
-            const message = btn.getAttribute('data-confirm') || 'Confirmar?';
-            if (!window.confirm(message)) {
-                event.preventDefault();
+            if (btn.dataset.adminConfirmSubmitting === '1') {
+                delete btn.dataset.adminConfirmSubmitting;
+                return;
             }
+            event.preventDefault();
+            openAdminConfirm(readConfirmOptions(btn)).then(ok => {
+                if (!ok) return;
+                btn.dataset.adminConfirmSubmitting = '1';
+                const form = btn.closest('form');
+                if (form) {
+                    form.requestSubmit();
+                } else {
+                    btn.click();
+                }
+            });
         });
     });
 
-    // --- 4. Auto-dismiss das flash messages ----------------------------------
+    // --- 3. Auto-dismiss das flash messages ----------------------------------
     document.querySelectorAll('.admin-flash').forEach(el => {
         setTimeout(() => {
             el.style.transition = 'opacity 400ms ease, transform 400ms ease';
@@ -170,4 +255,25 @@
             setTimeout(() => el.remove(), 450);
         }, 6000);
     });
+
+    // --- 4. Altura real da admin-topbar — sticky do catálogo embutido (mobile + desktop) ---
+    const adminShell = document.querySelector('.admin-shell');
+    const adminTopbar = adminShell?.querySelector(':scope > .admin-topbar');
+
+    if (adminShell && adminTopbar) {
+        const syncAdminTopbarHeight = () => {
+            adminShell.style.setProperty(
+                '--admin-topbar-height',
+                `${Math.round(adminTopbar.getBoundingClientRect().height)}px`
+            );
+        };
+
+        syncAdminTopbarHeight();
+
+        if (typeof ResizeObserver !== 'undefined') {
+            new ResizeObserver(syncAdminTopbarHeight).observe(adminTopbar);
+        } else {
+            window.addEventListener('resize', syncAdminTopbarHeight, { passive: true });
+        }
+    }
 })();

@@ -4,7 +4,7 @@
 - ``/catalogo`` etc. Rotas antigas redirecionam para ``/`` (venda só com vendedor logado).
 - ``/api/...``         Endpoints JSON (vendas exigem sessão do vendedor).
 - ``/admin/...``       Painel administrativo.
-- ``/vendedor/...``    Painel do vendedor (dashboard, venda/catálogo, estoque, movimentações, transações).
+- ``/vendedor/...``    Painel do vendedor (catálogo/venda, minhas vendas, estoque, movimentações, transações).
 """
 
 from __future__ import annotations
@@ -50,6 +50,7 @@ from data.products import CATEGORIES
 from database import (
     EXPORT_MOVEMENTS_CSV_CAP,
     RULE_TYPE_LABELS,
+    active_promotion_names_by_product_id,
     active_promotion_tooltip_by_product_id,
     build_promo_display_map,
     create_promotion,
@@ -59,6 +60,7 @@ from database import (
     get_promotion,
     list_promotions_for_event,
     product_ids_with_active_promotions_for_event,
+    quote_cart_items_for_event,
     toggle_promotion_active,
     update_promotion,
     add_product_to_event,
@@ -76,6 +78,7 @@ from database import (
     find_product_by_sku_or_id,
     get_active_event_for_seller,
     get_event,
+    get_event_financial_report,
     get_event_sales_dashboard,
     get_event_stats,
     get_event_stock_stats,
@@ -425,6 +428,26 @@ def _is_seller_logged_in() -> bool:
     return bool(_seller_auth())
 
 
+def _totem_theme_scope() -> str | None:
+    """Escopo de preferência visual: admin ou vendedor, por login."""
+    path = (request.path or "").lower()
+    if path.startswith("/admin"):
+        if _is_admin_logged_in():
+            return f"admin:{_current_admin_user()}"
+        return "admin:_guest"
+    if path.startswith("/vendedor"):
+        auth = _seller_auth()
+        if auth and auth.get("seller_id"):
+            return f"seller:{int(auth['seller_id'])}"
+        return "seller:_guest"
+    return None
+
+
+@app.context_processor
+def _inject_totem_theme_scope():
+    return {"totem_theme_scope": _totem_theme_scope()}
+
+
 def _clear_admin_session() -> None:
     """Remove apenas credenciais do painel admin (preserva vendedor na mesma sessão)."""
     for key in ("is_admin", "admin_user"):
@@ -682,26 +705,31 @@ def api_confirm_transaction_aut(tx_id: int):
 # Painel administrativo — autenticação
 # ---------------------------------------------------------------------------
 
+def _admin_home_url() -> str:
+    """Página inicial do painel administrativo (lista de eventos)."""
+    return url_for("admin_events")
+
+
 @app.route("/admin")
 def admin_index():
     if not _is_admin_logged_in():
         return redirect(url_for("admin_login"))
-    return redirect(url_for("admin_dashboard"))
+    return redirect(_admin_home_url())
 
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
     if _is_admin_logged_in():
-        return redirect(url_for("admin_dashboard"))
+        return redirect(_admin_home_url())
 
     error = None
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
         if username == ADMIN_USERNAME and password == ADMIN_PASSWORD:
-            next_url = request.args.get("next") or url_for("admin_dashboard")
+            next_url = request.args.get("next") or _admin_home_url()
             if not next_url.startswith("/"):
-                next_url = url_for("admin_dashboard")
+                next_url = _admin_home_url()
             response = redirect(next_url)
             return _set_auth_cookie(
                 response,
@@ -728,13 +756,13 @@ def admin_logout():
 def seller_index():
     if not _is_seller_logged_in():
         return redirect(url_for("seller_login"))
-    return redirect(url_for("seller_dashboard"))
+    return redirect(_seller_home_url())
 
 
 @app.route("/vendedor/login", methods=["GET", "POST"])
 def seller_login():
     if _is_seller_logged_in():
-        return redirect(url_for("seller_dashboard"))
+        return redirect(_seller_home_url())
 
     error = None
     email = ""
@@ -746,9 +774,9 @@ def seller_login():
             seller["password_hash"], password
         ):
             update_seller_last_login(int(seller["id"]))
-            next_url = request.args.get("next") or url_for("seller_dashboard")
+            next_url = request.args.get("next") or _seller_home_url()
             if not next_url.startswith("/vendedor"):
-                next_url = url_for("seller_dashboard")
+                next_url = _seller_home_url()
             response = redirect(next_url)
             return _set_auth_cookie(
                 response,
@@ -773,6 +801,12 @@ def seller_logout():
     return _delete_auth_cookie(response, SELLER_AUTH_COOKIE)
 
 
+def _seller_home_url() -> str:
+    """Página inicial do painel do vendedor (catálogo / venda)."""
+    url = _url_if_registered("seller_sale", fallback="/vendedor/venda")
+    return (url or "").strip() or "/vendedor/venda"
+
+
 def _seller_shell_context(**extra):
     auth = _seller_auth() or {}
     seller_id_raw = auth.get("seller_id")
@@ -787,10 +821,11 @@ def _seller_shell_context(**extra):
         "now": datetime.now(),
         "seller_event": seller_event,
         "seller_pending_cancel_url": _seller_pending_cancel_url,
+        "seller_home_url": _seller_home_url(),
     }
     ctx.update(extra)
-    venda_url = _url_if_registered("seller_sale", fallback="/vendedor/venda")
-    ctx["seller_venda_url"] = (venda_url or "").strip() or "/vendedor/venda"
+    venda_url = _seller_home_url()
+    ctx["seller_venda_url"] = venda_url
     return ctx
 
 
@@ -812,8 +847,8 @@ def _seller_totem_flow() -> dict:
         "paymentWaiting": _url_if_registered(
             "seller_payment_waiting", fallback="/vendedor/pagamento/aguardando"
         ),
-        "catalog": _url_if_registered("seller_sale", fallback="/vendedor/venda"),
-        "home": url_for("seller_dashboard"),
+        "catalog": _seller_home_url(),
+        "home": _seller_home_url(),
     }
 
 
@@ -823,7 +858,7 @@ def _seller_payment_page_context() -> dict:
         "totem_flow": flow,
         "payment_catalog_url": _url_if_registered(
             "seller_sale", fallback="/vendedor/venda"),
-        "payment_home_url": url_for("seller_dashboard"),
+        "payment_home_url": _seller_home_url(),
         "resume_pending_aut": None,
     }
 
@@ -908,7 +943,7 @@ def seller_restore_pending_checkout(tx_id: int):
             "Não foi possível restaurar este pedido. Verifique se está pendente de AUT e se os produtos ainda existem.",
             "error",
         )
-        return redirect(url_for("seller_dashboard"))
+        return redirect(url_for("seller_transactions"))
     return render_template(
         "seller/restore_checkout.html",
         restore_payload=payload,
@@ -929,7 +964,7 @@ def seller_cancel_pending_transaction(tx_id: int):
         flash("Pedido pendente descartado.", "success")
     except ValueError as exc:
         flash(str(exc), "error")
-    return redirect(url_for("seller_dashboard"))
+    return redirect(url_for("seller_transactions"))
 
 
 @app.route("/vendedor/dashboard")
@@ -942,23 +977,20 @@ def seller_dashboard():
     if seller_ev:
         ev_stats = get_event_stock_stats(seller_ev["id"])
         stock = {
-            "products_count": ev_stats["products_count"],
-            "products_active": ev_stats["products_count"],
-            "units_in_stock": ev_stats["units_in_stock"],
-            "stock_value": ev_stats["stock_value"],
             "below_min": ev_stats["below_min"],
             "out_of_stock": ev_stats["sem_estoque"],
         }
-        movements = list_event_stock_movements(seller_ev["id"], limit=80)
     else:
-        stock = get_products_library_stats()
-        movements = list_stock_movements(limit=80)
+        lib = get_products_library_stats()
+        stock = {
+            "below_min": lib["below_min"],
+            "out_of_stock": lib["out_of_stock"],
+        }
     return render_template(
         "seller/dashboard.html",
         stats=stats,
         stock=stock,
         transactions=transactions,
-        movements=movements,
         **_seller_shell_context(active_section="dashboard"),
     )
 
@@ -988,6 +1020,7 @@ def seller_stock():
         )
         promo_product_ids = product_ids_with_active_promotions_for_event(ev_id)
         promo_tooltips = active_promotion_tooltip_by_product_id(ev_id)
+        promo_names = active_promotion_names_by_product_id(ev_id)
         return render_template(
             "seller/stock.html",
             products=products,
@@ -999,6 +1032,7 @@ def seller_stock():
             stock_api_url=stock_api_url,
             promo_product_ids=promo_product_ids,
             promo_tooltips=promo_tooltips,
+            promo_names=promo_names,
             **_seller_shell_context(active_section="estoque"),
         )
     products, filters, pagination = _admin_stock_page_view()
@@ -1016,6 +1050,7 @@ def seller_stock():
                               per_page=filters["per_page"], page=pagination["page"]),
         promo_product_ids=frozenset(),
         promo_tooltips={},
+        promo_names={},
         **_seller_shell_context(active_section="estoque"),
     )
 
@@ -1023,6 +1058,7 @@ def seller_stock():
 @app.route("/vendedor/movimentacoes")
 @seller_required
 def seller_movements():
+    seller_id = _current_seller_id()
     movement_type = (request.args.get("tipo") or "").strip()
     q = (request.args.get("q") or "").strip()
     if not q:
@@ -1033,35 +1069,25 @@ def seller_movements():
     q_search = q or None
 
     seller_ev = _get_seller_event()
-    movement_filter_sellers: list = []
 
     if seller_ev:
         ev_id = seller_ev["id"]
-        movement_filter_sellers = list_event_sellers(ev_id)
-        event_seller_ids = {int(s["id"]) for s in movement_filter_sellers}
-        seller_raw = _parse_int(request.args.get("vendedor"), 0)
-        seller_filter = seller_raw if seller_raw > 0 and seller_raw in event_seller_ids else None
-        if seller_raw > 0 and seller_filter is None:
-            seller_raw = 0
-
         movements = list_event_stock_movements(
             ev_id,
             product_id=None,
             product_search=q_search,
             movement_type=movement_type or None,
             reference=pedido or None,
-            seller_id=seller_filter,
+            seller_id=seller_id,
             limit=500,
         )
         return render_template(
             "seller/movements.html",
             movements=movements,
-            movement_filter_sellers=movement_filter_sellers,
             filters={
                 "tipo": movement_type or "todos",
                 "q": q,
                 "pedido": pedido,
-                "vendedor": seller_raw,
             },
             **_seller_shell_context(active_section="movimentacoes"),
         )
@@ -1070,19 +1096,87 @@ def seller_movements():
         product_search=q_search,
         movement_type=movement_type or None,
         reference=pedido or None,
+        seller_id=seller_id,
         limit=500,
     )
     return render_template(
         "seller/movements.html",
         movements=movements,
-        movement_filter_sellers=movement_filter_sellers,
         filters={
             "tipo": movement_type or "todos",
             "q": q,
             "pedido": pedido,
-            "vendedor": 0,
         },
         **_seller_shell_context(active_section="movimentacoes"),
+    )
+
+
+@app.route("/vendedor/movimentacoes/pdf")
+@seller_required
+def seller_movements_pdf():
+    """Renderiza a versão para impressão/PDF das movimentações do vendedor logado."""
+    seller_id = _current_seller_id()
+    seller = get_seller(seller_id)
+    movement_type = (request.args.get("tipo") or "").strip()
+    q = (request.args.get("q") or "").strip()
+    pedido = (request.args.get("pedido") or "").strip()
+    q_search = q or None
+    seller_ev = _get_seller_event()
+
+    if seller_ev:
+        ev_id = seller_ev["id"]
+        movements = list_event_stock_movements(
+            ev_id,
+            product_id=None,
+            product_search=q_search,
+            movement_type=movement_type or None,
+            reference=pedido or None,
+            seller_id=seller_id,
+            limit=2000,
+        )
+    else:
+        movements = list_stock_movements(
+            product_search=q_search,
+            movement_type=movement_type or None,
+            reference=pedido or None,
+            seller_id=seller_id,
+            limit=2000,
+        )
+
+    sales_mvs = [m for m in movements if m.get("movement_type") == "venda"]
+    units_sold = sum(abs(m.get("delta", 0)) for m in sales_mvs)
+    entries_mvs = [m for m in movements if m.get("movement_type") == "entrada"]
+    units_entered = sum(m.get("delta", 0) for m in entries_mvs if (m.get("delta") or 0) > 0)
+
+    summary = {
+        "total": len(movements),
+        "sales_count": len(sales_mvs),
+        "units_sold": units_sold,
+        "entries_count": len(entries_mvs),
+        "units_entered": units_entered,
+    }
+
+    _tipo_labels = {
+        "todos": "Todos", "entrada": "Entradas", "saida": "Saídas manuais",
+        "venda": "Vendas", "ajuste": "Ajustes", "inicial": "Estoque inicial",
+    }
+    filters = {
+        "tipo": movement_type or "todos",
+        "tipo_label": _tipo_labels.get(movement_type or "todos", "Todos"),
+        "q": q,
+        "pedido": pedido,
+    }
+    back_url = url_for("seller_movements", tipo=movement_type or "todos", q=q, pedido=pedido)
+
+    return render_template(
+        "seller/movements_pdf.html",
+        movements=movements,
+        summary=summary,
+        filters=filters,
+        seller=seller,
+        seller_event=seller_ev,
+        back_url=back_url,
+        now=datetime.now(),
     )
 
 
@@ -1265,6 +1359,7 @@ def seller_api_event_stock():
     ev_stats = get_event_stock_stats(ev_id)
     promo_ids = product_ids_with_active_promotions_for_event(ev_id)
     promo_tooltips = active_promotion_tooltip_by_product_id(ev_id)
+    promo_names = active_promotion_names_by_product_id(ev_id)
     stock = {
         "products_count": ev_stats["products_count"],
         "products_active": ev_stats["products_count"],
@@ -1291,6 +1386,7 @@ def seller_api_event_stock():
                 }),
                 "active_promo": int(p["id"]) in promo_ids,
                 "promo_tooltip": promo_tooltips.get(int(p["id"]), ""),
+                "promo_name": promo_names.get(int(p["id"]), ""),
             }
             for p in products
         ],
@@ -1340,6 +1436,22 @@ def seller_api_event_catalog_promos_refresh():
     return jsonify({"products": products})
 
 
+@app.route("/api/carrinho/cotacao", methods=["POST"])
+@seller_required
+def api_cart_promo_quote():
+    """Cotação promocional do carrinho (mesma lógica da criação de transação)."""
+    seller_ev = _get_seller_event()
+    if seller_ev is None:
+        return jsonify({"error": "Cotação disponível apenas para vendas em evento."}), 404
+    payload = request.get_json(silent=True) or {}
+    items = payload.get("items") or payload.get("itens") or []
+    try:
+        quote = quote_cart_items_for_event(int(seller_ev["id"]), items)
+    except (TypeError, ValueError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(quote)
+
+
 @app.route("/vendedor/api/dashboard")
 @seller_required
 def seller_api_dashboard():
@@ -1351,40 +1463,21 @@ def seller_api_dashboard():
     if seller_ev:
         ev_stats = get_event_stock_stats(seller_ev["id"])
         stock = {
-            "products_count": ev_stats["products_count"],
-            "products_active": ev_stats["products_count"],
-            "units_in_stock": ev_stats["units_in_stock"],
-            "stock_value": ev_stats["stock_value"],
             "below_min": ev_stats["below_min"],
             "out_of_stock": ev_stats["sem_estoque"],
         }
     else:
-        stock = get_products_library_stats()
+        lib = get_products_library_stats()
+        stock = {
+            "below_min": lib["below_min"],
+            "out_of_stock": lib["out_of_stock"],
+        }
     return jsonify({
         "stats": get_stats(seller_id=seller_id),
         "stock": stock,
         "latest_tx_id": latest_tx_id,
         "transactions": [_seller_transaction_api(t) for t in transactions],
     })
-
-
-# ---------------------------------------------------------------------------
-# Painel administrativo — dashboard
-# ---------------------------------------------------------------------------
-
-@app.route("/admin/dashboard")
-@admin_required
-def admin_dashboard():
-    stats = get_stats()
-    stock = get_products_library_stats()
-    return render_template(
-        "admin/dashboard.html",
-        stats=stats,
-        stock=stock,
-        admin_user=_current_admin_user(),
-        now=datetime.now(),
-        active_section="dashboard",
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -1654,6 +1747,77 @@ def admin_seller_delete(seller_id: int):
     return redirect(url_for("admin_sellers"))
 
 
+# ---------------------------------------------------------------------------
+# Financeiro
+# ---------------------------------------------------------------------------
+
+def _parse_fin_filters():
+    """Lê parâmetros de filtro da rota Financeiro."""
+    event_id_raw = request.args.get("evento") or ""
+    date_from = (request.args.get("de") or "").strip()
+    date_to = (request.args.get("ate") or "").strip()
+    # validação mínima de formato
+    import re
+    _date_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    if date_from and not _date_re.match(date_from):
+        date_from = ""
+    if date_to and not _date_re.match(date_to):
+        date_to = ""
+    try:
+        ev_id = int(event_id_raw) if event_id_raw else None
+    except ValueError:
+        ev_id = None
+    return ev_id, date_from or None, date_to or None
+
+
+@app.route("/admin/financeiro")
+@admin_required
+def admin_financeiro():
+    all_events = list_events(include_archived=True)
+    ev_id, date_from, date_to = _parse_fin_filters()
+    if ev_id is None and all_events:
+        ev_id = int(all_events[0]["id"])
+    report = None
+    selected_event = None
+    if ev_id is not None:
+        selected_event = get_event(ev_id)
+        if selected_event:
+            report = get_event_financial_report(
+                ev_id, date_from=date_from, date_to=date_to
+            )
+    return render_template(
+        "admin/financeiro.html",
+        selected_event_id=ev_id,
+        date_from=date_from or "",
+        date_to=date_to or "",
+        report=report,
+        **_admin_shell_context(active_section="financeiro"),
+    )
+
+
+@app.route("/admin/financeiro/pdf")
+@admin_required
+def admin_financeiro_pdf():
+    """Renderiza a versão para impressão/PDF do relatório financeiro."""
+    ev_id, date_from, date_to = _parse_fin_filters()
+    if ev_id is None:
+        return redirect(url_for("admin_financeiro"))
+    event = get_event(ev_id)
+    if event is None:
+        flash("Evento não encontrado.", "error")
+        return redirect(url_for("admin_financeiro"))
+    report = get_event_financial_report(ev_id, date_from=date_from, date_to=date_to)
+    return render_template(
+        "admin/financeiro_pdf.html",
+        report=report,
+        all_events=list_events(include_archived=True),
+        selected_event_id=ev_id,
+        date_from=date_from or "",
+        date_to=date_to or "",
+        now=datetime.now(),
+    )
+
+
 @app.route("/admin/reiniciar-sistema", methods=["POST"])
 @admin_required
 def admin_reset_system():
@@ -1663,7 +1827,7 @@ def admin_reset_system():
             "Para reiniciar o sistema, marque a caixa de confirmação e tente novamente.",
             "error",
         )
-        return redirect(url_for("admin_dashboard"))
+        return redirect(_admin_home_url())
     try:
         result = reset_totem_to_default_state()
         flash(
@@ -1681,7 +1845,7 @@ def admin_reset_system():
             "Não foi possível reiniciar o sistema. Verifique os logs ou tente novamente.",
             "error",
         )
-    return redirect(url_for("admin_dashboard"))
+    return redirect(_admin_home_url())
 
 
 # ---------------------------------------------------------------------------
@@ -1693,6 +1857,8 @@ def _admin_shell_context(**extra):
     return {
         "admin_user": _current_admin_user(),
         "now": datetime.now(),
+        "all_events": list_events(include_archived=True),
+        "admin_home_url": _admin_home_url(),
         **extra,
     }
 
@@ -2586,7 +2752,8 @@ def admin_event_detail(event_id: int):
     if event is None:
         return redirect(url_for("admin_events"))
     stats = get_event_stock_stats(event_id)
-    sales_dashboard = get_event_sales_dashboard(event_id)
+    sales_day_page = max(1, _parse_int(request.args.get("sales_day_page"), 1))
+    sales_dashboard = get_event_sales_dashboard(event_id, sales_days_page=sales_day_page)
     recent_movements = list_event_stock_movements(event_id, limit=5)
     sellers = list_event_sellers(event_id)
     return render_template(
@@ -2640,6 +2807,35 @@ def admin_event_restore(event_id: int):
     return redirect(url_for("admin_events"))
 
 
+@app.route(
+    "/admin/eventos/<int:event_id>/excluir",
+    methods=["POST"],
+    endpoint="admin_event_delete",
+)
+@admin_required
+def admin_event_delete(event_id: int):
+    from database import delete_event
+
+    event = _event_or_404(event_id)
+    if event is None:
+        return redirect(url_for("admin_events"))
+    try:
+        summary = delete_event(event_id)
+        flash(
+            f"Evento \"{summary['name']}\" excluído permanentemente "
+            f"({summary['transactions']} transação(ões), "
+            f"{summary['stock_movements']} movimentação(ões) de estoque, "
+            f"{summary['products']} produto(s) no evento, "
+            f"{summary['promotions']} promoção(ões), "
+            f"{summary['sellers']} vínculo(s) com vendedores).",
+            "success",
+        )
+    except ValueError as exc:
+        flash(str(exc), "error")
+        return redirect(url_for("admin_event_detail", event_id=event_id))
+    return redirect(url_for("admin_events"))
+
+
 # ---------------------------------------------------------------------------
 # Eventos — sub-página Estoque
 # ---------------------------------------------------------------------------
@@ -2654,6 +2850,7 @@ def admin_event_stock(event_id: int):
     stats = get_event_stock_stats(event_id)
     promo_product_ids = product_ids_with_active_promotions_for_event(event_id)
     promo_tooltips = active_promotion_tooltip_by_product_id(event_id)
+    promo_names = active_promotion_names_by_product_id(event_id)
     return render_template(
         "admin/event_stock.html",
         event=event,
@@ -2663,6 +2860,7 @@ def admin_event_stock(event_id: int):
         pagination=pagination,
         promo_product_ids=promo_product_ids,
         promo_tooltips=promo_tooltips,
+        promo_names=promo_names,
         categories=_admin_stock_library_category_options(),
         allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
         active_event_tab="estoque",
@@ -3125,6 +3323,30 @@ def admin_event_promotions(event_id: int):
     )
 
 
+def _parse_promotion_form_fields(form) -> tuple[str, float, int, int]:
+    """Extrai parâmetros da regra a partir do POST do admin.
+
+    Cada tipo de promoção usa campos com nomes distintos no formulário para evitar
+    colisão entre seções ocultas (ex.: ``rule_value`` de percent vs. bundle).
+    """
+    rule_type = (form.get("rule_type") or "").strip()
+    if rule_type in ("percent", "fixed"):
+        rule_value = float(form.get("rule_value_pf") or 0)
+        min_qty = 1
+        free_qty = 0
+    elif rule_type == "bogo":
+        rule_value = 0.0
+        min_qty = int(form.get("min_qty_bogo") or 1)
+        free_qty = int(form.get("free_qty") or 0)
+    elif rule_type in ("min_bundle", "exact_bundle"):
+        rule_value = float(form.get("rule_value_bundle") or 0)
+        min_qty = int(form.get("min_qty_bundle") or 2)
+        free_qty = 0
+    else:
+        raise ValueError(f"Tipo de regra inválido: {rule_type}")
+    return rule_type, rule_value, min_qty, free_qty
+
+
 @app.route("/admin/eventos/<int:event_id>/promocoes/nova", methods=["POST"])
 @admin_required
 def admin_event_promotion_create(event_id: int):
@@ -3133,10 +3355,7 @@ def admin_event_promotion_create(event_id: int):
         return redirect(url_for("admin_events"))
     try:
         name = (request.form.get("name") or "").strip()
-        rule_type = (request.form.get("rule_type") or "").strip()
-        rule_value = float(request.form.get("rule_value") or 0)
-        min_qty = int(request.form.get("min_qty") or 1)
-        free_qty = int(request.form.get("free_qty") or 0)
+        rule_type, rule_value, min_qty, free_qty = _parse_promotion_form_fields(request.form)
         product_ids = [int(p) for p in request.form.getlist("product_ids") if p]
         create_promotion(
             event_id, name, rule_type,
@@ -3183,10 +3402,7 @@ def admin_event_promotion_edit(event_id: int, promo_id: int):
         return redirect(url_for("admin_event_promotions", event_id=event_id))
     try:
         name = (request.form.get("name") or "").strip()
-        rule_type = (request.form.get("rule_type") or "").strip()
-        rule_value = float(request.form.get("rule_value") or 0)
-        min_qty = int(request.form.get("min_qty") or 1)
-        free_qty = int(request.form.get("free_qty") or 0)
+        rule_type, rule_value, min_qty, free_qty = _parse_promotion_form_fields(request.form)
         # Ativar/desativar é só pelo botão dedicado (admin_event_promotion_toggle).
         active = bool(int(promo.get("active") or 0))
         product_ids = [int(p) for p in request.form.getlist("product_ids") if p]
@@ -3432,6 +3648,7 @@ def admin_api_event_stock(event_id: int):
     products, _filters, pagination = _admin_event_stock_page_view(event_id)
     promo_ids = product_ids_with_active_promotions_for_event(event_id)
     promo_tooltips = active_promotion_tooltip_by_product_id(event_id)
+    promo_names = active_promotion_names_by_product_id(event_id)
     return jsonify({
         "stats": get_event_stock_stats(event_id),
         "pagination": {
@@ -3449,6 +3666,7 @@ def admin_api_event_stock(event_id: int):
                 "status": _event_product_status(p),
                 "active_promo": int(p["product_id"]) in promo_ids,
                 "promo_tooltip": promo_tooltips.get(int(p["product_id"]), ""),
+                "promo_name": promo_names.get(int(p["product_id"]), ""),
             }
             for p in products
         ],

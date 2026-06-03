@@ -1,0 +1,35 @@
+{% macro admin_tx_item_cells(it) %}
+<span class="admin-tx__product">
+    {{ it.product_name }}
+    {% if it.promotion_name %}
+    <span class="admin-tx__promo-label">
+        <i class="fa-solid fa-tag" aria-hidden="true"></i>
+        {{ it.promotion_name }}
+    </span>
+    {% endif %}
+</span>
+<span>{% if it.product_sku %}<code>{{ it.product_sku }}</code>{% else %}—{% endif %}</span>
+<span>{{ it.category or '-' }}</span>
+<span class="admin-table__col--num">{{ it.quantity }}</span>
+<span class="admin-table__col--num admin-tx__unit-price">
+    {% if it.original_price and it.original_price > it.unit_price + 0.001 %}
+    <span class="admin-tx__price-original">{{ it.original_price | brl }}</span>
+    {% endif %}
+    {{ it.unit_price | brl }}
+</span>
+<span class="admin-table__col--num"><strong>{{ it.subtotal | brl }}</strong></span>
+{% endmacro %}
+
+{% macro admin_tx_discount_summary(tx_items, tx_total) %}
+{% set ns = namespace(lista=0) %}
+{% for it in tx_items %}
+{% set ns.lista = ns.lista + (it.original_price or it.unit_price) * it.quantity %}
+{% endfor %}
+{% set economia = ns.lista - tx_total %}
+{% if economia > 0.009 %}
+<div class="admin-tx__summary-row admin-tx__summary-row--discount">
+    <span>Descontos (promoções)</span>
+    <strong>-{{ economia | brl }}</strong>
+</div>
+{% endif %}
+{% endmacro %}

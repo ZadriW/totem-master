@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from .promotions import (
     RULE_TYPE_LABELS,
+    active_promotion_names_by_product_id,
     active_promotion_tooltip_by_product_id,
     build_promo_display_map,
     create_promotion,
@@ -31,6 +32,7 @@ from .promotions import (
     get_promotion,
     list_promotions_for_event,
     product_ids_with_active_promotions_for_event,
+    quote_cart_items_for_event,
     toggle_promotion_active,
     update_promotion,
 )
@@ -49,7 +51,9 @@ from .events import (
     archive_event,
     count_event_products_filtered,
     create_event,
+    delete_event,
     find_product_by_sku_or_id,
+    get_event_financial_report,
     get_active_event_for_seller,
     get_event,
     get_event_sales_dashboard,
@@ -136,6 +140,7 @@ from .transactions import (
 
 __all__ = [
     "RULE_TYPE_LABELS",
+    "active_promotion_names_by_product_id",
     "active_promotion_tooltip_by_product_id",
     "build_promo_display_map",
     "create_promotion",
@@ -145,6 +150,7 @@ __all__ = [
     "get_promotion",
     "list_promotions_for_event",
     "product_ids_with_active_promotions_for_event",
+    "quote_cart_items_for_event",
     "toggle_promotion_active",
     "update_promotion",
     "EXPORT_MOVEMENTS_CSV_CAP",
@@ -162,6 +168,8 @@ __all__ = [
     "count_transactions_for_event",
     "count_transactions_for_seller",
     "create_event",
+    "delete_event",
+    "get_event_financial_report",
     "create_seller_account",
     "create_transaction",
     "delete_seller",

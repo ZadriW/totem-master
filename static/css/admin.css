@@ -320,12 +320,14 @@
     background: var(--color-bg);
     display: flex;
     flex-direction: column;
+    /* Altura da barra fixa (desktop): padding 14×2 + conteúdo ~40px; JS refina em admin.js */
+    --admin-topbar-height: 68px;
 }
 
 .admin-topbar {
     position: sticky;
     top: 0;
-    z-index: 30;
+    z-index: 110;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -386,6 +388,36 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     color: var(--color-text);
     font-size: 14px;
     flex-wrap: wrap;
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+.admin-topbar__event-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    background: var(--color-primary);
+    color: #fff;
+    border-radius: var(--radius-pill);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    max-width: 130px;
+    min-width: 0;
+    overflow: hidden;
+    flex-shrink: 1;
+}
+
+.admin-topbar__event-badge--in-brand {
+    display: none;
+}
+
+.admin-topbar__event-badge-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
 }
 
 .admin-topbar__user,
@@ -423,6 +455,37 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 .admin-topbar__logout:hover {
     border-color: var(--color-primary);
     color: var(--color-primary);
+}
+
+.admin-topbar__reset-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(220, 38, 38, 0.35);
+    background: rgba(220, 38, 38, 0.08);
+    color: #b91c1c;
+    font-size: 13px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.admin-topbar__reset-btn:hover {
+    background: rgba(220, 38, 38, 0.14);
+    border-color: #dc2626;
+    color: #991b1b;
+}
+
+.admin-topbar__reset-btn:focus-visible {
+    outline: 2px solid #dc2626;
+    outline-offset: 2px;
+}
+
+.admin-topbar__reset-btn i {
+    font-size: 14px;
 }
 
 .admin-topbar__theme-toggle {
@@ -490,8 +553,30 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     margin-right: auto;
 }
 
+/* Catálogo embutido: busca/carrinho grudam abaixo da admin-topbar (mobile + desktop) */
 .admin-main.admin-main--catalog-embed .topbar {
-    top: 68px;
+    position: sticky;
+    top: var(--admin-topbar-height);
+    z-index: 100;
+}
+
+/* Desktop: topbar do painel fixa no topo (sticky quebra com overflow-x no body) */
+@media (min-width: 901px) {
+    .admin-shell > .admin-topbar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+    }
+
+    .admin-shell > .admin-main {
+        padding-top: calc(var(--admin-topbar-height) + 32px);
+    }
+
+    .admin-shell > .admin-main.admin-main--catalog-embed {
+        padding-top: var(--admin-topbar-height);
+    }
 }
 
 .admin-section {
@@ -856,7 +941,17 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     font-weight: 700;
 }
 
-.admin-event-dash-sales__table--top-skus > .admin-event-dash-sales__row.admin-event-dash-sales__row--top {
+.admin-event-dash-sales__table--top-skus > .admin-event-dash-sales__row.admin-event-dash-sales__row--top:not(.admin-table__head) {
+    display: grid;
+    grid-template-columns: 36px minmax(76px, 1fr) minmax(0, 1.55fr) minmax(3.25rem, auto) minmax(5.5rem, auto);
+    column-gap: 14px;
+    row-gap: 6px;
+    align-items: center;
+    padding: 11px 14px;
+    min-width: min(100%, 520px);
+}
+
+.admin-event-dash-sales__table--top-skus > .admin-table__head.admin-event-dash-sales__row.admin-event-dash-sales__row--top {
     display: grid;
     grid-template-columns: 36px minmax(76px, 1fr) minmax(0, 1.55fr) minmax(3.25rem, auto) minmax(5.5rem, auto);
     column-gap: 14px;
@@ -878,6 +973,157 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 .admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank {
     justify-self: center;
     text-align: center;
+}
+
+/* Top 3 — medalhas (ouro, prata, bronze) */
+.admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--gold,
+.admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--silver,
+.admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--bronze {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--gold {
+    background: linear-gradient(145deg, #ffe566 0%, #f5c518 48%, #d4a017 100%);
+    color: #5c4500;
+    border: 1.5px solid #c9a018;
+    box-shadow:
+        0 1px 4px rgba(212, 160, 23, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--silver {
+    background: linear-gradient(145deg, #f4f4f4 0%, #c8c8c8 48%, #9a9a9a 100%);
+    color: #3d3d3d;
+    border: 1.5px solid #a0a0a0;
+    box-shadow:
+        0 1px 4px rgba(120, 120, 120, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--bronze {
+    background: linear-gradient(145deg, #e8a86a 0%, #cd7f32 48%, #a0522d 100%);
+    color: #3d1f08;
+    border: 1.5px solid #9a5520;
+    box-shadow:
+        0 1px 4px rgba(160, 82, 45, 0.32),
+        inset 0 1px 0 rgba(255, 220, 180, 0.35);
+}
+
+/* Top-SKUs — mobile ≤900px: card com rank à esquerda, nome + sku à direita, métricas em pills */
+@media (max-width: 900px) {
+    .admin-event-dash-sales__table--top-skus > .admin-table__head.admin-event-dash-sales__row.admin-event-dash-sales__row--top {
+        display: none;
+    }
+
+    .admin-event-dash-sales__table--top-skus > .admin-event-dash-sales__row.admin-event-dash-sales__row--top:not(.admin-table__head) {
+        grid-template-columns: 36px 1fr 1fr;
+        grid-template-areas:
+            "rank product product"
+            "rank sku     sku"
+            ".    units   revenue";
+        column-gap: 10px;
+        row-gap: 6px;
+        padding: 14px 12px;
+        min-width: unset;
+        align-items: start;
+    }
+
+    .admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank:not(.admin-event-dash-sales__rank--gold):not(.admin-event-dash-sales__rank--silver):not(.admin-event-dash-sales__rank--bronze) {
+        grid-area: rank;
+        align-self: start;
+        margin-top: 3px;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: rgba(14, 22, 122, 0.09);
+        font-size: 13px;
+        font-weight: 800;
+        color: var(--color-primary);
+    }
+
+    .admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--gold,
+    .admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--silver,
+    .admin-event-dash-sales__table--top-skus .admin-event-dash-sales__rank--bronze {
+        grid-area: rank;
+        align-self: start;
+        margin-top: 3px;
+        width: 30px;
+        height: 30px;
+    }
+
+    /* SKU — 2ª célula */
+    .admin-event-dash-sales__table--top-skus > .admin-event-dash-sales__row--top:not(.admin-table__head) > :nth-child(2) {
+        grid-area: sku;
+        align-self: start;
+    }
+
+    /* Nome do produto — 3ª célula */
+    .admin-event-dash-sales__table--top-skus > .admin-event-dash-sales__row--top:not(.admin-table__head) > :nth-child(3) {
+        grid-area: product;
+        font-size: 14px;
+        font-weight: 600;
+        align-self: start;
+        line-height: 1.3;
+    }
+
+    /* Unidades — 4ª célula */
+    .admin-event-dash-sales__table--top-skus > .admin-event-dash-sales__row--top:not(.admin-table__head) > :nth-child(4) {
+        grid-area: units;
+        justify-self: start;
+        text-align: center;
+        padding: 7px 12px;
+        border-radius: 12px;
+        background: rgba(14, 22, 122, 0.07);
+        min-width: 0;
+        width: 100%;
+    }
+
+    /* Receita — 5ª célula */
+    .admin-event-dash-sales__table--top-skus > .admin-event-dash-sales__row--top:not(.admin-table__head) > :nth-child(5) {
+        grid-area: revenue;
+        justify-self: end;
+        text-align: center;
+        padding: 7px 12px;
+        border-radius: 12px;
+        background: rgba(14, 22, 122, 0.07);
+        min-width: 0;
+        width: 100%;
+    }
+
+    /* Labels nas pills */
+    .admin-event-dash-sales__table--top-skus > .admin-event-dash-sales__row--top:not(.admin-table__head) > :nth-child(4)::before {
+        content: "Unid.";
+        display: block;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        margin-bottom: 2px;
+    }
+
+    .admin-event-dash-sales__table--top-skus > .admin-event-dash-sales__row--top:not(.admin-table__head) > :nth-child(5)::before {
+        content: "Receita";
+        display: block;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        margin-bottom: 2px;
+    }
 }
 
 /* Vendedores: o seletor genérico .admin-table__head usa grid de 6 colunas (transações). Repete a grid de 7 colunas das linhas. */
@@ -902,7 +1148,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     }
 
     .admin-sellers__row {
-        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         grid-template-areas:
             "person status"
             "events events"
@@ -924,13 +1170,31 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         grid-area: status;
         justify-self: end;
     }
-    .admin-sellers__row > :nth-child(4) {
+    .admin-sellers__row:not(.admin-table__head) > :nth-child(4).admin-table__col--num {
         grid-area: sales;
         justify-self: start;
+        align-self: center;
+        text-align: left;
+        font-size: 13px;
+        min-width: 0;
     }
-    .admin-sellers__row > :nth-child(5) {
+    .admin-sellers__row:not(.admin-table__head) > :nth-child(4).admin-table__col--num::before {
+        content: "Vendas: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
+    }
+    .admin-sellers__row:not(.admin-table__head) > :nth-child(5).admin-table__col--num {
         grid-area: revenue;
         justify-self: end;
+        align-self: center;
+        text-align: right;
+        font-size: 13px;
+        min-width: 0;
+    }
+    .admin-sellers__row:not(.admin-table__head) > :nth-child(5).admin-table__col--num::before {
+        content: "Faturamento: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
     }
     .admin-sellers__row > :nth-child(6) {
         grid-area: login;
@@ -1007,8 +1271,26 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 
 .admin-tx__order-inner {
     display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    max-width: 100%;
+}
+
+.admin-tx__order-ref {
+    display: inline-flex;
     align-items: center;
     gap: 6px;
+}
+
+.admin-tx__order-client {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--color-text-muted);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     max-width: 100%;
 }
 
@@ -1061,7 +1343,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     flex-direction: row;
     align-items: center;
     justify-content: flex-end;
-    flex-wrap: wrap;
     gap: 8px;
     max-width: 100%;
 }
@@ -1232,6 +1513,31 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     color: var(--color-text);
 }
 
+.admin-tx__promo-label {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #0d7a4a;
+}
+
+.admin-tx__promo-label i {
+    margin-right: 4px;
+    opacity: 0.85;
+}
+
+.admin-tx__price-original {
+    display: block;
+    text-decoration: line-through;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.admin-tx__summary-row--discount strong {
+    color: #0d7a4a;
+}
+
 .admin-tx__items + .admin-tx__details-title {
     margin-top: 22px;
 }
@@ -1366,19 +1672,22 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 .admin-nav {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     flex: 1;
     justify-content: center;
     flex-wrap: wrap;
+    min-height: 36px;
 }
 
 .admin-nav__item {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 8px;
-    padding: 8px 14px;
+    padding: 8px 13px;
+    min-height: 36px;
     border-radius: var(--radius-pill);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--color-text-muted);
     transition: background var(--transition), color var(--transition);
@@ -1396,6 +1705,27 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 
 .admin-nav__item i {
     font-size: 13px;
+}
+
+.admin-nav__label {
+    min-width: 0;
+}
+
+.admin-nav__viewport,
+.admin-nav__track {
+    min-width: 0;
+}
+
+.admin-nav__slide-btn,
+.admin-nav__pager {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .admin-nav__viewport,
+    .admin-nav__track {
+        display: contents;
+    }
 }
 
 /* ==========================================================================
@@ -1506,103 +1836,77 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     transform: translateY(-1px);
 }
 
-.admin-section--danger-zone {
-    border: 1px solid rgba(220, 38, 38, 0.35);
-    border-radius: var(--radius-lg);
-    padding: 14px 18px 14px;
-    background: rgba(220, 38, 38, 0.04);
-}
-
-.admin-section--danger-zone.is-expanded {
-    padding-bottom: 18px;
-}
-
-.admin-danger-zone__toolbar {
-    margin: 0;
-}
-
-.admin-danger-zone__toggle {
-    width: 100%;
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 6px 4px;
-    border: none;
-    border-radius: var(--radius-md);
-    background: transparent;
-    cursor: pointer;
-    text-align: left;
-    font: inherit;
-    color: inherit;
-    transition: background 0.15s ease;
-}
-
-.admin-danger-zone__toggle:hover {
-    background: rgba(220, 38, 38, 0.06);
-}
-
-.admin-danger-zone__toggle:focus-visible {
-    outline: 2px solid #dc2626;
-    outline-offset: 2px;
-}
-
-.admin-danger-zone__chevron-wrap {
-    flex-shrink: 0;
+/* Botão compacto — só ícone, quadrado levemente arredondado em azul */
+.admin-btn--icon-only {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    padding: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
-    margin-top: 2px;
+    border: none;
     border-radius: var(--radius-sm);
-    background: rgba(220, 38, 38, 0.14);
-    color: #b91c1c;
+    line-height: 1;
+    background: rgba(14, 22, 122, 0.10);
+    color: var(--color-primary);
+    box-shadow: none;
 }
 
-.admin-danger-zone__chevron {
+.admin-btn--icon-only:hover,
+.admin-btn--icon-only:focus-visible {
+    background: rgba(14, 22, 122, 0.16);
+    color: var(--color-primary-dark);
+    transform: translateY(-1px);
+}
+
+.admin-btn--icon-only:active {
+    transform: translateY(0);
+    background: rgba(14, 22, 122, 0.20);
+}
+
+.admin-btn--ghost.admin-btn--icon-only {
+    background: rgba(14, 22, 122, 0.10);
+    color: var(--color-primary);
+    border: none;
+}
+
+.admin-btn--ghost.admin-btn--icon-only:hover,
+.admin-btn--ghost.admin-btn--icon-only:focus-visible {
+    background: rgba(14, 22, 122, 0.16);
+    color: var(--color-primary-dark);
+    border: none;
+}
+
+.admin-btn--icon-only.admin-btn--sm,
+.admin-btn--sm.admin-btn--icon-only {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
     font-size: 14px;
-    transition: transform 0.2s ease;
 }
 
-.admin-section--danger-zone.is-expanded .admin-danger-zone__chevron {
-    transform: rotate(180deg);
+.admin-btn--danger.admin-btn--icon-only {
+    background: rgba(220, 38, 38, 0.12);
+    color: #dc2626;
+    box-shadow: none;
 }
 
-.admin-danger-zone__toggle-label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
+.admin-btn--danger.admin-btn--icon-only:hover,
+.admin-btn--danger.admin-btn--icon-only:focus-visible {
+    background: rgba(220, 38, 38, 0.22);
+    color: #b91c1c;
+    transform: translateY(-1px);
 }
 
-.admin-danger-zone__heading-line {
-    display: block;
+.admin-btn--danger.admin-btn--icon-only:active {
+    transform: translateY(0);
+    background: rgba(220, 38, 38, 0.28);
+}
+
+.admin-event-header__delete-form {
+    display: inline-flex;
     margin: 0;
-    line-height: 1.3;
-}
-
-.admin-danger-zone__collapsed-hint {
-    font-size: 13px;
-    color: var(--color-text-muted);
-    line-height: 1.35;
-}
-
-.admin-section--danger-zone.is-expanded .admin-danger-zone__collapsed-hint {
-    display: none;
-}
-
-.admin-danger-zone__panel {
-    padding-top: 14px;
-    margin-top: 4px;
-    border-top: 1px solid rgba(220, 38, 38, 0.22);
-}
-
-.admin-danger-zone__subtitle {
-    margin: 0 0 4px;
-}
-
-.admin-reset-panel {
-    padding: 8px 0 20px;
 }
 
 .admin-reset-form {
@@ -1610,7 +1914,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;
-    max-width: 520px;
+    width: 100%;
 }
 
 .admin-reset-confirm {
@@ -1735,6 +2039,23 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-filter--search {
         grid-column: 1 / -1;
         max-width: none;
+    }
+}
+
+/* Admin — inputs de data nos filtros (mobile): largura contida para não estourar o grid */
+@media (max-width: 900px) {
+    .admin-shell:has(.admin-nav--admin) .admin-filter:has(> .admin-filter__input[type="date"]) {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .admin-shell:has(.admin-nav--admin) .admin-filters .admin-filter__input[type="date"] {
+        width: min(100%, 9.75rem);
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        font-size: 13px;
+        padding-inline: 10px;
     }
 }
 
@@ -1868,12 +2189,27 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     font-size: 14px;
 }
 
+/* Promoções: tooltips sobem acima da linha — não clipar na .admin-table (overflow:hidden global) */
+.admin-stock.admin-table {
+    overflow: visible;
+}
+
+.admin-stock .admin-stock__row {
+    overflow: visible;
+}
+
+.admin-stock__product,
+.admin-stock__product > span:last-child {
+    overflow: visible;
+}
+
 /* Desktop: ganha um pouco de largura usando o padding lateral do .admin-main */
 @media (min-width: 901px) {
     .admin-stock.admin-table {
         width: calc(100% + 32px);
         margin-left: -16px;
         margin-right: -16px;
+        overflow: visible;
     }
 }
 
@@ -1898,6 +2234,12 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 
 /* Desktop (≥901px): colunas proporcionais na largura da linha; produto com faixa estável para não invadir as demais colunas. */
 @media (min-width: 901px) {
+    .admin-stock__row:has(.admin-stock__promo-wrap:not([hidden]):hover),
+    .admin-stock__row:has(.admin-stock__promo-wrap:not([hidden]):focus-within) {
+        position: relative;
+        z-index: 40;
+    }
+
     .admin-stock .admin-stock__row {
         column-gap: 24px;
     }
@@ -1926,6 +2268,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-stock__row > :nth-child(1) {
         min-width: 0;
         padding-right: 28px;
+        overflow: visible;
     }
 
     /* Texto do produto (nome + meta) pode encolher dentro da célula para o ellipsis funcionar */
@@ -2007,7 +2350,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 }
 
 .admin-stock__product-name-row {
-    display: inline-flex;
     align-items: center;
     gap: 6px;
     flex-wrap: wrap;
@@ -2025,7 +2367,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     word-break: break-word;
 }
 
-/* Promo no estoque: wrapper mantém :hover ao mover o cursor para o balão (filho), evitando sumir com pseudo-elemento + pointer-events:none */
+/* Promo no estoque: tooltip só ao passar o cursor (ou foco) sobre o ícone */
 .admin-stock__promo-wrap {
     position: relative;
     display: inline-flex;
@@ -2039,20 +2381,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 
 .admin-stock__promo-tag-icon[hidden] {
     display: none !important;
-}
-
-/* Coluna invisível entre ícone e tooltip — sem isso o cursor “cai no buraco” e o hover some */
-.admin-stock__promo-wrap:not([hidden]):has(
-        .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty)
-    )::before {
-    content: "";
-    position: absolute;
-    left: 50%;
-    bottom: 100%;
-    width: 44px;
-    height: 72px;
-    transform: translateX(-50%);
-    z-index: 1;
 }
 
 /* Ícone de promoção ao lado do nome (estoque admin/vendedor — sem position:absolute do card) */
@@ -2081,7 +2409,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     left: 50%;
     bottom: calc(100% + 10px);
     transform: translateX(-50%);
-    z-index: 3;
+    z-index: 50;
     box-sizing: border-box;
     max-width: min(300px, 78vw);
     width: max-content;
@@ -2115,13 +2443,41 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     border-top-color: #1e1b4b;
 }
 
-.admin-stock__promo-wrap:not([hidden]):hover
-    .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty),
-.admin-stock__promo-wrap:not([hidden]):focus-within
-    .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty) {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
+@media (min-width: 901px) {
+    .admin-stock__promo-tag-icon:hover
+        + .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty),
+    .admin-stock__promo-tag-icon:focus-visible
+        + .admin-stock__promo-tooltip-panel:not(.admin-stock__promo-tooltip-panel--empty) {
+        opacity: 1;
+        visibility: visible;
+    }
+}
+
+.admin-stock__status-cell {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.admin-badge--promo-stock {
+    background: rgba(124, 58, 237, 0.10);
+    color: #6d28d9;
+    border: 1px solid rgba(124, 58, 237, 0.20);
+    display: none;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    max-width: min(160px, 100%);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-stock__promo-name-badge[hidden] {
+    display: none !important;
 }
 
 .admin-stock__product .admin-stock__meta {
@@ -2308,6 +2664,11 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 
 .admin-product__movements-table .admin-mov__row {
     min-width: 640px;
+}
+
+.admin-product__movements-table .admin-mov__row--with-event {
+    grid-template-columns: 1.1fr 0.9fr minmax(104px, 1.15fr) 0.5fr 0.65fr 1.35fr 0.65fr;
+    min-width: 720px;
 }
 
 .admin-card {
@@ -2560,6 +2921,11 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     grid-template-columns: 1.1fr 1.4fr 0.9fr minmax(104px, 1.15fr) 0.5fr 0.65fr 1.35fr 0.65fr;
 }
 
+/* Dashboard do evento — movimentações recentes (sem colunas Evento / Usuário) */
+.admin-mov__row--wide-event-dash {
+    grid-template-columns: 1.1fr 1.4fr 0.9fr 0.5fr 0.65fr 1.35fr;
+}
+
 .admin-table > .admin-mov__row:last-child { border-bottom: none; }
 .admin-table > .admin-mov__wrapper:last-child .admin-mov__row { border-bottom: none; }
 
@@ -2709,7 +3075,13 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         flex-wrap: nowrap;
         align-items: center;
         justify-content: flex-end;
-        gap: 10px 12px;
+        gap: 8px 10px;
+    }
+    .admin-topbar__event-badge {
+        max-width: 92px;
+        font-size: 10px;
+        padding: 3px 7px;
+        flex-shrink: 1;
     }
     .admin-topbar__user {
         min-width: 0;
@@ -2717,7 +3089,7 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         text-overflow: ellipsis;
         white-space: nowrap;
         flex: 1 1 auto;
-        max-width: 42%;
+        max-width: 36%;
     }
     .admin-topbar__clock {
         flex-shrink: 0;
@@ -2751,27 +3123,226 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-topbar__logout-label {
         display: none;
     }
-    /* Nav em grade 2×2: duas colunas, duas linhas (itens 1–2 à esq., 3–4 à dir.). */
+
+    .admin-topbar__reset-label {
+        display: none;
+    }
+
+    .admin-topbar__reset-btn {
+        padding: 8px;
+        gap: 0;
+    }
+
     .admin-nav {
         order: 3;
         flex: 0 0 auto;
         flex-basis: 100%;
         width: 100%;
         max-width: 100%;
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        grid-template-rows: auto auto;
-        grid-auto-flow: column;
-        gap: 8px 10px;
-        justify-content: stretch;
-        align-items: stretch;
+        min-height: 0;
+        padding-top: 4px;
+        border-top: 1px solid var(--color-border);
     }
-    .admin-nav__item {
-        justify-content: center;
-        width: 100%;
-        min-width: 0;
-        box-sizing: border-box;
+
+    /* Mobile estreito (≤767px): evento na marca + nav em slide (2 itens por página) */
+    @media (max-width: 767px) {
+        .admin-topbar {
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px 10px;
+        }
+
+        .admin-topbar__brand {
+            flex: 1 1 auto;
+            width: auto;
+            max-width: 100%;
+            min-width: 0;
+            justify-content: center;
+            flex-wrap: nowrap;
+            gap: 6px 8px;
+        }
+
+        .admin-topbar__brand img,
+        .admin-topbar__brand .admin-brand-logo {
+            height: 32px;
+            flex-shrink: 0;
+        }
+
+        .admin-topbar__badge {
+            flex-shrink: 0;
+            font-size: 9px;
+            padding: 3px 6px;
+            letter-spacing: 0.06em;
+        }
+
+        .admin-topbar__event-badge--in-brand {
+            display: inline-flex;
+            max-width: 76px;
+            font-size: 9px;
+            padding: 2px 6px;
+            flex-shrink: 1;
+        }
+
+        .admin-topbar__event-badge--in-meta {
+            display: none !important;
+        }
+
+        .admin-topbar__meta {
+            order: 2;
+            width: auto;
+            max-width: none;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .admin-topbar__user {
+            flex: 0 1 auto;
+            max-width: none;
+            font-size: 12px;
+            gap: 5px;
+        }
+
+        .admin-topbar__clock {
+            font-size: 11px;
+        }
+
+        .admin-topbar__theme-toggle {
+            width: 34px;
+            height: 34px;
+            flex-shrink: 0;
+        }
+
+        .admin-shell {
+            --admin-topbar-height: 154px;
+        }
+
+        .admin-nav {
+            display: grid;
+            grid-template-columns: 34px minmax(0, 1fr) 34px;
+            grid-template-rows: auto auto;
+            align-items: center;
+            gap: 6px 4px;
+            padding: 6px 0 4px;
+        }
+
+        .admin-nav__slide-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 40px;
+            padding: 0;
+            border: 1.5px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            background: var(--color-bg);
+            color: var(--color-text-muted);
+            cursor: pointer;
+            flex-shrink: 0;
+            transition: border-color var(--transition), color var(--transition), background var(--transition);
+        }
+
+        .admin-nav__slide-btn--prev {
+            grid-column: 1;
+            grid-row: 1;
+        }
+
+        .admin-nav__slide-btn--next {
+            grid-column: 3;
+            grid-row: 1;
+        }
+
+        .admin-nav__slide-btn:not(:disabled):hover {
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+            background: rgba(14, 22, 122, 0.06);
+        }
+
+        .admin-nav__slide-btn:disabled {
+            opacity: 0.35;
+            cursor: default;
+        }
+
+        .admin-nav__slide-btn:focus-visible {
+            outline: 2px solid var(--color-primary);
+            outline-offset: 2px;
+        }
+
+        .admin-nav__slide-btn i {
+            font-size: 12px;
+        }
+
+        .admin-nav__viewport {
+            display: block;
+            grid-column: 2;
+            grid-row: 1;
+            overflow: hidden;
+            min-width: 0;
+        }
+
+        .admin-nav__track {
+            display: flex;
+            width: max-content;
+            min-width: 100%;
+            transition: transform 0.28s ease;
+            will-change: transform;
+        }
+
+        .admin-nav__track .admin-nav__item {
+            flex: 0 0 auto;
+            box-sizing: border-box;
+            min-height: 46px;
+            padding: 10px 8px;
+            font-size: 13px;
+            gap: 6px;
+        }
+
+        .admin-nav__track .admin-nav__item i {
+            font-size: 14px;
+        }
+
+        .admin-nav--admin .admin-nav__track .admin-nav__item {
+            min-height: 42px;
+            padding: 8px 6px;
+            font-size: 12px;
+            gap: 5px;
+        }
+
+        .admin-nav--admin .admin-nav__track .admin-nav__item i {
+            font-size: 12px;
+        }
+
+        .admin-nav__pager {
+            display: flex;
+            grid-column: 1 / -1;
+            grid-row: 2;
+            justify-content: center;
+            align-items: center;
+            gap: 6px;
+            min-height: 10px;
+        }
+
+        .admin-nav__pager-dot {
+            width: 6px;
+            height: 6px;
+            padding: 0;
+            border: none;
+            border-radius: 999px;
+            background: var(--color-border);
+            cursor: pointer;
+            transition: width var(--transition), background var(--transition);
+        }
+
+        .admin-nav__pager-dot.is-active {
+            width: 18px;
+            background: var(--color-primary);
+        }
+
+        .admin-nav__pager-dot:focus-visible {
+            outline: 2px solid var(--color-primary);
+            outline-offset: 2px;
+        }
     }
+
     .admin-card__form {
         grid-template-columns: 1fr;
     }
@@ -2892,7 +3463,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     }
     .admin-stock__product strong {
         display: -webkit-box;
-        -webkit-line-clamp: 2;
         line-clamp: 2;
         -webkit-box-orient: vertical;
         white-space: normal;
@@ -2932,8 +3502,29 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         display: block;
         background: transparent;
         box-shadow: none;
+        overflow: visible;
+    }
+    .admin-stock .admin-stock__row {
+        overflow: visible;
     }
     .admin-stock .admin-table__head { display: none; }
+
+    /* Estoque ≤900px (mobile + tablet): badge roxo na situação; sem ícone/tooltip ao lado do nome */
+    .admin-stock .admin-stock__promo-wrap {
+        display: none !important;
+    }
+
+    .admin-stock__promo-name-badge:not([hidden]) {
+        display: inline-flex;
+    }
+
+    .admin-stock__status-cell {
+        width: 100%;
+    }
+
+    .admin-badge--promo-stock {
+        max-width: min(220px, 100%);
+    }
 
     /* Movimentações — mesmo “card” visual do estoque (mobile) */
     .admin-table:has(.admin-mov__wrapper),
@@ -3144,7 +3735,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-events > :nth-child(4)::before {
         content: "Evento";
         display: block;
-        margin-bottom: 2px;
         font-size: 10px;
         font-weight: 800;
         letter-spacing: 0.06em;
@@ -3183,6 +3773,110 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     }
     .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-events > :nth-child(8)::before {
         content: "Usuário";
+        display: block;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+
+    /* Dashboard do evento — movimentações recentes (mesmo card mobile que wide-events, sem Evento/Usuário) */
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-event-dash {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "product product"
+            "date    type"
+            "delta   balance"
+            "reason  reason";
+        gap: 10px 12px;
+        padding: 14px;
+        align-items: start;
+        border-bottom: none;
+        font-size: 13px;
+    }
+
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-event-dash > :nth-child(1) {
+        grid-area: date;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-event-dash > :nth-child(2) {
+        grid-area: product;
+    }
+
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-event-dash > :nth-child(3) {
+        grid-area: type;
+        justify-self: end;
+        align-self: start;
+    }
+
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-event-dash > :nth-child(4) {
+        grid-area: delta;
+        justify-self: start;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-event-dash > :nth-child(4).admin-table__col--num,
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-event-dash > :nth-child(5).admin-table__col--num {
+        text-align: center;
+    }
+
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-event-dash > :nth-child(5) {
+        grid-area: balance;
+        justify-self: end;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-event-dash > :nth-child(6) {
+        grid-area: reason;
+        white-space: normal;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-event-dash > :nth-child(1)::before {
+        content: "Data";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-event-dash > :nth-child(4)::before {
+        content: "Delta";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-event-dash > :nth-child(5)::before {
+        content: "Saldo";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+
+    .admin-mov__wrapper .admin-mov__row.admin-mov__row--wide-event-dash > :nth-child(6)::before {
+        content: "Motivo / ref.";
         display: block;
         margin-bottom: 4px;
         font-size: 10px;
@@ -3305,7 +3999,118 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(6)::before {
         content: "Usuário";
         display: block;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+
+    /* Biblioteca — histórico do produto com coluna Evento (7 colunas) */
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event {
+        grid-template-areas:
+            "date type"
+            "event event"
+            "delta balance"
+            "reason reason"
+            "user user";
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(3) {
+        grid-area: event;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 10px;
+        justify-self: stretch;
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        text-align: left;
+        min-width: 0;
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(3) .admin-mov__event-badge,
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(3) .admin-mov__event-none,
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(3) .admin-mov__event-unknown {
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(4) {
+        grid-area: delta;
+        justify-self: start;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(5) {
+        grid-area: balance;
+        justify-self: end;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(6) {
+        grid-area: reason;
+        white-space: normal;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(7) {
+        grid-area: user;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(4).admin-table__col--num,
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(5).admin-table__col--num {
+        text-align: center;
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(3)::before {
+        content: "Evento";
+        display: block;
+        margin-bottom: 0;
+        flex-shrink: 0;
+        line-height: 1;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(4)::before {
+        content: "Delta";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(5)::before {
+        content: "Saldo";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(6)::before {
+        content: "Motivo / ref.";
+        display: block;
         margin-bottom: 4px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event > :nth-child(7)::before {
+        content: "Usuário";
+        display: block;
         font-size: 10px;
         font-weight: 800;
         letter-spacing: 0.06em;
@@ -3416,7 +4221,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-table > .admin-mov__row:not(.admin-table__head):not(.admin-mov__row--wide) > :nth-child(6)::before {
         content: "Usuário";
         display: block;
-        margin-bottom: 4px;
         font-size: 10px;
         font-weight: 800;
         letter-spacing: 0.06em;
@@ -3431,23 +4235,157 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     }
     .admin-mov__note-btn {
         position: absolute;
+        justify-content: flex-end !important;
+        align-items: end !important;
         bottom: 12px;
         right: 12px;
         width: 48px;
         height: 48px;
-        font-size: 1.375rem;
+        font-size: 1.1rem;
         z-index: 2;
     }
     .admin-mov__note-btn i {
-        font-size: 1.375rem;
+        font-size: 1.1rem;
         line-height: 1;
     }
 
     .admin-table > .admin-mov__row.admin-table__head { display: none; }
 }
 
+/* Tablet (768px–900px): topbar do vendedor — marca + meta na 1ª linha, nav distribuída na 2ª */
+@media (min-width: 768px) and (max-width: 900px) {
+    .admin-shell {
+        --admin-topbar-height: 128px;
+    }
+
+    .admin-topbar {
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 16px 8px;
+        gap: 8px 12px;
+    }
+
+    .admin-topbar__brand {
+        order: 1;
+        flex: 0 1 auto;
+        width: auto;
+        max-width: 42%;
+        justify-content: flex-start;
+    }
+
+    .admin-topbar__brand img,
+    .admin-topbar__brand .admin-brand-logo {
+        height: 36px;
+    }
+
+    .admin-topbar__badge {
+        font-size: 10px;
+        padding: 3px 8px;
+    }
+
+    .admin-topbar__meta {
+        order: 2;
+        flex: 1 1 auto;
+        width: auto;
+        max-width: none;
+        justify-content: flex-end;
+        flex-wrap: nowrap;
+        gap: 8px;
+    }
+
+    .admin-topbar__event-badge {
+        max-width: 108px;
+        font-size: 10px;
+        padding: 3px 8px;
+    }
+
+    .admin-topbar__user {
+        max-width: 26%;
+        font-size: 12px;
+        gap: 6px;
+    }
+
+    .admin-topbar__clock {
+        font-size: 11px;
+        gap: 5px;
+    }
+
+    .admin-topbar__theme-toggle {
+        width: 36px;
+        height: 36px;
+        flex-shrink: 0;
+    }
+
+    .admin-topbar__logout {
+        padding: 8px 12px;
+        border: 1.5px solid var(--color-border);
+        background: var(--color-bg);
+        color: var(--color-text);
+    }
+
+    .admin-topbar__logout-label {
+        display: inline;
+        font-size: 12px;
+    }
+
+    .admin-nav {
+        order: 3;
+        flex: 0 0 100%;
+        width: 100%;
+        display: flex;
+        flex-wrap: nowrap;
+        justify-content: space-between;
+        align-items: stretch;
+        gap: 6px;
+        min-height: 48px;
+        padding: 6px 0 2px;
+        border-top: 1px solid var(--color-border);
+    }
+
+    .admin-nav__item {
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 46px;
+        justify-content: center;
+        padding: 10px 6px;
+        font-size: 13px;
+        gap: 6px;
+    }
+
+    .admin-nav__item i {
+        font-size: 14px;
+    }
+
+    .admin-nav--admin {
+        min-height: 42px;
+        gap: 4px;
+    }
+
+    .admin-nav--admin .admin-nav__item {
+        min-height: 40px;
+        padding: 8px 5px;
+        font-size: 12px;
+        gap: 5px;
+    }
+
+    .admin-nav--admin .admin-nav__item i {
+        font-size: 12px;
+    }
+
+    .admin-nav__label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+}
+
 /* ---------- Responsivo ---------- */
 @media (max-width: 900px) {
+    .admin-shell {
+        --admin-topbar-height: 136px;
+    }
+
     .admin-topbar {
         padding: 12px 16px;
     }
@@ -3460,8 +4398,9 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-main.admin-main--catalog-embed .admin-flashes {
         padding: 16px 16px 0;
     }
-    .admin-main.admin-main--catalog-embed .topbar {
-        top: 112px;
+    /* Catálogo embutido: logo duplicada — mantém admin-topbar__brand, oculta topbar__brand ao lado da busca */
+    .admin-main.admin-main--catalog-embed .topbar__brand {
+        display: none;
     }
     .admin-kpis {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3609,6 +4548,9 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         right: 16px;
         bottom: 12px;
     }
+    .admin-tx__row.is-open .admin-mov__note-btn {
+        display: none;
+    }
     .admin-table--tx-wide .admin-tx__row.is-open > .admin-table__col--toggle,
     .admin-table--with-payment:not(.admin-table--tx-wide) .admin-tx__row.is-open > .admin-table__col--toggle {
         top: 16px;
@@ -3671,16 +4613,63 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         padding: 12px 14px;
     }
     .admin-tx__items-row > :nth-child(1) { grid-column: 1 / -1; }
-    .admin-tx__items-row > :nth-child(2) { grid-column: 1; font-size: 12px; color: var(--color-text-muted); }
-    .admin-tx__items-row > :nth-child(3) { grid-column: 1; font-size: 12px; color: var(--color-text-muted); }
+    .admin-tx__items-row > :nth-child(2) {
+        grid-column: 1;
+        font-size: 12px;
+        color: var(--color-text-muted);
+        text-align: left;
+    }
+    .admin-tx__items-row > :nth-child(2)::before {
+        content: "SKU: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
+    }
+    .admin-tx__items-row > :nth-child(3) {
+        grid-column: 1;
+        font-size: 12px;
+        color: var(--color-text-muted);
+        text-align: left;
+    }
+    .admin-tx__items-row > :nth-child(3)::before {
+        content: "Categoria: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
+    }
     .admin-tx__items-row > :nth-child(4),
     .admin-tx__items-row > :nth-child(5),
     .admin-tx__items-row > :nth-child(6) {
         text-align: right;
     }
-    .admin-tx__items-row > :nth-child(4) { grid-column: 2; font-size: 12px; color: var(--color-text-muted); }
+    .admin-tx__items-row > :nth-child(4).admin-table__col--num {
+        grid-column: 2;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-tx__items-row > :nth-child(4).admin-table__col--num::before {
+        content: "Qtd: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
+    }
     .admin-tx__items-row > :nth-child(5) { grid-column: 2; font-size: 12px; color: var(--color-text-muted); }
     .admin-tx__items-row > :nth-child(6) { grid-column: 2; }
+}
+
+/* Restaura altura da topbar em tablet (após regras gerais de max-width: 900px) */
+@media (min-width: 768px) and (max-width: 900px) {
+    .admin-shell {
+        --admin-topbar-height: 128px;
+    }
+}
+
+/* Desktop: catálogo embutido — offset do main (admin-topbar fixa) + logo na topbar do catálogo */
+@media (min-width: 901px) {
+    .admin-shell > .admin-main.admin-main--catalog-embed {
+        padding-top: var(--admin-topbar-height);
+    }
+
+    .admin-main.admin-main--catalog-embed .topbar__brand {
+        display: inline-flex;
+    }
 }
 
 .admin-mov__wrapper {
@@ -3764,6 +4753,31 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     opacity: 0.72;
 }
 
+.admin-events-list .admin-events-list__created {
+    text-align: left;
+    justify-self: start;
+}
+
+.admin-table__head.admin-events-list__row .admin-events-list__created {
+    text-align: left;
+    justify-self: start;
+}
+
+.admin-events-list__stat--products,
+.admin-events-list__stat--sellers {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-events-list__stat--products::before,
+.admin-events-list__stat--sellers::before {
+    content: none;
+}
+
+.admin-events-list__meta {
+    display: contents;
+}
+
 /* Seção "arquivados" colapsada */
 .admin-events-archived__summary {
     cursor: pointer;
@@ -3840,10 +4854,39 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
         padding: 12px 16px;
     }
     .admin-events-list__row > :nth-child(1) { grid-area: name; }
-    .admin-events-list__row > :nth-child(2),
-    .admin-events-list__row > :nth-child(3),
-    .admin-events-list__row > :nth-child(4) { grid-area: meta; font-size: 12px; color: var(--color-text-muted); }
-    .admin-events-list__row > :nth-child(5) { grid-area: actions; justify-self: end; }
+    .admin-events-list__meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 6px 12px;
+        grid-area: meta;
+        min-width: 0;
+        width: 100%;
+        font-size: 12px;
+        color: var(--color-text-muted);
+    }
+    .admin-events-list__meta .admin-events-list__stat--products,
+    .admin-events-list__meta .admin-events-list__stat--sellers,
+    .admin-events-list__meta .admin-events-list__created {
+        display: inline;
+        width: auto;
+        flex: 0 1 auto;
+        min-width: 0;
+        text-align: left;
+        white-space: nowrap;
+    }
+    .admin-events-list__stat--products::before {
+        content: "Produtos: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
+    }
+    .admin-events-list__stat--sellers::before {
+        content: "Vendedores: ";
+        font-weight: 700;
+        color: var(--color-text-muted);
+    }
+    .admin-events-list__row > :nth-child(3) { grid-area: actions; justify-self: end; }
     .admin-table__head.admin-events-list__row { display: none; }
 
     .admin-event__row {
@@ -3860,7 +4903,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     .admin-event__row > :nth-child(1) { grid-area: product; }
     .admin-event__row > :nth-child(2) { grid-area: category; font-size: 12px; color: var(--color-text-muted); }
     .admin-event__row > :nth-child(3) { display: none; }
-    .admin-event__row > :nth-child(4) { grid-area: stock; }
     .admin-event__row > :nth-child(5) { grid-area: min; justify-self: end; }
     .admin-event__row > :nth-child(6) { grid-area: status; }
     .admin-event__row > :nth-child(7) { grid-area: actions; justify-self: end; align-self: start; }
@@ -3874,56 +4916,86 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
 }
 
 /* ==========================================================================
-   Sub-navegação interna do evento (Dashboard / Estoque / Movimentações / Vendedores)
+   Nav do evento na topbar (substitui admin-nav--admin quando dentro de evento)
    ========================================================================== */
 
-.admin-event-subnav {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 0;
-    background: var(--color-surface);
-    border-radius: var(--radius-md);
-    padding: 0 24px;
-    overflow-x: auto;
-    scrollbar-width: none;
-}
-
-.admin-event-subnav .admin-event-subnav__event-badge {
-    flex-shrink: 0;
-    align-self: center;
-}
-
-.admin-event-subnav::-webkit-scrollbar { display: none; }
-
-.admin-event-subnav__item {
+/* Badge-select de troca de evento */
+.admin-event-nav__badge {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    padding: 14px 18px;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    color: var(--color-text-muted);
-    margin-bottom: -2px;
+    padding: 5px 10px 5px 10px;
+    border-radius: var(--radius-pill);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
     white-space: nowrap;
-    transition: color var(--transition);
-    text-decoration: none;
-}
-
-.admin-event-subnav__item:hover {
+    flex-shrink: 0;
+    background: rgba(14, 22, 122, 0.12);
     color: var(--color-primary);
-    border-bottom-color: rgba(14, 22, 122, 0.3);
+    border: 1.5px solid rgba(14, 22, 122, 0.18);
+    max-width: 260px;
+    min-width: 0;
 }
 
-.admin-event-subnav__item.is-active {
-    color: var(--color-primary);
-    border-bottom-color: var(--color-primary);
-}
-
-.admin-event-subnav__item i {
+.admin-event-nav__badge-icon {
     font-size: 13px;
     flex-shrink: 0;
+}
+
+.admin-event-nav__chevron {
+    font-size: 10px;
+    flex-shrink: 0;
+    opacity: 0.75;
+    margin-left: -2px;
+    cursor: pointer;
+    padding: 2px;
+}
+
+.admin-event-nav__chevron:hover {
+    opacity: 1;
+}
+
+.admin-event-nav__chevron:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+.admin-event-nav__select {
+    appearance: none;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-size: 12px;
+    font-weight: 800;
+    font-family: inherit;
+    color: inherit;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    min-width: 0;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0;
+    line-height: 1.3;
+}
+
+.admin-event-nav__select option {
+    font-weight: 600;
+    color: var(--color-text);
+    background: var(--color-surface);
+}
+
+/* Separador visual entre badge e itens de nav */
+.admin-event-nav__sep {
+    display: block;
+    width: 1px;
+    height: 20px;
+    background: var(--color-border);
+    flex-shrink: 0;
+    align-self: center;
+    margin: 0 2px;
 }
 
 /* Header do dashboard do evento — botão discreto de edição */
@@ -4230,6 +5302,106 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     background: rgba(12, 138, 77, 0.1);
 }
 
+/* Diálogo de confirmação (admin.js) */
+.admin-modal--confirm {
+    max-width: 440px;
+}
+
+.admin-confirm__body {
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+}
+
+.admin-confirm__icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+    flex-shrink: 0;
+    background: rgba(14, 22, 122, 0.08);
+    color: var(--color-primary);
+}
+
+.admin-confirm__icon--destructive {
+    background: rgba(220, 38, 38, 0.12);
+    color: #dc2626;
+}
+
+.admin-confirm__message {
+    margin: 0;
+    width: 100%;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--color-text);
+    text-align: left;
+}
+
+.admin-confirm__footer {
+    padding: 0 22px 20px;
+    border-top: none;
+}
+
+/* Modal de reinício do sistema (topbar) */
+.admin-modal--reset {
+    max-width: 520px;
+}
+
+.admin-modal--reset::backdrop {
+    background: rgba(127, 29, 29, 0.35);
+}
+
+.admin-reset-modal__panel {
+    border: 2px solid rgba(220, 38, 38, 0.45);
+    box-shadow: 0 20px 48px rgba(127, 29, 29, 0.22);
+}
+
+.admin-reset-modal__header {
+    background: linear-gradient(180deg, rgba(254, 242, 242, 0.95) 0%, var(--color-surface) 100%);
+    border-bottom: 1px solid rgba(220, 38, 38, 0.25);
+}
+
+.admin-reset-modal__header .admin-modal__title {
+    color: #991b1b;
+}
+
+.admin-reset-modal__body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.admin-reset-modal__icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+    flex-shrink: 0;
+    align-self: center;
+    background: rgba(220, 38, 38, 0.14);
+    color: #dc2626;
+}
+
+.admin-reset-modal__desc {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--color-text);
+}
+
+.admin-reset-modal__desc strong {
+    color: #991b1b;
+}
+
+.admin-reset-modal__footer {
+    border-top: 1px solid rgba(220, 38, 38, 0.15);
+    padding: 16px;
+}
+
 .admin-modal__hint {
     font-size: 13px;
     color: var(--color-text-muted);
@@ -4239,24 +5411,97 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     gap: 6px;
 }
 
-/* Responsivo da sub-nav do evento */
+/* Prévia de estoque ao selecionar evento no modal "Adicionar ao Evento" */
+.add-event-stock-preview {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-top: -4px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    font-size: 12px;
+}
+
+.add-event-stock-preview[hidden] {
+    display: none !important;
+}
+
+.add-event-stock-preview__item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1;
+}
+
+.add-event-stock-preview__label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.add-event-stock-preview__value {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+
+.add-event-stock-preview__sep {
+    width: 1px;
+    height: 32px;
+    background: var(--color-border);
+    margin: 0 14px;
+    flex-shrink: 0;
+}
+
+/* Mensagem "produto novo neste evento" */
+.add-event-stock-preview--new {
+    display: flex !important;
+    align-items: center;
+    gap: 7px;
+    margin-top: -4px;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    background: rgba(14, 22, 122, 0.05);
+    border: 1px solid rgba(14, 22, 122, 0.12);
+    font-size: 12px;
+    color: var(--color-primary);
+    line-height: 1.4;
+}
+
+.add-event-stock-preview--new[hidden] {
+    display: none !important;
+}
+
+.add-event-stock-preview--new i {
+    flex-shrink: 0;
+    font-size: 13px;
+    opacity: 0.8;
+}
+
+/* Spinner enquanto carrega */
+.add-event-stock-preview[aria-busy="true"] .add-event-stock-preview__value {
+    opacity: 0.4;
+}
+
+/* Responsivo do badge-select de evento na topbar */
 @media (max-width: 900px) {
-    .admin-event-subnav {
-        padding: 0 12px;
+    .admin-event-nav__badge {
+        max-width: 160px;
+        font-size: 11px;
+        padding: 4px 8px;
     }
-    .admin-event-subnav .admin-event-subnav__event-badge {
-        max-width: 140px;
+    .admin-event-nav__select {
+        max-width: 110px;
+        font-size: 11px;
     }
-    .admin-event-subnav__item {
-        padding: 12px 12px;
-        font-size: 12px;
-        gap: 5px;
-    }
-    .admin-event-subnav__item span {
-        display: none;
-    }
-    .admin-event-subnav__item i {
-        font-size: 16px;
+    .admin-event-nav__chevron {
+        font-size: 9px;
     }
 }
 
@@ -4277,10 +5522,6 @@ html.admin-theme--dark .admin-login__brand .admin-brand-logo--dark {
     max-width: 180px;
     overflow: hidden;
     text-overflow: ellipsis;
-}
-
-.admin-nav__event-badge i {
-    color: currentColor;
 }
 
 .admin-field__hint-row {
@@ -4759,15 +6000,26 @@ html.admin-theme--dark .admin-nav__item.is-active {
     color: var(--color-primary-light);
 }
 
-html.admin-theme--dark .admin-event-subnav__item:hover {
-    color: var(--color-primary);
-    background: transparent;
-    border-bottom-color: var(--admin-accent-glow);
+html.admin-theme--dark .admin-nav__slide-btn {
+    background: var(--color-bg);
+    border-color: var(--color-border);
+    color: var(--color-text-muted);
 }
 
-html.admin-theme--dark .admin-event-subnav__item.is-active {
+html.admin-theme--dark .admin-nav__slide-btn:not(:disabled):hover {
+    background: var(--admin-tint);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-event-nav__badge {
+    background: rgba(88, 106, 255, 0.14);
+    border-color: rgba(88, 106, 255, 0.30);
     color: var(--color-primary-light);
-    border-bottom-color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-event-nav__sep {
+    background: var(--color-border);
 }
 
 html.admin-theme--dark .admin-breadcrumb {
@@ -4933,6 +6185,12 @@ html.admin-theme--dark .admin-badge--promo-type {
     color: var(--color-primary-light);
 }
 
+html.admin-theme--dark .admin-badge--promo-stock {
+    background: rgba(167, 139, 250, 0.14);
+    color: #c4b5fd;
+    border-color: rgba(167, 139, 250, 0.28);
+}
+
 /* Flashes */
 html.admin-theme--dark .admin-flash {
     border-left-color: var(--color-primary);
@@ -4978,6 +6236,33 @@ html.admin-theme--dark .admin-btn--danger {
     color: var(--admin-danger);
 }
 
+html.admin-theme--dark .admin-btn--danger.admin-btn--icon-only {
+    background: rgba(240, 113, 120, 0.14);
+    color: var(--admin-danger);
+}
+
+html.admin-theme--dark .admin-btn--danger.admin-btn--icon-only:hover,
+html.admin-theme--dark .admin-btn--danger.admin-btn--icon-only:focus-visible {
+    background: rgba(240, 113, 120, 0.24);
+    color: #ffb4b8;
+}
+
+html.admin-theme--dark .admin-btn--icon-only:not(.admin-btn--danger) {
+    background: var(--admin-tint);
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-btn--icon-only:not(.admin-btn--danger):hover,
+html.admin-theme--dark .admin-btn--icon-only:not(.admin-btn--danger):focus-visible {
+    background: var(--admin-tint-strong);
+    color: var(--color-primary-light);
+}
+
+html.admin-theme--dark .admin-confirm__icon--destructive {
+    background: rgba(240, 113, 120, 0.14);
+    color: var(--admin-danger);
+}
+
 html.admin-theme--dark .admin-btn--danger:hover {
     border-color: var(--admin-danger);
     background: var(--admin-danger-bg);
@@ -4994,9 +6279,33 @@ html.admin-theme--dark .admin-btn--danger-solid:hover:not(:disabled) {
     border-color: var(--admin-danger);
 }
 
-html.admin-theme--dark .admin-section--danger-zone {
-    border-color: rgba(240, 113, 120, 0.35);
-    background: rgba(240, 113, 120, 0.06);
+html.admin-theme--dark .admin-topbar__reset-btn {
+    border-color: rgba(240, 113, 120, 0.4);
+    background: rgba(240, 113, 120, 0.12);
+    color: #f87171;
+}
+
+html.admin-theme--dark .admin-topbar__reset-btn:hover {
+    background: rgba(240, 113, 120, 0.2);
+    border-color: #f87171;
+    color: #fca5a5;
+}
+
+html.admin-theme--dark .admin-reset-modal__header {
+    background: linear-gradient(180deg, rgba(69, 10, 10, 0.5) 0%, var(--color-surface) 100%);
+    border-bottom-color: rgba(240, 113, 120, 0.3);
+}
+
+html.admin-theme--dark .admin-reset-modal__header .admin-modal__title {
+    color: #fca5a5;
+}
+
+html.admin-theme--dark .admin-reset-modal__panel {
+    border-color: rgba(240, 113, 120, 0.4);
+}
+
+html.admin-theme--dark .admin-reset-modal__desc strong {
+    color: #fca5a5;
 }
 
 html.admin-theme--dark .admin-tx__discard-cart:hover {
@@ -5082,19 +6391,16 @@ html.admin-theme--dark .admin-stock__promo-tooltip-panel:not(.admin-stock__promo
     border-top-color: #0a0d26;
 }
 
-/* Badge de evento na nav do vendedor */
+/* Badge de evento na meta do vendedor */
+html.admin-theme--dark .admin-topbar__event-badge,
 html.admin-theme--dark .admin-nav__event-badge {
     color: #03051a;
 }
 
 /* ---------------------------------------------------------------------------
    Catálogo embutido (vendedor) — ajustes além das variáveis globais
+   (logos claro/escuro em .topbar__brand: ver catalog.css)
    --------------------------------------------------------------------------- */
-.admin-main--catalog-embed .topbar__brand .admin-brand-logo {
-    height: 48px;
-    width: auto;
-    display: inline-block;
-}
 
 html.admin-theme--dark .admin-main--catalog-embed .topbar__search input:focus {
     background: var(--color-surface);
@@ -5107,6 +6413,18 @@ html.admin-theme--dark .admin-main--catalog-embed .topbar__cart:hover {
 
 html.admin-theme--dark .admin-main--catalog-embed .topbar__cart-count {
     color: #03051a;
+}
+
+html.admin-theme--dark .admin-main--catalog-embed .cart-item__counter {
+    background: var(--color-surface);
+}
+
+html.admin-theme--dark .admin-main--catalog-embed .cart-drawer__checkout {
+    color: #03051a;
+}
+
+html.admin-theme--dark .admin-main--catalog-embed .category-dropdown__panel {
+    box-shadow: var(--shadow-lg);
 }
 
 html.admin-theme--dark .admin-main--catalog-embed .category-letter-trigger.is-active,
@@ -5171,8 +6489,126 @@ html.admin-theme--dark .admin-main--catalog-embed .cart-item__remove:hover {
     color: var(--admin-danger);
 }
 
-html.admin-theme--dark .admin-main--catalog-embed .cart-drawer__checkout {
+/* ---------------------------------------------------------------------------
+   Pagamento (fluxo vendedor) — modo escuro
+   --------------------------------------------------------------------------- */
+.payment__brand .admin-brand-logo--light,
+.payment__brand .admin-brand-logo--dark {
+    height: 44px;
+    width: auto;
+}
+
+.payment__brand .admin-brand-logo--light {
+    display: inline-block;
+}
+
+.payment__brand .admin-brand-logo--dark {
+    display: none;
+}
+
+html.admin-theme--dark .payment__brand .admin-brand-logo--light {
+    display: none;
+}
+
+html.admin-theme--dark .payment__brand .admin-brand-logo--dark {
+    display: inline-block;
+}
+
+html.admin-theme--dark .payment__back:hover {
+    background: var(--admin-tint);
+}
+
+html.admin-theme--dark .payment__section--method-flow {
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-sm);
+}
+
+html.admin-theme--dark .payment__instructions {
+    background: var(--admin-blue-tint-soft);
+}
+
+html.admin-theme--dark .payment__btn--next {
     color: #03051a;
+    box-shadow: 0 8px 20px var(--admin-accent-glow);
+}
+
+html.admin-theme--dark .payment-field__cep-btn {
+    color: #03051a;
+}
+
+html.admin-theme--dark .payment-field__cep-btn:hover:not(:disabled) {
+    background: var(--color-primary-light);
+}
+
+html.admin-theme--dark .payment__btn--secondary:hover {
+    background: var(--admin-tint);
+    border-color: var(--color-primary);
+}
+
+html.admin-theme--dark .payment-wait__pulse {
+    background: var(--admin-tint);
+    animation: paymentWaitPulseDark 2s ease-in-out infinite;
+}
+
+@keyframes paymentWaitPulseDark {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 var(--admin-accent-glow);
+    }
+    50% {
+        transform: scale(1.04);
+        box-shadow: 0 0 0 12px rgba(240, 192, 48, 0);
+    }
+}
+
+html.admin-theme--dark .payment-aut__icon {
+    background: var(--admin-tint);
+}
+
+html.admin-theme--dark .payment-aut__resume-hint {
+    color: var(--admin-warn);
+}
+
+html.admin-theme--dark .payment-pin__backdrop {
+    background: rgba(3, 5, 26, 0.78);
+}
+
+html.admin-theme--dark .payment-pin__icon {
+    background: var(--admin-tint);
+}
+
+html.admin-theme--dark .payment-pin__input:focus {
+    background: var(--color-surface);
+    box-shadow: 0 0 0 4px var(--admin-tint-strong);
+}
+
+html.admin-theme--dark .payment-pin__error {
+    color: var(--admin-danger);
+    background: var(--admin-danger-bg);
+}
+
+html.admin-theme--dark .payment-method__choice:hover .payment-method__box {
+    border-color: var(--color-primary);
+}
+
+html.admin-theme--dark .payment-method__choice input:checked + .payment-method__box {
+    background: var(--admin-tint);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+html.admin-theme--dark .payment-field__input:focus,
+html.admin-theme--dark .payment-aut__input:focus,
+html.admin-theme--dark .payment-installments__select:focus {
+    background: var(--color-surface);
+    box-shadow: 0 0 0 3px var(--admin-tint-strong);
+}
+
+html.admin-theme--dark .payment__success-order {
+    background: var(--admin-tint);
+}
+
+html.admin-theme--dark .seller-restore-msg {
+    color: var(--color-text-muted);
 }
 
 /* Responsivo — topbar em telas menores */
@@ -5183,5 +6619,649 @@ html.admin-theme--dark .admin-main--catalog-embed .cart-drawer__checkout {
 
     html.admin-theme--dark .admin-stock__row > :nth-child(4) {
         background: var(--admin-tint);
+    }
+}
+
+/* ==========================================================================
+   Seção Financeiro
+   ========================================================================== */
+
+/* Filtros */
+.admin-fin__filters {
+    margin-bottom: 0;
+}
+
+/* Cabeçalho do relatório (evento + período) */
+.admin-fin__report-header {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 24px;
+    padding: 14px 28px 12px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    margin: 0 0 4px;
+}
+
+.admin-fin__event-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--color-text);
+    letter-spacing: -0.01em;
+}
+
+.admin-fin__period-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+/* KPIs financeiros */
+.admin-kpis--fin {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 900px) {
+    .admin-kpis--fin {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* Grid: fluxo de estoque + mini-KPIs */
+.admin-fin__stock-grid {
+    display: grid;
+    grid-template-columns: 1fr minmax(200px, 240px);
+    gap: 20px;
+    align-items: start;
+}
+
+@media (max-width: 860px) {
+    .admin-fin__stock-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Tabela de fluxo */
+.admin-fin__stock-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    padding: 9px 14px;
+    font-size: 14px;
+    border-bottom: 1px solid var(--color-border);
+    align-items: center;
+}
+
+.admin-fin__stock-row:last-child {
+    border-bottom: none;
+}
+
+.admin-fin__stock-row--header {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    padding: 6px 14px;
+    background: var(--color-bg);
+}
+
+.admin-fin__stock-row--positive {
+    color: #0c8a4d;
+}
+
+.admin-fin__stock-row--negative {
+    color: #c62828;
+}
+
+.admin-fin__stock-row--total {
+    font-weight: 800;
+    font-size: 15px;
+    background: var(--color-bg);
+    border-top: 2px solid var(--color-border);
+    border-bottom: none;
+    color: var(--color-text);
+}
+
+/* Mini-KPIs de estoque */
+.admin-fin__stock-kpis {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.admin-fin__stock-kpi {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.admin-fin__stock-kpi--warn {
+    border-color: rgba(232, 148, 32, 0.45);
+    background: rgba(232, 148, 32, 0.06);
+}
+
+.admin-fin__stock-kpi-label {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.admin-fin__stock-kpi-value {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.admin-fin__stock-kpi-value--hl {
+    color: var(--color-primary);
+}
+
+/* Top SKUs */
+.admin-fin__skus-row {
+    display: grid;
+    grid-template-columns: 32px 100px 1fr 100px 110px 100px;
+    gap: 8px;
+    padding: 10px 16px;
+    font-size: 14px;
+    align-items: center;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.admin-fin__skus-row:last-child {
+    border-bottom: none;
+}
+
+.admin-fin__rank {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--color-text-muted);
+    text-align: center;
+}
+
+.admin-fin__sku-code {
+    font-size: 12px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 2px 7px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.admin-fin__prod-name a {
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.admin-fin__refund {
+    color: #c62828;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+/* Linha de pagamento / dia */
+.admin-fin__pm-row,
+.admin-fin__day-row,
+.admin-fin__seller-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 8px;
+    padding: 9px 16px;
+    font-size: 14px;
+    border-bottom: 1px solid var(--color-border);
+    align-items: center;
+}
+
+.admin-fin__pm-row:last-child,
+.admin-fin__day-row:last-child,
+.admin-fin__seller-row:last-child {
+    border-bottom: none;
+}
+
+.admin-fin__pm-row .admin-table__col--num,
+.admin-fin__day-row .admin-table__col--num,
+.admin-fin__seller-row .admin-table__col--num {
+    min-width: 80px;
+}
+
+/* Grid inferior: 2 colunas */
+.admin-fin__bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+.admin-fin__section-half {
+    margin: 0;
+}
+
+@media (max-width: 860px) {
+    .admin-fin__bottom-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Top SKUs — mobile (≤900px): card vertical com rank em círculo */
+@media (max-width: 900px) {
+    .admin-fin__skus-table {
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .admin-fin__skus-table > .admin-table__head {
+        display: none;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) {
+        grid-template-columns: 40px 1fr 1fr;
+        grid-template-areas:
+            "rank product product"
+            ".    sku     units"
+            ".    revenue refund";
+        gap: 8px 12px;
+        padding: 14px 16px;
+        margin-bottom: 12px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: var(--color-surface);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+        border-bottom: none;
+        align-items: start;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head):last-child {
+        margin-bottom: 0;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) > :nth-child(1) {
+        grid-area: rank;
+        align-self: start;
+        margin-top: 2px;
+        width: 34px;
+        height: 34px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: rgba(14, 22, 122, 0.09);
+        font-size: 14px;
+        font-weight: 800;
+        color: var(--color-primary);
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) > :nth-child(2) {
+        grid-area: sku;
+        align-self: start;
+        min-width: 0;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) > :nth-child(2)::before {
+        content: "SKU: ";
+        display: block;
+        font-weight: 700;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        margin-bottom: 2px;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) > :nth-child(3) {
+        grid-area: product;
+        font-size: 15px;
+        font-weight: 600;
+        line-height: 1.3;
+        min-width: 0;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) > .admin-table__col--num {
+        text-align: left;
+        min-width: 0;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) > :nth-child(4) {
+        grid-area: units;
+        font-size: 13px;
+        align-self: start;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) > :nth-child(4)::before {
+        content: "Unid. vendidas";
+        display: block;
+        font-weight: 700;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        margin-bottom: 2px;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) > :nth-child(5) {
+        grid-area: revenue;
+        font-size: 13px;
+        align-self: start;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) > :nth-child(5)::before {
+        content: "Receita";
+        display: block;
+        font-weight: 700;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        margin-bottom: 2px;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) > :nth-child(6) {
+        grid-area: refund;
+        font-size: 13px;
+        align-self: start;
+        display: block;
+        text-align: left;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) > :nth-child(6)::before {
+        content: "Estornos";
+        display: block;
+        font-weight: 700;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+        margin-bottom: 2px;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) > :nth-child(6).admin-fin__refund {
+        display: block;
+    }
+
+    .admin-fin__skus-row:not(.admin-table__head) > :nth-child(6).admin-fin__refund i {
+        margin-right: 4px;
+        font-size: 12px;
+    }
+}
+
+/* Dark mode */
+html.admin-theme--dark .admin-fin__report-header {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+}
+
+html.admin-theme--dark .admin-fin__stock-row--header {
+    background: var(--color-bg);
+}
+
+html.admin-theme--dark .admin-fin__stock-row--total {
+    background: var(--color-bg);
+}
+
+html.admin-theme--dark .admin-fin__stock-row--positive {
+    color: var(--admin-success);
+}
+
+html.admin-theme--dark .admin-fin__stock-row--negative {
+    color: var(--admin-danger);
+}
+
+html.admin-theme--dark .admin-fin__stock-kpi--warn {
+    border-color: rgba(232, 148, 32, 0.35);
+    background: var(--admin-warn-bg);
+}
+
+html.admin-theme--dark .admin-fin__refund {
+    color: var(--admin-danger);
+}
+
+html.admin-theme--dark .admin-fin__stock-kpi-value--hl {
+    color: var(--color-primary);
+}
+
+html.admin-theme--dark .admin-fin__sku-code {
+    background: var(--color-bg);
+    border-color: var(--color-border);
+}
+
+/* ==========================================================================
+   Página de impressão / PDF do Financeiro
+   ========================================================================== */
+
+.fin-pdf {
+    font-family: var(--font-base, 'Inter', sans-serif);
+    font-size: 13px;
+    color: #1a1d2e;
+    background: #fff;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 40px 48px;
+}
+
+.fin-pdf__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+    border-bottom: 2px solid #0e167a;
+}
+
+.fin-pdf__brand img {
+    height: 44px;
+}
+
+.fin-pdf__meta {
+    text-align: right;
+}
+
+.fin-pdf__event-name {
+    font-size: 20px;
+    font-weight: 800;
+    color: #0e167a;
+    letter-spacing: -0.01em;
+    margin-bottom: 4px;
+}
+
+.fin-pdf__period {
+    font-size: 13px;
+    color: #6b7280;
+    font-weight: 600;
+}
+
+.fin-pdf__generated {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 4px;
+}
+
+/* Seções */
+.fin-pdf__section {
+    margin-bottom: 26px;
+}
+
+.fin-pdf__section-title {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #0e167a;
+    border-bottom: 1px solid #e5e7eb;
+    padding-bottom: 5px;
+    margin-bottom: 12px;
+}
+
+/* KPIs */
+.fin-pdf__kpis {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.fin-pdf__kpi {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 12px 14px;
+    background: #f5f6fb;
+}
+
+.fin-pdf__kpi-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #6b7280;
+    margin-bottom: 3px;
+}
+
+.fin-pdf__kpi-value {
+    font-size: 20px;
+    font-weight: 800;
+    color: #0e167a;
+    letter-spacing: -0.02em;
+}
+
+.fin-pdf__kpi-hint {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 2px;
+}
+
+/* Tabelas PDF */
+.fin-pdf__table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.fin-pdf__table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #6b7280;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 4px 8px 6px;
+    background: #f5f6fb;
+}
+
+.fin-pdf__table td {
+    padding: 7px 8px;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: middle;
+}
+
+.fin-pdf__table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.fin-pdf__table tr:last-child td {
+    border-bottom: none;
+}
+
+.fin-pdf__table .total-row td {
+    font-weight: 800;
+    background: #f5f6fb;
+    border-top: 2px solid #e5e7eb;
+}
+
+.fin-pdf__table .positive { color: #0c8a4d; }
+.fin-pdf__table .negative { color: #c62828; }
+
+.fin-pdf__grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.fin-pdf__footer {
+    margin-top: 32px;
+    padding-top: 14px;
+    border-top: 1px solid #e5e7eb;
+    font-size: 11px;
+    color: #9ca3af;
+    text-align: center;
+}
+
+.fin-pdf__print-btn {
+    position: fixed;
+    top: 18px;
+    right: 24px;
+    z-index: 100;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #0e167a;
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(14,22,122,0.28);
+    transition: background 0.15s;
+}
+
+.fin-pdf__print-btn:hover {
+    background: #1a25a5;
+}
+
+.fin-pdf__back-btn {
+    position: fixed;
+    top: 18px;
+    left: 24px;
+    z-index: 100;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #f5f6fb;
+    color: #1a1d2e;
+    border: 1px solid #e5e7eb;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s;
+}
+
+@media print {
+    .fin-pdf__print-btn,
+    .fin-pdf__back-btn {
+        display: none !important;
+    }
+
+    .fin-pdf {
+        padding: 0;
+        max-width: 100%;
+    }
+
+    .fin-pdf__section {
+        page-break-inside: avoid;
+    }
+
+    .fin-pdf__header {
+        page-break-after: avoid;
     }
 }

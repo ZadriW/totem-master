@@ -5,8 +5,6 @@
 {% block admin_body %}
 
 {# ============================================================ Sub-nav do evento #}
-{% include "admin/_event_subnav.html" %}
-
 <section class="admin-section">
     <header class="admin-section__header admin-section__header--row">
         <div>
@@ -55,6 +53,24 @@
                 </button>
             </form>
             {% endif %}
+            <form
+                method="post"
+                action="{{ url_for('admin_event_delete', event_id=event.id) }}"
+                class="admin-event-header__delete-form"
+                data-confirm="{{ ('Serão removidos produtos do evento, promoções, vínculos com vendedores, transações e movimentações de estoque. Esta ação não pode ser desfeita.') | e }}"
+                data-confirm-title="Excluir evento {{ event.name|e }}?"
+                data-confirm-label="Excluir"
+            >
+                {% include 'partials/csrf_field.html' %}
+                <button
+                    type="submit"
+                    class="admin-btn admin-btn--danger admin-btn--icon-only"
+                    title="Excluir evento"
+                    aria-label="Excluir evento {{ event.name }}"
+                >
+                    <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+                </button>
+            </form>
         </div>
     </header>
 
@@ -132,7 +148,7 @@
                     Vendas por dia
                 </h3>
                 <p class="admin-event-dash-sales__panel-hint">
-                    Até {{ sales_dashboard.sales_days_limit }} dias distintos com pedidos (mais recentes primeiro).
+                    Dias com pedidos no evento, mais recentes primeiro (até {{ sales_dashboard.sales_days_limit }} dias).
                 </p>
                 {% if sales_dashboard.sales_by_day %}
                 <div class="admin-table admin-event-dash-sales__table admin-event-dash-sales__table--by-day" role="table" aria-label="Vendas por dia">
@@ -150,6 +166,45 @@
                     </div>
                     {% endfor %}
                 </div>
+                {% set day_pagination = sales_dashboard.sales_by_day_pagination %}
+                {% if day_pagination.total > 0 %}
+                <nav class="admin-pagination" aria-label="Paginação de vendas por dia">
+                    <p class="admin-pagination__summary">
+                        Mostrando
+                        <strong>{{ day_pagination.showing_from }}–{{ day_pagination.showing_to }}</strong>
+                        de <strong>{{ day_pagination.total }}</strong> dia(s)
+                        · página {{ day_pagination.page }} de {{ day_pagination.total_pages }}
+                    </p>
+                    <div class="admin-pagination__nav">
+                        {% if day_pagination.has_prev %}
+                        <a class="admin-btn admin-btn--ghost admin-btn--sm"
+                           href="{{ url_for('admin_event_detail', event_id=event.id, sales_day_page=day_pagination.page - 1) }}#event-dash-sales-title"
+                           rel="prev">
+                            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                            Anterior
+                        </a>
+                        {% else %}
+                        <span class="admin-pagination__disabled admin-btn admin-btn--ghost admin-btn--sm" aria-disabled="true">
+                            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                            Anterior
+                        </span>
+                        {% endif %}
+                        {% if day_pagination.has_next %}
+                        <a class="admin-btn admin-btn--ghost admin-btn--sm"
+                           href="{{ url_for('admin_event_detail', event_id=event.id, sales_day_page=day_pagination.page + 1) }}#event-dash-sales-title"
+                           rel="next">
+                            Próxima
+                            <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                        </a>
+                        {% else %}
+                        <span class="admin-pagination__disabled admin-btn admin-btn--ghost admin-btn--sm" aria-disabled="true">
+                            Próxima
+                            <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                        </span>
+                        {% endif %}
+                    </div>
+                </nav>
+                {% endif %}
                 {% else %}
                 <p class="admin-event-dash-sales__empty">Nenhuma venda registrada neste evento ainda.</p>
                 {% endif %}
@@ -172,7 +227,7 @@
                     </div>
                     {% for item in sales_dashboard.top_products %}
                     <div class="admin-event-dash-sales__row admin-event-dash-sales__row--top" role="row">
-                        <span class="admin-event-dash-sales__rank">{{ loop.index }}</span>
+                        <span class="admin-event-dash-sales__rank{% if loop.index == 1 %} admin-event-dash-sales__rank--gold{% elif loop.index == 2 %} admin-event-dash-sales__rank--silver{% elif loop.index == 3 %} admin-event-dash-sales__rank--bronze{% endif %}">{{ loop.index }}</span>
                         <span><code class="admin-event-dash-sales__sku">{{ item.sku }}</code></span>
                         <span class="admin-event-dash-sales__prod-name">
                             {% if item.product_id %}
@@ -264,7 +319,7 @@
 
     {% if recent_movements %}
     <div class="admin-table" role="table" aria-label="Movimentações recentes do evento">
-        <div class="admin-table__head admin-mov__row" role="row">
+        <div class="admin-table__head admin-mov__row admin-mov__row--wide admin-mov__row--wide-event-dash" role="row">
             <span role="columnheader">Data/Hora</span>
             <span role="columnheader">Produto</span>
             <span role="columnheader">Tipo</span>
@@ -273,27 +328,29 @@
             <span role="columnheader">Motivo / Ref.</span>
         </div>
         {% for m in recent_movements %}
-        <div class="admin-mov__row" role="row">
-            <span>{{ m.created_at | datahora }}</span>
-            <span class="admin-mov__product">
-                <a href="{{ url_for('admin_product_detail', product_id=m.product_id) }}">
-                    {{ m.product_name or '—' }}
-                </a>
-                <small>#{{ m.product_id }}{% if m.product_sku %} &middot; <code class="admin-mov__sku">{{ m.product_sku }}</code>{% endif %} &middot; {{ m.product_category or '-' }}</small>
-            </span>
-            <span>
-                <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
-                    {{ m.movement_type | movlabel }}
+        <div class="admin-mov__wrapper" data-movement-id="{{ m.id }}">
+            <div class="admin-mov__row admin-mov__row--wide admin-mov__row--wide-event-dash" role="row">
+                <span>{{ m.created_at | datahora }}</span>
+                <span class="admin-mov__product">
+                    <a href="{{ url_for('admin_product_detail', product_id=m.product_id) }}">
+                        {{ m.product_name or '—' }}
+                    </a>
+                    <small>#{{ m.product_id }}{% if m.product_sku %} &middot; <code class="admin-mov__sku">{{ m.product_sku }}</code>{% endif %} &middot; {{ m.product_category or '-' }}</small>
                 </span>
-            </span>
-            <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% elif m.delta < 0 %}negative{% else %}neutral{% endif %}">
-                {{ m.delta | signed }}
-            </span>
-            <span class="admin-table__col--num"><strong>{{ m.balance_after }}</strong></span>
-            <span class="admin-mov__reason">
-                {% if m.reference %}<code>{{ m.reference }}</code>{% endif %}
-                {{ m.reason or '-' }}
-            </span>
+                <span class="admin-mov__type-cell">
+                    <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
+                        {{ m.movement_type | movlabel }}
+                    </span>
+                </span>
+                <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% elif m.delta < 0 %}negative{% else %}neutral{% endif %}">
+                    {{ m.delta | signed }}
+                </span>
+                <span class="admin-table__col--num"><strong>{{ m.balance_after }}</strong></span>
+                <span class="admin-mov__reason">
+                    {% if m.reference %}<code>{{ m.reference }}</code>{% endif %}
+                    {{ m.reason or '-' }}
+                </span>
+            </div>
         </div>
         {% endfor %}
     </div>

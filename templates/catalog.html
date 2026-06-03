@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/admin_brand_logo.html" import admin_brand_logo %}
 
 {% block title %}Catálogo | Odonto Master{% endblock %}
 
@@ -11,7 +12,7 @@
 {% block body %}
 <header class="topbar">
     <a class="topbar__brand" href="{{ url_for('welcome') }}" aria-label="Voltar ao início">
-        <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
+        {{ admin_brand_logo() }}
     </a>
 
     <div class="topbar__search">
@@ -202,6 +203,7 @@
 <script>
     window.__PRODUCTS__ = {{ products|tojson }};
 </script>
+<script src="{{ url_for('static', filename='js/promo-pricing.js') }}"></script>
 <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
 <script src="{{ url_for('static', filename='js/idle-timeout.js') }}"></script>
 <script src="{{ url_for('static', filename='js/catalog.js') }}"></script>

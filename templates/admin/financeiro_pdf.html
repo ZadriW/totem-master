@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório Financeiro — {{ report.event.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/fonts-local.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <style>
+        body { margin: 0; background: #fff; }
+    </style>
+</head>
+<body>
+
+{# Botões de controle — ocultos na impressão #}
+<button class="fin-pdf__print-btn" onclick="window.print()">
+    <i class="fa-solid fa-print" aria-hidden="true"></i>
+    Imprimir / Salvar PDF
+</button>
+
+<a class="fin-pdf__back-btn"
+   href="{{ url_for('admin_financeiro', evento=selected_event_id, de=date_from, ate=date_to) }}">
+    <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+    Voltar
+</a>
+
+<div class="fin-pdf">
+
+    {# ── Cabeçalho ─────────────────────────────────────────────────────── #}
+    <header class="fin-pdf__header">
+        <div class="fin-pdf__brand">
+            <img src="{{ url_for('static', filename='images/logo-master.png') }}" alt="Odonto Master">
+        </div>
+        <div class="fin-pdf__meta">
+            <div class="fin-pdf__event-name">{{ report.event.name }}</div>
+            <div class="fin-pdf__period">{{ report.period.label }}</div>
+            <div class="fin-pdf__generated">
+                Relatório gerado em
+                {{ now.strftime('%d/%m/%Y às %H:%M') if now else '' }}
+            </div>
+        </div>
+    </header>
+
+    {# ── KPIs ──────────────────────────────────────────────────────────── #}
+    <section class="fin-pdf__section">
+        <div class="fin-pdf__section-title">Resumo de Vendas</div>
+        <div class="fin-pdf__kpis">
+            <div class="fin-pdf__kpi">
+                <div class="fin-pdf__kpi-label">Pedidos confirmados</div>
+                <div class="fin-pdf__kpi-value">{{ report.kpis.orders }}</div>
+                <div class="fin-pdf__kpi-hint">{{ report.kpis.items_sold }} unid. vendidas</div>
+            </div>
+            <div class="fin-pdf__kpi">
+                <div class="fin-pdf__kpi-label">Receita bruta</div>
+                <div class="fin-pdf__kpi-value">{{ report.kpis.revenue | brl }}</div>
+                <div class="fin-pdf__kpi-hint">Pedidos confirmados</div>
+            </div>
+            <div class="fin-pdf__kpi">
+                <div class="fin-pdf__kpi-label">Ticket médio</div>
+                <div class="fin-pdf__kpi-value">{{ report.kpis.avg_ticket | brl }}</div>
+                <div class="fin-pdf__kpi-hint">Por pedido</div>
+            </div>
+            <div class="fin-pdf__kpi">
+                <div class="fin-pdf__kpi-label">Estornos</div>
+                <div class="fin-pdf__kpi-value">{{ report.kpis.refunds_count }}</div>
+                <div class="fin-pdf__kpi-hint">{{ report.kpis.refunds_value | brl }} devolvido</div>
+            </div>
+        </div>
+    </section>
+
+    {# ── Estoque ────────────────────────────────────────────────────────── #}
+    <section class="fin-pdf__section">
+        <div class="fin-pdf__section-title">Movimentação de Estoque</div>
+        <div class="fin-pdf__grid-2">
+            <table class="fin-pdf__table">
+                <thead>
+                    <tr>
+                        <th>Tipo de movimentação</th>
+                        <th class="num">Unidades</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Estoque inicial</td>
+                        <td class="num">{{ report.stock_summary.initial_units }}</td>
+                    </tr>
+                    <tr>
+                        <td class="positive">+ Entradas</td>
+                        <td class="num positive">+{{ report.stock_summary.entries }}</td>
+                    </tr>
+                    <tr>
+                        <td class="negative">− Saídas por venda</td>
+                        <td class="num negative">−{{ report.stock_summary.sold_units }}</td>
+                    </tr>
+                    <tr>
+                        <td class="positive">+ Devoluções (estorno)</td>
+                        <td class="num positive">+{{ report.stock_summary.refunded_units }}</td>
+                    </tr>
+                    <tr>
+                        <td class="negative">− Saídas manuais</td>
+                        <td class="num negative">−{{ report.stock_summary.exits_manual }}</td>
+                    </tr>
+                    {% if report.stock_summary.losses_units > 0 %}
+                    <tr>
+                        <td class="negative">− Quebras (ajustes negativos)</td>
+                        <td class="num negative">−{{ report.stock_summary.losses_units }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr class="total-row">
+                        <td>Saldo atual (estoque final)</td>
+                        <td class="num">{{ report.stock_summary.final_units }}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <table class="fin-pdf__table">
+                <thead>
+                    <tr>
+                        <th>Indicador</th>
+                        <th class="num">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Produtos no evento</td>
+                        <td class="num">{{ report.stock_summary.products_count }}</td>
+                    </tr>
+                    <tr>
+                        <td>Valor em estoque (atual)</td>
+                        <td class="num"><strong>{{ report.stock_summary.stock_value | brl }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Produtos sem estoque</td>
+                        <td class="num {% if report.stock_summary.sem_estoque > 0 %}negative{% endif %}">
+                            {{ report.stock_summary.sem_estoque }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Abaixo do mínimo</td>
+                        <td class="num {% if report.stock_summary.below_min > 0 %}negative{% endif %}">
+                            {{ report.stock_summary.below_min }}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    {# ── Top SKUs ───────────────────────────────────────────────────────── #}
+    {% if report.top_skus %}
+    <section class="fin-pdf__section">
+        <div class="fin-pdf__section-title">Top SKUs — Volume de Vendas</div>
+        <table class="fin-pdf__table">
+            <thead>
+                <tr>
+                    <th style="width:30px">#</th>
+                    <th>SKU</th>
+                    <th>Produto</th>
+                    <th class="num">Unid. vendidas</th>
+                    <th class="num">Receita</th>
+                    <th class="num">Estornos</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sku in report.top_skus %}
+                <tr>
+                    <td class="num" style="color:#9ca3af">{{ sku.rank }}</td>
+                    <td><strong>{{ sku.sku }}</strong></td>
+                    <td>{{ sku.product_name }}</td>
+                    <td class="num"><strong>{{ sku.units_sold }}</strong></td>
+                    <td class="num">{{ sku.revenue | brl }}</td>
+                    <td class="num {% if sku.refunded_units > 0 %}negative{% endif %}">
+                        {% if sku.refunded_units > 0 %}{{ sku.refunded_units }}{% else %}—{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endif %}
+
+    {# ── Grade: Pagamentos + Vendas por dia ──────────────────────────────── #}
+    <section class="fin-pdf__section">
+        <div class="fin-pdf__grid-2">
+
+            <div>
+                <div class="fin-pdf__section-title">Formas de Pagamento</div>
+                {% if report.payment_methods %}
+                <table class="fin-pdf__table">
+                    <thead>
+                        <tr>
+                            <th>Método</th>
+                            <th class="num">Pedidos</th>
+                            <th class="num">Receita</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pm in report.payment_methods %}
+                        <tr>
+                            <td>{{ pm.method | paymethod(None) }}</td>
+                            <td class="num">{{ pm.orders }}</td>
+                            <td class="num"><strong>{{ pm.revenue | brl }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p style="color:#9ca3af;font-size:12px">Sem dados de pagamento.</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <div class="fin-pdf__section-title">Vendas por Dia</div>
+                {% if report.sales_by_day %}
+                <table class="fin-pdf__table">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th class="num">Pedidos</th>
+                            <th class="num">Receita</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for d in report.sales_by_day | reverse %}
+                        {% set parts = d.day.split('-') %}
+                        <tr>
+                            <td>{{ parts[2] }}/{{ parts[1] }}/{{ parts[0] }}</td>
+                            <td class="num">{{ d.orders }}</td>
+                            <td class="num"><strong>{{ d.revenue | brl }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p style="color:#9ca3af;font-size:12px">Sem vendas no período.</p>
+                {% endif %}
+            </div>
+
+        </div>
+    </section>
+
+    {# ── Desempenho por vendedor ─────────────────────────────────────────── #}
+    {% if report.sellers %}
+    <section class="fin-pdf__section">
+        <div class="fin-pdf__section-title">Desempenho por Vendedor</div>
+        <table class="fin-pdf__table">
+            <thead>
+                <tr>
+                    <th>Vendedor</th>
+                    <th class="num">Pedidos</th>
+                    <th class="num">Receita</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in report.sellers %}
+                <tr>
+                    <td>{{ s.name }}</td>
+                    <td class="num">{{ s.orders }}</td>
+                    <td class="num"><strong>{{ s.revenue | brl }}</strong></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endif %}
+
+    {# ── Rodapé ─────────────────────────────────────────────────────────── #}
+    <footer class="fin-pdf__footer">
+        Relatório gerado pelo sistema Odonto Master
+        {% if report.period.date_from or report.period.date_to %}
+        — Período: {{ report.period.label }}
+        {% else %}
+        — Todo o período do evento
+        {% endif %}
+    </footer>
+
+</div>
+
+{# Font Awesome para ícones usados no botão (só precisa no browser) #}
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/all.min.css') }}" media="screen">
+
+</body>
+</html>

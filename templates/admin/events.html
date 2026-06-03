@@ -106,7 +106,7 @@
             <span role="columnheader">Evento</span>
             <span class="admin-table__col--num" role="columnheader">Produtos</span>
             <span class="admin-table__col--num" role="columnheader">Vendedores</span>
-            <span class="admin-table__col--num" role="columnheader">Criado em</span>
+            <span class="admin-events-list__created admin-table__col--num" role="columnheader">Criado em</span>
             <span role="columnheader" class="admin-stock__actions-head">Ações</span>
         </div>
 
@@ -125,18 +125,19 @@
                 <small class="admin-stock__meta">{{ ev.description }}</small>
                 {% endif %}
             </span>
-            <span class="admin-table__col--num">{{ ev.products_count }}</span>
-            <span class="admin-table__col--num">{{ ev.sellers_count }}</span>
-            <span class="admin-stock__meta admin-table__col--num">{{ ev.created_at | datahora }}</span>
+            <div class="admin-events-list__meta">
+                <span class="admin-events-list__stat admin-events-list__stat--products">{{ ev.products_count }}</span>
+                <span class="admin-events-list__stat admin-events-list__stat--sellers">{{ ev.sellers_count }}</span>
+                <span class="admin-stock__meta admin-events-list__created admin-table__col--num">{{ ev.created_at | datahora }}</span>
+            </div>
             <span class="admin-stock__actions">
                 <a
-                    class="admin-btn admin-btn--primary admin-btn--sm"
+                    class="admin-btn admin-btn--ghost admin-btn--sm admin-btn--icon-only"
                     href="{{ url_for('admin_event_detail', event_id=ev.id) }}"
                     title="Gerenciar evento"
                     aria-label="Gerenciar {{ ev.name }}"
                 >
                     <i class="fa-solid fa-sliders" aria-hidden="true"></i>
-                    Gerenciar
                 </a>
             </span>
         </div>
@@ -161,7 +162,7 @@
                 <span role="columnheader">Evento</span>
                 <span class="admin-table__col--num" role="columnheader">Produtos</span>
                 <span class="admin-table__col--num" role="columnheader">Vendedores</span>
-                <span role="columnheader" class="admin-table__col--num">Criado em</span>
+                <span class="admin-events-list__created admin-table__col--num" role="columnheader">Criado em</span>
                 <span role="columnheader" class="admin-stock__actions-head">Ações</span>
             </div>
             {% for ev in events_archived %}
@@ -180,9 +181,11 @@
                     {% endif %}
                     <span class="admin-badge admin-badge--neutral">Arquivado</span>
                 </span>
-                <span class="admin-table__col--num">{{ ev.products_count }}</span>
-                <span class="admin-table__col--num">{{ ev.sellers_count }}</span>
-                <span class="admin-stock__meta admin-table__col--num">{{ ev.created_at | datahora }}</span>
+                <div class="admin-events-list__meta">
+                    <span class="admin-events-list__stat admin-events-list__stat--products">{{ ev.products_count }}</span>
+                    <span class="admin-events-list__stat admin-events-list__stat--sellers">{{ ev.sellers_count }}</span>
+                    <span class="admin-stock__meta admin-events-list__created admin-table__col--num">{{ ev.created_at | datahora }}</span>
+                </div>
                 <span class="admin-stock__actions">
                     <a
                         class="admin-btn admin-btn--ghost admin-btn--sm"
@@ -197,6 +200,24 @@
                         <button type="submit" class="admin-btn admin-btn--ghost admin-btn--sm" title="Reativar evento" aria-label="Reativar {{ ev.name }}">
                             <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
                             Reativar
+                        </button>
+                    </form>
+                    <form
+                        method="post"
+                        action="{{ url_for('admin_event_delete', event_id=ev.id) }}"
+                        style="display:contents;"
+                        data-confirm="Todos os dados deste evento serão removidos do sistema. Esta ação não pode ser desfeita."
+                        data-confirm-title="Excluir evento {{ ev.name|e }}?"
+                        data-confirm-label="Excluir"
+                    >
+                        {% include 'partials/csrf_field.html' %}
+                        <button
+                            type="submit"
+                            class="admin-btn admin-btn--danger admin-btn--icon-only admin-btn--sm"
+                            title="Excluir evento"
+                            aria-label="Excluir {{ ev.name }}"
+                        >
+                            <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
                         </button>
                     </form>
                 </span>

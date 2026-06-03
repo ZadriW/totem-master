@@ -225,6 +225,7 @@
         const x = Number(n);
         if (!Number.isFinite(x)) return 'R$ 0,00';
         return `R$ ${x.toFixed(2).replace('.', ',')}`;
+
     }
 
     function renderPromoBadgeMarkup(product) {
@@ -236,13 +237,20 @@
         const em = !!product.em_promocao;
         const po = Number(product.preco_original);
         const pp = Number(product.preco);
-        if (em && Number.isFinite(po) && po !== pp) {
+        const tipo = product.promo_tipo || '';
+
+        // percent / fixed: preço unitário já reduzido — exibe riscado + novo preço.
+        if (em && (tipo === 'percent' || tipo === 'fixed') && Number.isFinite(po) && po > pp + 0.001) {
             return `<div class="product-card__price-wrap"><span class="product-card__price-original">${formatCatalogPriceBRL(po)}</span><p class="product-card__price product-card__price--promo">${formatCatalogPriceBRL(pp)}</p></div>`;
         }
-        if (em && product.promo_tipo === 'bogo') {
+
+        // bogo / min_bundle / exact_bundle: desconto depende da quantidade — exibe preço
+        // de lista + nome da promoção. O desconto só aparece quando a regra é atingida no carrinho.
+        if (em && (tipo === 'bogo' || tipo === 'min_bundle' || tipo === 'exact_bundle')) {
             const nome = escapeCatalogHtml(product.promo_nome || '');
-            return `<div class="product-card__price-wrap"><p class="product-card__price">${formatCatalogPriceBRL(pp)}</p><span class="product-card__promo-name">${nome}</span></div>`;
+            return `<div class="product-card__price-wrap"><p class="product-card__price">${formatCatalogPriceBRL(pp)}</p>${nome ? `<span class="product-card__promo-name">${nome}</span>` : ''}</div>`;
         }
+
         return `<p class="product-card__price">${formatCatalogPriceBRL(pp)}</p>`;
     }
 
@@ -525,8 +533,16 @@
     }
 
     function renderCartItem(item) {
-        const subtotal = Cart.formatBRL(item.preco * item.quantidade);
+        const subtotal = Cart.formatBRL(item.subtotal != null ? item.subtotal : item.preco * item.quantidade);
         const unit = Cart.formatBRL(item.preco);
+        const listUnit = Number(item.preco_lista) || Number(item.preco) || 0;
+        const showOriginal = item.promo_aplicada && listUnit > Number(item.preco) + 0.001;
+        const unitLine = showOriginal
+            ? `<span class="line-item__price-original">${Cart.formatBRL(listUnit)}</span> ${unit}`
+            : unit;
+        const promoHint = item.promo_aplicada && item.promo_nome
+            ? `<p class="line-item__promo"><i class="fa-solid fa-tag" aria-hidden="true"></i> ${item.promo_nome}</p>`
+            : '';
         return `
             <article class="cart-item" data-id="${item.id}">
                 <div class="cart-item__image">
@@ -537,8 +553,9 @@
                     <h3 class="cart-item__name">${item.nome}</h3>
                     ${item.sku ? `<p class="cart-item__sku">SKU ${item.sku}</p>` : ''}
                     <p class="cart-item__price">
-                        ${unit} un. &middot; <strong>${subtotal}</strong>
+                        ${unitLine} un. &middot; <strong>${subtotal}</strong>
                     </p>
+                    ${promoHint}
                     <div class="cart-item__counter" role="group" aria-label="Quantidade">
                         <button type="button" class="cart-item__counter-btn" data-cart-action="dec" aria-label="Diminuir">
                             <i class="fa-solid fa-minus" aria-hidden="true"></i>
@@ -560,11 +577,11 @@
 
     function renderDrawer() {
         if (!drawer) return;
-        const items = Cart.getItems();
-        const count = Cart.count();
+        const totals = Cart.getTotals();
+        const items = totals.items;
 
-        drawerCount.textContent = count;
-        drawerTotal.textContent = Cart.formatBRL(Cart.total());
+        drawerCount.textContent = totals.count;
+        drawerTotal.textContent = Cart.formatBRL(totals.total);
         drawerCheckout.disabled = items.length === 0;
 
         if (items.length === 0) {

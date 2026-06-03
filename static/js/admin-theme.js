@@ -1,21 +1,52 @@
 /**
- * Modo escuro dos painéis Admin e Vendedor — alternância e persistência (localStorage).
+ * Modo escuro dos painéis Admin e Vendedor — alternância e persistência por login.
+ *
+ * Cada escopo (ex.: ``admin:joao``, ``seller:42``) tem preferência independente
+ * em ``localStorage`` na chave ``totem-theme:{escopo}``.
  */
 (() => {
     'use strict';
 
-    const STORAGE_KEY = 'totem-admin-theme';
+    const LEGACY_STORAGE_KEY = 'totem-admin-theme';
     const root = document.documentElement;
+
+    function getScope() {
+        const scope = window.__TOTEM_THEME_SCOPE__;
+        return typeof scope === 'string' && scope.trim() ? scope.trim() : 'admin:_guest';
+    }
+
+    function storageKey(scope) {
+        return `totem-theme:${scope || getScope()}`;
+    }
+
+    function readTheme(scope) {
+        const resolvedScope = scope || getScope();
+        const key = storageKey(resolvedScope);
+        try {
+            let theme = localStorage.getItem(key);
+            if (theme === null && resolvedScope.startsWith('admin:')) {
+                const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+                if (legacy === 'dark' || legacy === 'light') {
+                    theme = legacy;
+                    localStorage.setItem(key, theme);
+                }
+            }
+            return theme === 'dark' ? 'dark' : 'light';
+        } catch (_) {
+            return 'light';
+        }
+    }
 
     function isDark() {
         return root.classList.contains('admin-theme--dark');
     }
 
-    function apply(theme) {
+    function apply(theme, scope) {
+        const resolvedScope = scope || getScope();
         const dark = theme === 'dark';
         root.classList.toggle('admin-theme--dark', dark);
         try {
-            localStorage.setItem(STORAGE_KEY, dark ? 'dark' : 'light');
+            localStorage.setItem(storageKey(resolvedScope), dark ? 'dark' : 'light');
         } catch (_) {
             /* ignore */
         }
@@ -36,7 +67,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
-        syncToggleButtons();
+        apply(readTheme());
         document.querySelectorAll('[data-admin-theme-toggle]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 apply(isDark() ? 'light' : 'dark');
@@ -44,5 +75,11 @@
         });
     });
 
-    window.TotemAdminTheme = { apply, isDark };
+    window.TotemAdminTheme = {
+        apply,
+        isDark,
+        readTheme,
+        getScope,
+        storageKey,
+    };
 })();

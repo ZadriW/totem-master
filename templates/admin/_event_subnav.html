@@ -6,7 +6,6 @@
     {% if event %}
     {% set admin_ev_badge = event.badge_color | event_badge_style %}
     <span class="admin-nav__event-badge admin-event-subnav__event-badge" title="{% if event.active %}Evento ativo{% else %}Evento arquivado{% endif %} — {{ event.name }}"{% if admin_ev_badge %} style="{{ admin_ev_badge }}"{% endif %}>
-        <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
         {{ event.name }}
     </span>
     {% endif %}

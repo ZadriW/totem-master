@@ -10,8 +10,8 @@
 {% endblock %}
 
 {% block seller_body %}
-    {% set catalog_brand_href = url_for('seller_dashboard') %}
-    {% set catalog_brand_aria = 'Voltar ao painel do vendedor' %}
+    {% set catalog_brand_href = seller_home_url|default(seller_venda_url, true) %}
+    {% set catalog_brand_aria = 'Catálogo do vendedor' %}
     {% include 'partials/catalog_content.html' %}
 {% endblock %}
 
@@ -23,6 +23,7 @@ window.__PRODUCTS__ = {{ products|tojson }};
 window.__CATALOG_STOCK_API__ = {{ catalog_stock_api_url | tojson }};
 window.__CATALOG_PROMO_REFRESH_API__ = {{ catalog_promo_refresh_api_url | tojson }};
 </script>
+<script src="{{ url_for('static', filename='js/promo-pricing.js') }}"></script>
 <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
 <script src="{{ url_for('static', filename='js/catalog.js') }}"></script>
 {% endblock %}

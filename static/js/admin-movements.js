@@ -11,9 +11,18 @@
         Math.max(10, parseInt(table?.dataset.perPage || '25', 10) || 25) + 40,
     );
     const disablePoll = table?.dataset.disablePoll === 'true';
-    let latestId = Number(
-        (table && table.querySelector('[data-movement-id]') || {}).dataset?.movementId || 0
-    );
+
+    function readLatestMovementIdFromDom(root) {
+        let max = 0;
+        if (!root) return max;
+        root.querySelectorAll('[data-movement-id]').forEach(el => {
+            const id = Number(el.dataset.movementId);
+            if (Number.isFinite(id) && id > max) max = id;
+        });
+        return max;
+    }
+
+    let latestId = readLatestMovementIdFromDom(table);
 
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -41,7 +50,6 @@
         const attrStyle = eventBadgeInline(movement);
         if (hasId && ename) {
             return `<span class="admin-mov__event-cell"><span class="admin-nav__event-badge admin-mov__event-badge"${attrStyle} title="Evento #${escapeHtml(eid)}">
-                <i class="fa-solid fa-calendar-star" aria-hidden="true"></i>
                 ${escapeHtml(ename)}
             </span></span>`;
         }
@@ -147,8 +155,16 @@
         if (!response.ok) return;
         const data = await response.json();
         const nextLatest = Number(data.latest_id || 0);
-        if (nextLatest === latestId) return;
-        mergeNewMovements(data.movements || [], nextLatest);
+        if (nextLatest <= latestId) return;
+
+        const movements = data.movements || [];
+        const hasNew = movements.some(movement => Number(movement.id) > latestId);
+        if (!hasNew) {
+            latestId = nextLatest;
+            return;
+        }
+
+        mergeNewMovements(movements, nextLatest);
     }
 
     if (table && table.dataset.apiUrl && !disablePoll) {
