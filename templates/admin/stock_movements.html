@@ -8,7 +8,7 @@
         <div>
             <h1 class="admin-section__title">Movimentações de estoque</h1>
             <p class="admin-section__subtitle">
-                Histórico completo de entradas, saídas, vendas, ajustes e estoque inicial.
+                Histórico completo de entradas, saídas e vendas.
                 Nas <strong>vendas do totem</strong>, o código do pedido fica em <em>Ref.</em> (ex.: <code>OM260422-1234</code>).
             </p>
         </div>
@@ -22,8 +22,6 @@
                 <option value="entrada" {% if filters.tipo == 'entrada' %}selected{% endif %}>Entradas</option>
                 <option value="saida" {% if filters.tipo == 'saida' %}selected{% endif %}>Saídas manuais</option>
                 <option value="venda" {% if filters.tipo == 'venda' %}selected{% endif %}>Vendas</option>
-                <option value="ajuste" {% if filters.tipo == 'ajuste' %}selected{% endif %}>Ajustes</option>
-                <option value="inicial" {% if filters.tipo == 'inicial' %}selected{% endif %}>Estoque inicial</option>
             </select>
         </label>
 

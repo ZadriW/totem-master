@@ -81,10 +81,6 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>Estoque inicial</td>
-                        <td class="num">{{ report.stock_summary.initial_units }}</td>
-                    </tr>
-                    <tr>
                         <td class="positive">+ Entradas</td>
                         <td class="num positive">+{{ report.stock_summary.entries }}</td>
                     </tr>
@@ -100,12 +96,6 @@
                         <td class="negative">− Saídas manuais</td>
                         <td class="num negative">−{{ report.stock_summary.exits_manual }}</td>
                     </tr>
-                    {% if report.stock_summary.losses_units > 0 %}
-                    <tr>
-                        <td class="negative">− Quebras (ajustes negativos)</td>
-                        <td class="num negative">−{{ report.stock_summary.losses_units }}</td>
-                    </tr>
-                    {% endif %}
                     <tr class="total-row">
                         <td>Saldo atual (estoque final)</td>
                         <td class="num">{{ report.stock_summary.final_units }}</td>

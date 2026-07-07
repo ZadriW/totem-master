@@ -198,6 +198,21 @@
     margin-top: 4px;
 }
 
+/* Aviso de item acima do estoque (painel do vendedor — retirada posterior) */
+.cart-item__backorder {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #92400e;
+    background: rgba(232, 137, 11, 0.12);
+    border: 1px solid rgba(232, 137, 11, 0.4);
+    border-radius: 8px;
+}
+
 .cart-item__price strong {
     color: var(--color-text);
     font-weight: 700;

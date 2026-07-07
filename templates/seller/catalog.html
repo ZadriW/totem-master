@@ -10,14 +10,15 @@
 {% endblock %}
 
 {% block seller_body %}
-    {% set catalog_brand_href = url_for('seller_dashboard') %}
-    {% set catalog_brand_aria = 'Voltar ao painel do vendedor' %}
+    {% set catalog_brand_href = seller_home_url|default(seller_venda_url, true) %}
+    {% set catalog_brand_aria = 'Catálogo do vendedor' %}
     {% include 'partials/catalog_content.html' %}
 {% endblock %}
 
 {% block seller_scripts %}
 <script src="{{ url_for('static', filename='js/totem-api-errors.js') }}"></script>
 <script>
+window.__SELLER_BACKORDER__ = true;
 window.__TOTEM_FLOW__ = {{ totem_flow | tojson }};
 window.__PRODUCTS__ = {{ products|tojson }};
 window.__CATALOG_STOCK_API__ = {{ catalog_stock_api_url | tojson }};

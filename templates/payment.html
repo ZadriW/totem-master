@@ -62,6 +62,32 @@
                     >
                 </label>
 
+                <label class="payment-field">
+                    <span class="payment-field__label">E-mail</span>
+                    <input
+                        type="email"
+                        name="email"
+                        class="payment-field__input"
+                        placeholder="cliente@email.com"
+                        autocomplete="email"
+                        inputmode="email"
+                    >
+                </label>
+
+                <label class="payment-field">
+                    <span class="payment-field__label">Telefone</span>
+                    <input
+                        type="tel"
+                        name="phone"
+                        id="paymentPhone"
+                        class="payment-field__input"
+                        placeholder="(00) 00000-0000"
+                        maxlength="15"
+                        inputmode="tel"
+                        autocomplete="tel"
+                    >
+                </label>
+
                 <hr class="payment__divider payment__divider--form" aria-hidden="true">
 
                 <h2 class="payment__section-title payment__section-title--sub payment__section-title--cro">
@@ -124,10 +150,11 @@
                 <h2 class="payment__section-title payment__section-title--sub payment__section-title--address">
                     <i class="fa-solid fa-location-dot" aria-hidden="true"></i>
                     Endereço para Retirada
+                    <span class="payment__section-optional">(opcional)</span>
                 </h2>
 
                 <label class="payment-field payment-field--half">
-                    <span class="payment-field__label">CEP <span class="payment-field__required">*</span></span>
+                    <span class="payment-field__label">CEP</span>
                     <div class="payment-field__wrap">
                         <input
                             type="text"
@@ -135,7 +162,6 @@
                             id="paymentZipcode"
                             class="payment-field__input"
                             placeholder="00000-000"
-                            required
                             maxlength="9"
                             inputmode="numeric"
                             autocomplete="postal-code"
@@ -151,26 +177,24 @@
                 </label>
 
                 <label class="payment-field payment-field--wide">
-                    <span class="payment-field__label">Endereço <span class="payment-field__required">*</span></span>
+                    <span class="payment-field__label">Endereço</span>
                     <input
                         type="text"
                         name="address"
                         id="paymentAddress"
                         class="payment-field__input"
                         placeholder="Rua, avenida..."
-                        required
                         autocomplete="street-address"
                     >
                 </label>
 
                 <label class="payment-field payment-field--quarter">
-                    <span class="payment-field__label">Número <span class="payment-field__required">*</span></span>
+                    <span class="payment-field__label">Número</span>
                     <input
                         type="text"
                         name="number"
                         class="payment-field__input"
                         placeholder="123"
-                        required
                         autocomplete="off"
                     >
                 </label>
@@ -187,21 +211,20 @@
                 </label>
 
                 <label class="payment-field payment-field--half">
-                    <span class="payment-field__label">Cidade <span class="payment-field__required">*</span></span>
+                    <span class="payment-field__label">Cidade</span>
                     <input
                         type="text"
                         name="city"
                         id="paymentCity"
                         class="payment-field__input"
                         placeholder="Ex.: São Paulo"
-                        required
                         autocomplete="address-level2"
                     >
                 </label>
 
                 <label class="payment-field payment-field--half">
-                    <span class="payment-field__label">Estado <span class="payment-field__required">*</span></span>
-                    <select name="state" id="paymentState" class="payment-field__input" required autocomplete="address-level1">
+                    <span class="payment-field__label">Estado</span>
+                    <select name="state" id="paymentState" class="payment-field__input" autocomplete="address-level1">
                         <option value="">Selecione...</option>
                         <option value="AC">Acre</option>
                         <option value="AL">Alagoas</option>
@@ -347,6 +370,7 @@
 <script src="{{ url_for('static', filename='js/totem-api-errors.js') }}"></script>
 <script>
 window.__TOTEM_FLOW__ = {{ (totem_flow or {}) | tojson }};
+window.__SELLER_BACKORDER__ = {{ (seller_backorder or false) | tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/promo-pricing.js') }}"></script>
 <script src="{{ url_for('static', filename='js/cart.js') }}"></script>

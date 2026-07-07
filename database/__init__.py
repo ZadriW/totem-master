@@ -10,7 +10,7 @@ Esquema (resumo)
 ----------------
 
 - ``products`` — catálogo (sku, preço, categoria, imagem, estoque, mínimo, ativo).
-- ``stock_movements`` — variações de estoque (entrada, saída, venda, ajuste, inicial).
+- ``stock_movements`` — variações de estoque (entrada, saída, venda).
 - ``transactions`` / ``transaction_items`` — pedidos e itens com snapshot.
 - ``sellers`` — credenciais dos vendedores.
 - ``events`` / ``event_products`` / ``event_sellers`` — inventário por evento.
@@ -120,7 +120,9 @@ from .stock import (
 )
 from .transactions import (
     cancel_pending_transaction_for_seller,
+    confirm_item_delivery,
     confirm_transaction_with_aut,
+    count_pending_delivery_transactions,
     count_transactions_for_event,
     count_transactions_for_seller,
     create_transaction,
@@ -161,7 +163,9 @@ __all__ = [
     "add_seller_to_event",
     "archive_event",
     "cancel_pending_transaction_for_seller",
+    "confirm_item_delivery",
     "confirm_transaction_with_aut",
+    "count_pending_delivery_transactions",
     "count_event_products_filtered",
     "count_products_admin_filtered",
     "count_stock_movements",

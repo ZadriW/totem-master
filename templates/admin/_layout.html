@@ -16,22 +16,94 @@
 {% block body %}
 <div class="admin-shell">
     <header class="admin-topbar">
-        <a class="admin-topbar__brand" href="{{ url_for('admin_dashboard') }}">
+        <a class="admin-topbar__brand" href="{{ admin_home_url|default(url_for('admin_events'), true) }}">
             {{ admin_brand_logo() }}
             <span class="admin-topbar__badge">Admin</span>
         </a>
 
+        {% if active_event_tab is defined and event is defined %}
+        {# ── Nav do evento: substitui o nav global enquanto o admin navega dentro de um evento ── #}
+        {% set ev_badge_style = event.badge_color | event_badge_style %}
+        <nav class="admin-nav admin-nav--event" aria-label="Seções do evento" data-admin-nav-slide>
+            <button type="button" class="admin-nav__slide-btn admin-nav__slide-btn--prev" data-admin-nav-prev aria-label="Seções anteriores" hidden>
+                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+            </button>
+            <div class="admin-nav__viewport" data-admin-nav-viewport>
+                <div class="admin-nav__track" data-admin-nav-track>
+
+            {# Badge com select para trocar de evento #}
+            <span class="admin-event-nav__badge"{% if ev_badge_style %} style="{{ ev_badge_style }}"{% endif %}>
+                <i class="fa-solid fa-calendar-star admin-event-nav__badge-icon" aria-hidden="true"></i>
+                <select
+                    class="admin-event-nav__select"
+                    aria-label="Trocar de evento"
+                    title="Trocar de evento"
+                    onchange="window.location.href = this.value"
+                >
+                    {% for ev in all_events %}
+                    <option
+                        value="{{ url_for('admin_event_detail', event_id=ev.id) }}"
+                        {% if ev.id == event.id %}selected{% endif %}
+                    >{{ ev.name }}{% if not ev.active %} (arquivado){% endif %}</option>
+                    {% endfor %}
+                </select>
+                <i
+                    class="fa-solid fa-chevron-down admin-event-nav__chevron"
+                    role="button"
+                    tabindex="0"
+                    title="Abrir lista de eventos"
+                    aria-label="Abrir lista de eventos"
+                    onclick="var s=this.previousElementSibling;if(s&&s.tagName==='SELECT'){if(typeof s.showPicker==='function'){s.showPicker();}else{s.focus();s.click();}}"
+                    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
+                ></i>
+            </span>
+
+            {# Separador visual #}
+            <span class="admin-event-nav__sep" aria-hidden="true"></span>
+
+            {# Links de seções do evento #}
+            <a class="admin-nav__item {% if active_event_tab == 'dashboard' %}is-active{% endif %}"
+               href="{{ url_for('admin_event_detail', event_id=event.id) }}" title="Dashboard do evento">
+                <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
+                <span>Dashboard</span>
+            </a>
+            <a class="admin-nav__item {% if active_event_tab == 'estoque' %}is-active{% endif %}"
+               href="{{ url_for('admin_event_stock', event_id=event.id) }}" title="Estoque do evento">
+                <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
+                <span>Estoque</span>
+            </a>
+            <a class="admin-nav__item {% if active_event_tab == 'movimentacoes' %}is-active{% endif %}"
+               href="{{ url_for('admin_event_movements', event_id=event.id) }}" title="Movimentações do evento">
+                <i class="fa-solid fa-right-left" aria-hidden="true"></i>
+                <span>Movimentações</span>
+            </a>
+            <a class="admin-nav__item {% if active_event_tab == 'transacoes' %}is-active{% endif %}"
+               href="{{ url_for('admin_event_transactions', event_id=event.id) }}" title="Transações do evento">
+                <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
+                <span>Transações</span>
+            </a>
+            <a class="admin-nav__item {% if active_event_tab == 'promocoes' %}is-active{% endif %}"
+               href="{{ url_for('admin_event_promotions', event_id=event.id) }}" title="Promoções do evento">
+                <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                <span>Promoções</span>
+            </a>
+
+                </div>
+            </div>
+            <button type="button" class="admin-nav__slide-btn admin-nav__slide-btn--next" data-admin-nav-next aria-label="Próximas seções" hidden>
+                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            </button>
+            <div class="admin-nav__pager" data-admin-nav-pager hidden aria-hidden="true"></div>
+        </nav>
+
+        {% else %}
+        {# ── Nav global do painel admin ── #}
         <nav class="admin-nav admin-nav--admin" aria-label="Seções do painel" data-admin-nav-slide>
             <button type="button" class="admin-nav__slide-btn admin-nav__slide-btn--prev" data-admin-nav-prev aria-label="Seções anteriores" hidden>
                 <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
             </button>
             <div class="admin-nav__viewport" data-admin-nav-viewport>
                 <div class="admin-nav__track" data-admin-nav-track>
-            <a class="admin-nav__item {% if active_section == 'dashboard' %}is-active{% endif %}"
-               href="{{ url_for('admin_dashboard') }}">
-                <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
-                Dashboard
-            </a>
             <a class="admin-nav__item {% if active_section == 'produtos' %}is-active{% endif %}"
                href="{{ url_for('admin_products') }}">
                 <i class="fa-solid fa-tags" aria-hidden="true"></i>
@@ -59,6 +131,7 @@
             </button>
             <div class="admin-nav__pager" data-admin-nav-pager hidden aria-hidden="true"></div>
         </nav>
+        {% endif %}
 
         <div class="admin-topbar__meta">
             <span class="admin-topbar__user">
@@ -69,6 +142,16 @@
                 <i class="fa-regular fa-clock" aria-hidden="true"></i>
                 {{ now.strftime('%d/%m/%Y %H:%M') }}
             </span>
+            <button
+                type="button"
+                class="admin-topbar__reset-btn"
+                data-admin-reset-open
+                title="Reiniciar sistema"
+                aria-label="Reiniciar sistema ao estado padrão"
+            >
+                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                <span class="admin-topbar__reset-label">Reiniciar</span>
+            </button>
             <button
                 type="button"
                 class="admin-topbar__theme-toggle"
@@ -115,6 +198,66 @@
 {% include 'partials/admin_confirm_dialog.html' %}
 
 <dialog
+    class="admin-modal admin-modal--reset"
+    id="admin-reset-dialog"
+    aria-labelledby="admin-reset-dialog-title"
+    aria-describedby="admin-reset-dialog-desc"
+>
+    <div class="admin-modal__panel admin-reset-modal__panel">
+        <header class="admin-modal__header admin-reset-modal__header">
+            <h2 class="admin-modal__title" id="admin-reset-dialog-title">Reiniciar sistema</h2>
+            <button
+                type="button"
+                class="admin-modal__close"
+                data-admin-reset-close
+                aria-label="Fechar"
+            >
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+        </header>
+        <div class="admin-modal__body admin-reset-modal__body">
+            <div class="admin-reset-modal__icon" aria-hidden="true">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <p class="admin-reset-modal__desc" id="admin-reset-dialog-desc">
+                Use apenas em ambiente de demonstração ou quando precisar zerar o histórico.
+                Esta ação <strong>apaga todas as vendas</strong> (e dados de clientes),
+                <strong>apaga todo o histórico de movimentações de estoque</strong>
+                e <strong>zera a quantidade em estoque</strong> no cadastro e em <strong>cada evento</strong>.
+                <strong>Não é possível desfazer.</strong>
+            </p>
+            <form
+                method="post"
+                action="{{ url_for('admin_reset_system') }}"
+                class="admin-reset-form"
+                id="adminResetForm"
+            >
+                {% include 'partials/csrf_field.html' %}
+                <label class="admin-reset-confirm">
+                    <input type="checkbox" name="confirm_reset" value="1" id="adminResetConfirm">
+                    <span>Entendo que esta operação é irreversível e desejo reiniciar o sistema.</span>
+                </label>
+            </form>
+        </div>
+        <footer class="admin-modal__footer admin-reset-modal__footer">
+            <button type="button" class="admin-btn admin-btn--ghost" data-admin-reset-close>
+                Cancelar
+            </button>
+            <button
+                type="submit"
+                form="adminResetForm"
+                class="admin-btn admin-btn--danger-solid"
+                id="adminResetSubmit"
+                disabled
+            >
+                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                Reiniciar sistema
+            </button>
+        </footer>
+    </div>
+</dialog>
+
+<dialog
     id="admin-image-lightbox"
     class="admin-image-lightbox"
     aria-labelledby="admin-image-lightbox-title"
@@ -144,5 +287,6 @@
 <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin-nav-slide.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin-image-lightbox.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin-reset.js') }}"></script>
 {% block admin_scripts %}{% endblock %}
 {% endblock %}

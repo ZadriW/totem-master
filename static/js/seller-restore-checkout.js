@@ -11,7 +11,7 @@
 
     const payload = window.__SELLER_RESTORE_CHECKOUT__;
     const payUrl = window.__SELLER_RESTORE_PAYMENT_URL__ || '/vendedor/pagamento';
-    const fallbackUrl = window.__SELLER_RESTORE_FALLBACK_URL__ || '/vendedor/dashboard';
+    const fallbackUrl = window.__SELLER_RESTORE_FALLBACK_URL__ || '/vendedor/venda';
 
     if (!payload || !Array.isArray(payload.cart_items) || payload.cart_items.length === 0) {
         window.location.replace(fallbackUrl);

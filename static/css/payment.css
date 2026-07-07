@@ -115,6 +115,32 @@ button.payment__back {
     align-items: center;
 }
 
+/* Aviso de pedido com itens sem estoque (painel do vendedor) */
+.payment-backorder-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #92400e;
+    background: rgba(232, 137, 11, 0.10);
+    border: 1px solid rgba(232, 137, 11, 0.4);
+    border-radius: 12px;
+    line-height: 1.45;
+}
+
+.payment-backorder-note i {
+    margin-top: 2px;
+}
+
+.payment-backorder-note ul {
+    margin: 6px 0;
+    padding-left: 18px;
+    text-align: left;
+}
+
 .payment-item:last-child {
     border-bottom: none;
 }
@@ -149,7 +175,43 @@ button.payment__back {
     font-size: 15px;
     font-weight: 600;
     color: var(--color-text);
+    margin: 0;
+    min-width: 0;
+}
+
+.payment-item__name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
     margin-top: 2px;
+}
+
+/* Ícone de retirada posterior (estoque insuficiente — painel vendedor) */
+.payment-item__backorder {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(232, 137, 11, 0.14);
+    color: #b45309;
+    font-size: 11px;
+    cursor: help;
+}
+
+.payment-item--backorder {
+    background: linear-gradient(
+        90deg,
+        rgba(232, 137, 11, 0.06) 0%,
+        transparent 48%
+    );
+    margin: 0 -4px;
+    padding-left: 4px;
+    padding-right: 4px;
+    border-radius: var(--radius-sm);
 }
 
 .payment-item__sku {
@@ -817,6 +879,13 @@ button.payment__back {
 .payment__section-title--address {
     margin-top: 0;
     padding-top: 0;
+}
+
+.payment__section-optional {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    margin-left: 6px;
 }
 
 .payment-cro__hint {

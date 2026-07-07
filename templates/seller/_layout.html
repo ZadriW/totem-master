@@ -20,7 +20,7 @@
 {% block body %}
 <div class="admin-shell">
     <header class="admin-topbar">
-        <a class="admin-topbar__brand" href="{{ url_for('seller_dashboard') }}">
+        <a class="admin-topbar__brand" href="{{ seller_home_url|default(seller_venda_url, true) }}">
             {{ admin_brand_logo() }}
             <span class="admin-topbar__badge">Vendedor</span>
             {{ seller_event_badge('admin-topbar__event-badge--in-brand') }}
@@ -32,15 +32,15 @@
             </button>
             <div class="admin-nav__viewport" data-admin-nav-viewport>
                 <div class="admin-nav__track" data-admin-nav-track>
-            <a class="admin-nav__item {% if active_section == 'dashboard' %}is-active{% endif %}"
-               href="{{ url_for('seller_dashboard') }}">
-                <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
-                <span class="admin-nav__label">Dashboard</span>
-            </a>
             <a class="admin-nav__item {% if active_section == 'venda' %}is-active{% endif %}"
                href="{{ seller_venda_url|default('/vendedor/venda', true) }}">
                 <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
                 <span class="admin-nav__label">Catálogo</span>
+            </a>
+            <a class="admin-nav__item {% if active_section == 'dashboard' %}is-active{% endif %}"
+               href="{{ url_for('seller_dashboard') }}">
+                <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
+                <span class="admin-nav__label">Minhas vendas</span>
             </a>
             <a class="admin-nav__item {% if active_section == 'estoque' %}is-active{% endif %}"
                href="{{ url_for('seller_stock') }}">
@@ -51,11 +51,6 @@
                href="{{ url_for('seller_movements') }}">
                 <i class="fa-solid fa-right-left" aria-hidden="true"></i>
                 <span class="admin-nav__label">Movimentações</span>
-            </a>
-            <a class="admin-nav__item {% if active_section == 'transacoes' %}is-active{% endif %}"
-               href="{{ url_for('seller_transactions') }}">
-                <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
-                <span class="admin-nav__label">Transações</span>
             </a>
                 </div>
             </div>

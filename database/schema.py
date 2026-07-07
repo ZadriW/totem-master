@@ -206,7 +206,8 @@ def _ensure_transactions_client_columns(conn: sqlite3.Connection) -> None:
     """Adiciona colunas de dados do cliente/vendedor em transactions."""
     cols = _table_columns(conn, "transactions")
     client_fields = [
-        "client_name", "client_cpf", "client_zipcode", "client_address",
+        "client_name", "client_cpf", "client_email", "client_phone",
+        "client_zipcode", "client_address",
         "client_number", "client_complement", "client_city", "client_state"
     ]
     for field in client_fields:
@@ -339,6 +340,45 @@ def _ensure_transaction_items_promo_columns(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE transaction_items ADD COLUMN promotion_id INTEGER")
 
 
+def _ensure_delivery_columns(conn: sqlite3.Connection) -> None:
+    """Colunas de controle de entrega por item (venda com estoque parcial).
+
+    - ``transaction_items.quantity_delivered``: unidades já entregues (estoque baixado).
+    - ``transactions.delivery_status``: ``completa`` | ``parcial`` | ``pendente``.
+
+    Backfill: transações já confirmadas/estornadas antes desta migração tiveram
+    baixa integral de estoque, logo ``quantity_delivered = quantity``.
+    """
+    ti_cols = _table_columns(conn, "transaction_items")
+    tx_cols = _table_columns(conn, "transactions")
+    is_new = "quantity_delivered" not in ti_cols
+    if is_new:
+        conn.execute(
+            "ALTER TABLE transaction_items "
+            "ADD COLUMN quantity_delivered INTEGER NOT NULL DEFAULT 0"
+        )
+    if "delivery_status" not in tx_cols:
+        conn.execute(
+            "ALTER TABLE transactions "
+            "ADD COLUMN delivery_status TEXT NOT NULL DEFAULT 'completa'"
+        )
+    if is_new:
+        conn.execute(
+            """
+            UPDATE transaction_items
+               SET quantity_delivered = quantity
+             WHERE transaction_id IN (
+                       SELECT id FROM transactions
+                        WHERE status IN ('confirmado', 'estornado')
+                   )
+            """
+        )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_transactions_delivery_status "
+        "ON transactions(event_id, delivery_status)"
+    )
+
+
 def _ensure_sellers_columns(conn: sqlite3.Connection) -> None:
     """Migrações leves para contas de vendedores."""
     cols = _table_columns(conn, "sellers")
@@ -450,6 +490,27 @@ def _ensure_promotions_extended_rule_types(conn: sqlite3.Connection) -> None:
 # Inicialização + seed
 # ---------------------------------------------------------------------------
 
+def _consolidate_legacy_movement_types(conn: sqlite3.Connection) -> None:
+    """Converte tipos legados ``ajuste``/``inicial`` para ``entrada`` ou ``saída``."""
+    conn.execute(
+        "DELETE FROM stock_movements WHERE movement_type IN ('ajuste', 'inicial') AND delta = 0"
+    )
+    conn.execute(
+        """
+        UPDATE stock_movements
+           SET movement_type = 'entrada'
+         WHERE movement_type IN ('inicial', 'ajuste') AND delta > 0
+        """
+    )
+    conn.execute(
+        """
+        UPDATE stock_movements
+           SET movement_type = 'saida'
+         WHERE movement_type = 'ajuste' AND delta < 0
+        """
+    )
+
+
 def init_db() -> None:
     """Cria as tabelas, aplica migrações leves e remove resíduos do seed antigo."""
     with get_conn() as conn:
@@ -470,6 +531,8 @@ def init_db() -> None:
         _ensure_events_badge_color(conn)
         _ensure_event_extensions(conn)
         _ensure_transaction_items_promo_columns(conn)
+        _ensure_delivery_columns(conn)
+        _consolidate_legacy_movement_types(conn)
         _purge_invalid_product_ids(conn)
         _purge_legacy_demo_products(conn)
 

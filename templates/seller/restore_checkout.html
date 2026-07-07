@@ -12,7 +12,7 @@
 <script>
 window.__SELLER_RESTORE_CHECKOUT__ = {{ restore_payload | tojson }};
 window.__SELLER_RESTORE_PAYMENT_URL__ = {{ payment_url | tojson }};
-window.__SELLER_RESTORE_FALLBACK_URL__ = {{ url_for('seller_dashboard') | tojson }};
+window.__SELLER_RESTORE_FALLBACK_URL__ = {{ url_for('seller_sale') | tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/seller-restore-checkout.js') }}"></script>
 {% endblock %}

@@ -6,7 +6,7 @@ from datetime import date as _date
 from typing import Dict, List, Optional, Tuple
 
 from .connection import _now_iso, get_conn
-from .event_stock import _apply_event_movement, _insert_event_stock_movement_row
+from .event_stock import _apply_event_movement
 from .products import _product_row_to_client
 from .sku_helpers import _default_sku_for_id
 
@@ -193,9 +193,9 @@ def add_product_to_event(
     """Adiciona um produto ao evento com estoque inicial.
 
     ``link_audit_reason`` quando informado ativa o fluxo da biblioteca geral: grava
-    inclusão como movimentação tipo ``ajuste`` (``stock_movements`` com ``event_id``),
-    visível nas movimentações globais e do evento. Estoque inicial > 0 vira o delta do
-    ajuste; com estoque 0 grava-se linha de auditoria com delta 0.
+    inclusão como movimentação tipo ``entrada`` (``stock_movements`` com ``event_id``),
+    visível nas movimentações globais e do evento. Estoque inicial > 0 vira uma entrada;
+    com estoque 0 apenas associa o produto ao evento (sem linha de movimentação).
 
     Sem ``link_audit_reason``, mantém o comportamento legado (apenas ``INSERT`` em
     ``event_products``).
@@ -256,21 +256,8 @@ def add_product_to_event(
                 conn,
                 event_id=int(event_id),
                 product_id=int(product_id),
-                movement_type="ajuste",
+                movement_type="entrada",
                 delta=stock_i,
-                reason=note,
-                reference=ref_note,
-                created_by=created_by,
-            )
-        else:
-            _insert_event_stock_movement_row(
-                conn,
-                event_id=int(event_id),
-                product_id=int(product_id),
-                movement_type="ajuste",
-                quantity=0,
-                delta=0,
-                balance_after=0,
                 reason=note,
                 reference=ref_note,
                 created_by=created_by,
@@ -761,8 +748,8 @@ def get_event_financial_report(
     - ``kpis``           : {orders, revenue, avg_ticket, refunds_count,
                             refunds_value, items_sold}
     - ``payment_methods``: lista {method, orders, revenue}
-    - ``stock_summary``  : {initial_units, entries, exits_manual, sold_units,
-                            refunded_units, losses_units, final_units,
+    - ``stock_summary``  : {entries, exits_manual, sold_units,
+                            refunded_units, final_units,
                             products_count, sem_estoque, below_min, stock_value}
     - ``top_skus``       : lista (top 10) {rank, sku, product_name, product_id,
                             units_sold, revenue, refunded_units}
@@ -849,12 +836,10 @@ def get_event_financial_report(
             ).fetchone()
             return int(row["total"] or 0) if row else 0
 
-        initial_units = _sum_mov(("inicial",))
         entries = _sum_mov(("entrada",))
         exits_manual = _sum_mov(("saida",))
         sold_units = _sum_mov(("venda",), " AND m.delta < 0")
         refunded_units = _sum_mov(("venda",), " AND m.delta > 0")
-        losses_units = _sum_mov(("ajuste",), " AND m.delta < 0")
 
         # Estoque final (situação atual dos produtos no evento)
         final_row = conn.execute(
@@ -876,12 +861,10 @@ def get_event_financial_report(
         ).fetchone()
 
         stock_summary = {
-            "initial_units": initial_units,
             "entries": entries,
             "exits_manual": exits_manual,
             "sold_units": sold_units,
             "refunded_units": refunded_units,
-            "losses_units": losses_units,
             "final_units": final_units,
             "products_count": int(sv_row["products_count"] or 0) if sv_row else 0,
             "sem_estoque": int(sv_row["sem_estoque"] or 0) if sv_row else 0,

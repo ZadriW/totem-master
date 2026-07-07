@@ -175,6 +175,16 @@
         return `${digits.slice(0, 5)}-${digits.slice(5, 8)}`;
     }
 
+    function maskPhone(value) {
+        const digits = value.replace(/\D/g, '').slice(0, 11);
+        if (digits.length <= 2) return digits.length ? `(${digits}` : '';
+        if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+        if (digits.length <= 10) {
+            return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+        }
+        return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+    }
+
     function maskCRO(value) {
         return value.replace(/\D/g, '').slice(0, 7);
     }
@@ -252,6 +262,8 @@
             input.setCustomValidity(valid ? '' : 'CPF inválido');
         } else if (input.name === 'cro_numero') {
             input.value = maskCRO(input.value);
+        } else if (input.name === 'phone') {
+            input.value = maskPhone(input.value);
         } else if (input.name === 'zipcode') {
             input.value = maskCEP(input.value);
             const digits = input.value.replace(/\D/g, '');
@@ -319,6 +331,8 @@
         return {
             name: (data.get('name') || '').trim(),
             cpf: (data.get('cpf') || '').trim(),
+            email: (data.get('email') || '').trim(),
+            phone: (data.get('phone') || '').trim(),
             cro_uf: (data.get('cro_uf') || '').trim(),
             cro_numero: (data.get('cro_numero') || '').trim(),
             zipcode: (data.get('zipcode') || '').trim(),
@@ -347,6 +361,10 @@
         if (stored.name && nameEl) nameEl.value = stored.name;
         const cpfEl = form.querySelector('[name="cpf"]');
         if (stored.cpf && cpfEl) cpfEl.value = stored.cpf;
+        const emailEl = form.querySelector('[name="email"]');
+        if (stored.email && emailEl) emailEl.value = stored.email;
+        const phoneEl = form.querySelector('[name="phone"]');
+        if (stored.phone && phoneEl) phoneEl.value = maskPhone(String(stored.phone));
         const croUfEl = form.querySelector('[name="cro_uf"]');
         if (stored.cro_uf && croUfEl) croUfEl.value = stored.cro_uf;
         const croNumEl = form.querySelector('[name="cro_numero"]');

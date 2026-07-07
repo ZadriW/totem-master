@@ -42,6 +42,9 @@
         let n = parseInt(String(qty), 10);
         if (!Number.isFinite(n)) n = 1;
         n = Math.max(1, n);
+        // Painel do vendedor: permite quantidade acima do estoque
+        // (item fica pendente de retirada; pagamento integral no AUT).
+        if (window.__SELLER_BACKORDER__) return n;
         if (Number.isFinite(stock) && stock > 0) n = Math.min(n, stock);
         return n;
     }
@@ -239,7 +242,8 @@
         applyServerQuote(quote) {
             if (!quote || !Array.isArray(quote.items)) return;
             const byId = new Map(quote.items.map(row => [String(row.id), row]));
-            const items = readRaw().map(item => {
+            const prev = readRaw();
+            const items = prev.map(item => {
                 const row = byId.get(String(item.id));
                 if (!row) return item;
                 return {
@@ -252,7 +256,17 @@
                     promo_nome: row.promo_nome || item.promo_nome || '',
                 };
             });
-            writeRaw(items);
+            const pricingChanged = items.length !== prev.length || items.some((item, i) => {
+                const p = prev[i];
+                if (!p || String(p.id) !== String(item.id)) return true;
+                return (
+                    Math.abs(Number(item.preco) - Number(p.preco)) > 0.001
+                    || Math.abs(Number(item.subtotal) - Number(p.subtotal)) > 0.001
+                    || !!item.promo_aplicada !== !!p.promo_aplicada
+                    || (item.promo_nome || '') !== (p.promo_nome || '')
+                );
+            });
+            if (pricingChanged) writeRaw(items);
         },
 
         subscribe(handler) {

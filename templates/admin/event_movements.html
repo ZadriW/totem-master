@@ -3,9 +3,6 @@
 {% block title %}Movimentações — {{ event.name }} | Dental Odonto Master{% endblock %}
 
 {% block admin_body %}
-
-{% include "admin/_event_subnav.html" %}
-
 <section class="admin-section">
     <header class="admin-section__header admin-section__header--row">
         <div>
@@ -15,7 +12,7 @@
             </a>
             <h1 class="admin-section__title">Movimentações de estoque</h1>
             <p class="admin-section__subtitle">
-                Histórico de entradas, saídas, vendas, ajustes e estoque inicial neste evento.
+                Histórico de entradas, saídas e vendas neste evento.
                 Nas <strong>vendas do totem</strong>, o código do pedido aparece em <em>Motivo / Ref.</em>
             </p>
         </div>
@@ -35,8 +32,6 @@
                 <option value="entrada" {% if filters.tipo == 'entrada' %}selected{% endif %}>Entradas</option>
                 <option value="saida" {% if filters.tipo == 'saida' %}selected{% endif %}>Saídas manuais</option>
                 <option value="venda" {% if filters.tipo == 'venda' %}selected{% endif %}>Vendas</option>
-                <option value="ajuste" {% if filters.tipo == 'ajuste' %}selected{% endif %}>Ajustes</option>
-                <option value="inicial" {% if filters.tipo == 'inicial' %}selected{% endif %}>Estoque inicial</option>
             </select>
         </label>
 

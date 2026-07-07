@@ -169,7 +169,7 @@
         return data;
     }
 
-    /** Etapa 2: confirma com AUT. Retorna order_number. */
+    /** Etapa 2: confirma com AUT. Retorna a resposta completa (order_number, pending_items…). */
     async function confirmWithAut(txId, aut) {
         const data = await window.TotemApiErrors.fetchJson(`/api/transacoes/${txId}/aut`, {
             method: 'PATCH',
@@ -179,7 +179,7 @@
         });
         confirmedReceiptToken =
             data.receipt_token != null ? String(data.receipt_token) : null;
-        return data.order_number;
+        return data;
     }
 
     function showAutScreen() {
@@ -204,9 +204,31 @@
         autError.hidden = false;
     }
 
-    function showSuccess(orderNumber) {
+    function renderPendingDeliveryNotice(pendingItems) {
+        const box = document.getElementById('successPendingDelivery');
+        if (!box) return;
+        if (!Array.isArray(pendingItems) || pendingItems.length === 0) {
+            box.hidden = true;
+            return;
+        }
+        const rows = pendingItems
+            .map(p => `<li><strong>${p.pending}×</strong> ${p.product_name}</li>`)
+            .join('');
+        box.innerHTML = `
+            <i class="fa-solid fa-box-open" aria-hidden="true"></i>
+            <span>
+                Itens pagos aguardando reposição de estoque (retirada posterior):
+                <ul>${rows}</ul>
+                Eles aparecem no pedido como <strong>retirada pendente</strong> e constam na nota.
+            </span>
+        `;
+        box.hidden = false;
+    }
+
+    function showSuccess(orderNumber, pendingItems) {
         confirmedOrderNumber = orderNumber != null ? String(orderNumber) : null;
         successOrder.textContent = `Pedido #${orderNumber}`;
+        renderPendingDeliveryNotice(pendingItems);
         document.querySelector('.payment')?.classList.add('payment--success-only');
 
         if (autSection) {
@@ -288,9 +310,9 @@
                     await patchPendingTransaction(pendingTxId);
                     renderWaiting();
                 }
-                const orderNumber = await confirmWithAut(pendingTxId, aut);
+                const confirmData = await confirmWithAut(pendingTxId, aut);
                 autSave.innerHTML = originalLabel;
-                showSuccess(orderNumber);
+                showSuccess(confirmData.order_number, confirmData.pending_items);
             } catch (err) {
                 autSave.disabled = false;
                 autSave.innerHTML = originalLabel;

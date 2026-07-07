@@ -4,13 +4,11 @@
 {% from "macros/admin_tx_receipt_link.html" import admin_tx_receipt_link %}
 {% from "macros/admin_tx_status_badge.html" import admin_tx_status_badge %}
 {% from "macros/admin_tx_item_cells.html" import admin_tx_item_cells, admin_tx_discount_summary %}
+{% from "macros/admin_tx_delivery.html" import admin_tx_delivery_badge, admin_tx_delivery_section %}
 
 {% block title %}Transações — {{ event.name }} | Dental Odonto Master{% endblock %}
 
 {% block admin_body %}
-
-{% include "admin/_event_subnav.html" %}
-
 <section class="admin-section">
     <header class="admin-section__header admin-section__header--row">
         <div>
@@ -87,6 +85,16 @@
         </label>
 
         <label class="admin-filter">
+            <span class="admin-filter__label">Entrega</span>
+            <select name="entrega" class="admin-filter__input"
+                    title="Situação de entrega dos itens (pedidos confirmados)">
+                <option value="todos" {% if filters.entrega == 'todos' %}selected{% endif %}>Todas</option>
+                <option value="completa" {% if filters.entrega == 'completa' %}selected{% endif %}>Entrega completa</option>
+                <option value="parcial" {% if filters.entrega == 'parcial' %}selected{% endif %}>Retirada pendente</option>
+            </select>
+        </label>
+
+        <label class="admin-filter">
             <span class="admin-filter__label">Data do pedido</span>
             <input type="date" name="data" class="admin-filter__input"
                    value="{{ filters.data }}"
@@ -111,14 +119,14 @@
                     name="pedido"
                     value="{{ filters.pedido }}"
                     class="admin-filter__input"
-                    placeholder="Ex.: OM260422-1234 ou parte do número"
+                    placeholder="Código do pedido ou nome do cliente…"
                     autocomplete="off"
                     inputmode="search"
                     aria-describedby="hint-filtro-pedido-event-tx"
                 >
             </span>
             <span id="hint-filtro-pedido-event-tx" class="admin-filter__hint">
-                Busca no número do pedido; útil para localizar uma venda específica no evento.
+                Busca pelo número do pedido (ex.: OM260422-1234) ou pelo nome do cliente.
             </span>
         </label>
 
@@ -172,7 +180,7 @@
                     <span class="admin-table__col admin-table__col--toggle">
                         <i class="fa-solid fa-chevron-right admin-tx__chevron" aria-hidden="true"></i>
                     </span>
-                    {{ admin_tx_order_cell(tx.order_number) }}
+                    {{ admin_tx_order_cell(tx.order_number, tx.client_name) }}
                     <span class="admin-table__col">{{ tx.created_at | datahora }}</span>
                     <span class="admin-table__col admin-table__col--num">{{ tx.items_count }}</span>
                     <span class="admin-table__col admin-table__col--num">
@@ -187,6 +195,7 @@
                     <span class="admin-table__col admin-table__col--num admin-tx__status">
                         <span class="admin-tx__status-stack">
                             {{ admin_tx_status_badge(tx) }}
+                            {{ admin_tx_delivery_badge(tx) }}
                             {{ admin_tx_receipt_link(tx) }}
                         </span>
                     </span>
@@ -220,6 +229,7 @@
                             </div>
                             {% endfor %}
                         </div>
+                        {{ admin_tx_delivery_section(tx, 'admin_event_confirm_item_delivery', event_id=event.id) }}
                         {{ admin_tx_client_section(tx) }}
                         <div class="admin-tx__summary">
                             <div class="admin-tx__summary-row">
@@ -277,7 +287,7 @@
         <div class="admin-pagination__nav">
             {% if pagination.has_prev %}
             <a class="admin-btn admin-btn--ghost admin-btn--sm"
-               href="{{ url_for('admin_event_transactions', event_id=event.id, pedido=filters.pedido, status=filters.status, vendedor=filters.vendedor, data=filters.data, per_page=filters.per_page, page=pagination.page - 1) }}"
+               href="{{ url_for('admin_event_transactions', event_id=event.id, pedido=filters.pedido, status=filters.status, entrega=filters.entrega, vendedor=filters.vendedor, data=filters.data, per_page=filters.per_page, page=pagination.page - 1) }}"
                rel="prev">
                 <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
                 Anterior
@@ -290,7 +300,7 @@
             {% endif %}
             {% if pagination.has_next %}
             <a class="admin-btn admin-btn--ghost admin-btn--sm"
-               href="{{ url_for('admin_event_transactions', event_id=event.id, pedido=filters.pedido, status=filters.status, vendedor=filters.vendedor, data=filters.data, per_page=filters.per_page, page=pagination.page + 1) }}"
+               href="{{ url_for('admin_event_transactions', event_id=event.id, pedido=filters.pedido, status=filters.status, entrega=filters.entrega, vendedor=filters.vendedor, data=filters.data, per_page=filters.per_page, page=pagination.page + 1) }}"
                rel="next">
                 Próxima
                 <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>

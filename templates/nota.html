@@ -245,6 +245,49 @@
         }
 
         /* ---------------------------------------------------------------
+           Itens pendentes de retirada (entrega parcial)
+        --------------------------------------------------------------- */
+        .receipt__item-pending-tag {
+            grid-column: 1 / -1;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: #92400e;
+        }
+
+        .receipt__pending {
+            border: 1.5px dashed #92400e;
+            border-radius: 4px;
+            padding: 10px 12px;
+            margin-top: 12px;
+        }
+
+        .receipt__pending-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .1em;
+            color: #92400e;
+            margin-bottom: 6px;
+        }
+
+        .receipt__pending-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            font-size: 12px;
+            padding: 2px 0;
+        }
+
+        .receipt__pending-text {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 6px;
+            line-height: 1.5;
+        }
+
+        /* ---------------------------------------------------------------
            Totalizador
         --------------------------------------------------------------- */
         .receipt__totals {
@@ -519,7 +562,13 @@
             </div>
 
             {% set items = tx['items'] %}
+            {% set tx_confirmado = (tx.status or '')|lower == 'confirmado' %}
+            {% set pending_items = [] %}
             {% for it in items %}
+            {% set pendente = (it.quantity or 0) - (it.quantity_delivered or 0) %}
+            {% if tx_confirmado and it.product_id and pendente > 0 %}
+                {% if pending_items.append((it, pendente)) %}{% endif %}
+            {% endif %}
             <div class="receipt__item">
                 <span class="receipt__item-name">{{ it.product_name }}</span>
                 <span class="receipt__item-qty">{{ it.quantity }}×</span>
@@ -532,8 +581,29 @@
                     {% if it.category %} · {{ it.category }}{% endif %}
                     — Unit. R$ {{ "%.2f"|format(it.unit_price | float) | replace('.', ',') }}
                 </span>
+                {% if tx_confirmado and it.product_id and pendente > 0 %}
+                <span class="receipt__item-pending-tag">
+                    &#9888; {{ pendente }} un. pendente{% if pendente != 1 %}s{% endif %} de retirada
+                </span>
+                {% endif %}
             </div>
             {% endfor %}
+
+            {% if pending_items %}
+            <div class="receipt__pending">
+                <div class="receipt__pending-title">&#9888; Itens para retirada posterior</div>
+                {% for it, pendente in pending_items %}
+                <div class="receipt__pending-row">
+                    <span>{{ it.product_name }}</span>
+                    <strong>{{ pendente }} un.</strong>
+                </div>
+                {% endfor %}
+                <p class="receipt__pending-text">
+                    Estes itens já estão pagos, mas aguardam reposição de estoque.
+                    Apresente esta nota no balcão para retirá-los assim que disponíveis.
+                </p>
+            </div>
+            {% endif %}
         </div>
 
         <!-- ──────────────────── TOTALIZADOR ──────────────────── -->

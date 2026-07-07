@@ -138,6 +138,28 @@
     }
 
     /**
+     * Ícone minimalista para itens acima do estoque (painel do vendedor).
+     * Retorna string vazia quando não há retirada posterior pendente.
+     */
+    function backorderIndicatorHtml(item, articleClass) {
+        if (!window.__SELLER_BACKORDER__) return '';
+        const stock = Number(item.estoque);
+        if (!Number.isFinite(stock)) return '';
+        const qty = Math.max(0, Number(item.quantidade) || 0);
+        const available = Math.max(0, stock);
+        const missing = qty - available;
+        if (missing <= 0) return '';
+        const label = available <= 0
+            ? 'Sem estoque — retirada posterior pelo cliente'
+            : `${missing} de ${qty} un. sem estoque — retirada posterior pelo cliente`;
+        return (
+            `<span class="${articleClass}__backorder" title="${escapeHtml(label)}" `
+            + `role="img" aria-label="${escapeHtml(label)}">`
+            + `<i class="fa-solid fa-box-open" aria-hidden="true"></i></span>`
+        );
+    }
+
+    /**
      * HTML de linha para carrinho / pagamento.
      * @param {object} item
      * @param {function} formatBRL
@@ -158,15 +180,20 @@
         const badge = item.promo_aplicada && item.promo_badge && !item.promo_nome
             ? `<p class="line-item__promo"><i class="fa-solid fa-tag" aria-hidden="true"></i> ${escapeHtml(item.promo_badge)}</p>`
             : '';
+        const backorderIcon = backorderIndicatorHtml(item, articleClass);
+        const backorderClass = backorderIcon ? ` ${articleClass}--backorder` : '';
 
         return `
-            <article class="${articleClass}" data-id="${item.id}">
+            <article class="${articleClass}${backorderClass}" data-id="${item.id}">
                 <div class="${articleClass}__image">
                     <img src="${item.imagem || ''}" alt="${escapeHtml(item.nome)}" loading="lazy">
                 </div>
                 <div class="${articleClass}__info">
                     <span class="${articleClass}__category">${escapeHtml(item.categoria || '')}</span>
-                    <h3 class="${articleClass}__name">${escapeHtml(item.nome)}</h3>
+                    <div class="${articleClass}__name-row">
+                        <h3 class="${articleClass}__name">${escapeHtml(item.nome)}</h3>
+                        ${backorderIcon}
+                    </div>
                     ${item.sku ? `<p class="${articleClass}__sku">SKU ${escapeHtml(item.sku)}</p>` : ''}
                     <p class="${articleClass}__meta">${qty} × ${unitHtml}</p>
                     ${promoHint || badge}
@@ -183,5 +210,6 @@
         recalculateItems,
         getTotals,
         renderLineItemHtml,
+        backorderIndicatorHtml,
     };
 })();

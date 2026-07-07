@@ -148,10 +148,6 @@
                 <span>Tipo</span>
                 <span class="admin-table__col--num">Unidades</span>
             </div>
-            <div class="admin-fin__stock-row">
-                <span><i class="fa-solid fa-flag" aria-hidden="true"></i> Estoque inicial</span>
-                <span class="admin-table__col--num">{{ report.stock_summary.initial_units }}</span>
-            </div>
             <div class="admin-fin__stock-row admin-fin__stock-row--positive">
                 <span><i class="fa-solid fa-plus" aria-hidden="true"></i> Entradas</span>
                 <span class="admin-table__col--num">+{{ report.stock_summary.entries }}</span>
@@ -168,12 +164,6 @@
                 <span><i class="fa-solid fa-hand-holding-box" aria-hidden="true"></i> Saídas manuais</span>
                 <span class="admin-table__col--num">-{{ report.stock_summary.exits_manual }}</span>
             </div>
-            {% if report.stock_summary.losses_units > 0 %}
-            <div class="admin-fin__stock-row admin-fin__stock-row--negative">
-                <span><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i> Quebras (ajuste negativo)</span>
-                <span class="admin-table__col--num">-{{ report.stock_summary.losses_units }}</span>
-            </div>
-            {% endif %}
             <div class="admin-fin__stock-row admin-fin__stock-row--total">
                 <span><i class="fa-solid fa-layer-group" aria-hidden="true"></i> Saldo atual (estoque final)</span>
                 <span class="admin-table__col--num">{{ report.stock_summary.final_units }}</span>

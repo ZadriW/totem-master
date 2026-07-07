@@ -3,8 +3,6 @@
 {% block title %}{{ product.nome }} — Estoque — {{ event.name }} | Dental Odonto Master{% endblock %}
 
 {% block admin_body %}
-{% include "admin/_event_subnav.html" %}
-
 <section
     class="admin-section"
     data-admin-product
@@ -179,51 +177,6 @@
                             {% if product.estoque <= 0 %}disabled{% endif %}>
                         <i class="fa-solid fa-minus" aria-hidden="true"></i>
                         Registrar saída
-                    </button>
-                </form>
-                </div>
-            </article>
-
-            <article class="admin-card admin-card--ajuste admin-card--collapsible">
-                <button
-                    type="button"
-                    class="admin-card__header admin-card__header--toggle"
-                    id="stock-card-ajuste-trigger"
-                    aria-expanded="false"
-                    aria-controls="stock-card-ajuste-panel"
-                    data-stock-card-toggle
-                >
-                    <i class="fa-solid fa-scale-balanced admin-card__icon" aria-hidden="true"></i>
-                    <div>
-                        <h2 class="admin-card__title">Ajuste de inventário</h2>
-                        <p class="admin-card__subtitle">Conferência física: informe o saldo correto no evento.</p>
-                    </div>
-                    <span class="admin-card__toggle-chevron" aria-hidden="true">
-                        <i class="fa-solid fa-chevron-down"></i>
-                    </span>
-                </button>
-                <div class="admin-card__collapsible-panel" id="stock-card-ajuste-panel" role="region" aria-labelledby="stock-card-ajuste-trigger" hidden>
-                <form method="post"
-                      action="{{ url_for('admin_event_stock_adjust', event_id=event.id, product_id=product.id) }}"
-                      class="admin-card__form"
-                      data-confirm="Ajustar o estoque para o valor informado?"
-                      data-live-stock-form>
-                    {% include 'partials/csrf_field.html' %}
-                    <div class="admin-field">
-                        <label class="admin-field__label" for="ajuste-stock">Novo saldo</label>
-                        <input id="ajuste-stock" type="number" name="new_stock" min="0" step="1"
-                               class="admin-field__input" required
-                               value="{{ product.estoque }}">
-                    </div>
-                    <div class="admin-field admin-field--wide">
-                        <label class="admin-field__label" for="ajuste-reason">Motivo <span class="admin-field__required">*</span></label>
-                        <input id="ajuste-reason" type="text" name="reason" maxlength="160"
-                               class="admin-field__input" required
-                               placeholder="Ex.: Contagem do inventário mensal">
-                    </div>
-                    <button type="submit" class="admin-btn admin-btn--ghost admin-btn--block">
-                        <i class="fa-solid fa-check" aria-hidden="true"></i>
-                        Aplicar ajuste
                     </button>
                 </form>
                 </div>

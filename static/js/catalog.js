@@ -172,6 +172,8 @@
         let n = parseInt(String(raw), 10);
         if (!Number.isFinite(n)) n = 1;
         n = Math.max(1, n);
+        // Painel do vendedor: sem teto de estoque (retirada posterior).
+        if (window.__SELLER_BACKORDER__) return n;
         if (stock > 0) n = Math.min(n, stock);
         return n;
     }
@@ -458,7 +460,9 @@
             let val = clampQty(card, input.value);
 
             if (action === 'inc') {
-                val = stock > 0 ? Math.min(val + 1, stock) : val + 1;
+                val = (stock > 0 && !window.__SELLER_BACKORDER__)
+                    ? Math.min(val + 1, stock)
+                    : val + 1;
             } else if (action === 'dec') {
                 val = Math.max(1, val - 1);
             }
@@ -543,6 +547,11 @@
         const promoHint = item.promo_aplicada && item.promo_nome
             ? `<p class="line-item__promo"><i class="fa-solid fa-tag" aria-hidden="true"></i> ${item.promo_nome}</p>`
             : '';
+        const stock = Number(item.estoque);
+        const missing = Number.isFinite(stock) ? item.quantidade - Math.max(0, stock) : 0;
+        const backorderHint = (window.__SELLER_BACKORDER__ && missing > 0)
+            ? `<p class="cart-item__backorder"><i class="fa-solid fa-box-open" aria-hidden="true"></i> ${missing} un. sem estoque — retirada posterior pelo cliente</p>`
+            : '';
         return `
             <article class="cart-item" data-id="${item.id}">
                 <div class="cart-item__image">
@@ -556,6 +565,7 @@
                         ${unitLine} un. &middot; <strong>${subtotal}</strong>
                     </p>
                     ${promoHint}
+                    ${backorderHint}
                     <div class="cart-item__counter" role="group" aria-label="Quantidade">
                         <button type="button" class="cart-item__counter-btn" data-cart-action="dec" aria-label="Diminuir">
                             <i class="fa-solid fa-minus" aria-hidden="true"></i>

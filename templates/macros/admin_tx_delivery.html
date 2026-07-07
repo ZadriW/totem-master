@@ -1,0 +1,61 @@
+{# Badge e seção de retirada pendente (venda confirmada com entrega parcial). #}
+
+{% macro admin_tx_delivery_badge(tx) -%}
+{% if (tx.status or '')|lower == 'confirmado' and (tx.delivery_status or 'completa') in ('parcial', 'pendente') %}
+<span class="admin-badge admin-badge--warn admin-tx__delivery-badge" title="Há itens pagos aguardando retirada" aria-label="Retirada pendente">
+    <i class="fa-solid fa-box-open" aria-hidden="true"></i>
+</span>
+{% endif %}
+{%- endmacro %}
+
+{# Lista itens pendentes de retirada com botão de confirmação de entrega.
+   ``endpoint``: nome da rota POST (tx_id, item_id [, event_id]).
+   ``event_id``: obrigatório apenas nas rotas do admin (escopo do evento). #}
+{% macro admin_tx_delivery_section(tx, endpoint, event_id=None) %}
+{% if (tx.status or '')|lower == 'confirmado' %}
+{% set pending_items = [] %}
+{% for it in tx['items'] %}
+    {% set pending = (it.quantity or 0) - (it.quantity_delivered or 0) %}
+    {% if it.product_id and pending > 0 %}
+        {% if pending_items.append((it, pending)) %}{% endif %}
+    {% endif %}
+{% endfor %}
+{% if pending_items %}
+<div class="admin-tx__delivery">
+    <h4 class="admin-tx__delivery-title">
+        <i class="fa-solid fa-box-open" aria-hidden="true"></i>
+        Itens aguardando retirada
+    </h4>
+    <p class="admin-tx__delivery-hint">
+        Pagos no fechamento da venda, mas ainda não entregues.
+        Confirme a entrega quando o cliente retirar o produto (o estoque será baixado neste momento).
+    </p>
+    {% for it, pending in pending_items %}
+    <div class="admin-tx__delivery-row">
+        <span class="admin-tx__delivery-product">
+            {{ it.product_name }}
+            {% if it.product_sku %}<code>{{ it.product_sku }}</code>{% endif %}
+        </span>
+        <span class="admin-tx__delivery-qty">
+            <strong>{{ pending }}</strong> de {{ it.quantity }} un. pendente{% if pending != 1 %}s{% endif %}
+        </span>
+        <form method="post"
+              {% if event_id %}
+              action="{{ url_for(endpoint, event_id=event_id, tx_id=tx.id, item_id=it.id) }}"
+              {% else %}
+              action="{{ url_for(endpoint, tx_id=tx.id, item_id=it.id) }}"
+              {% endif %}
+              class="admin-tx__delivery-form"
+              data-confirm="Confirmar a entrega de {{ pending }} un. de '{{ it.product_name }}'? O estoque será baixado.">
+            {% include 'partials/csrf_field.html' %}
+            <button type="submit" class="admin-btn admin-btn--primary admin-btn--sm">
+                <i class="fa-solid fa-check" aria-hidden="true"></i>
+                Confirmar entrega
+            </button>
+        </form>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+{% endmacro %}

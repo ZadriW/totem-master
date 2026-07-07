@@ -14,6 +14,8 @@
     const CATALOG_URL = FLOW.catalog || '/vendedor/venda';
     const RESUME_PENDING_TX_KEY = 'totem_resume_pending_tx_id';
     const QUOTE_API = '/api/carrinho/cotacao';
+    /** Intervalo entre cotações promocionais no servidor (POST /api/carrinho/cotacao). */
+    const QUOTE_POLL_MS = 5000;
 
     function readResumePendingTxId() {
         try {
@@ -44,7 +46,7 @@
     const continueBtn = document.getElementById('paymentContinue');
     const cancelBtn = document.getElementById('paymentCancel');
 
-    let quoteTimer = null;
+    let quotePollTimer = null;
 
     function renderItem(item) {
         if (PromoPricing && typeof PromoPricing.renderLineItemHtml === 'function') {
@@ -52,14 +54,21 @@
         }
         const subtotal = Cart.formatBRL(item.subtotal != null ? item.subtotal : item.preco * item.quantidade);
         const unit = Cart.formatBRL(item.preco);
+        const backorderIcon = PromoPricing && typeof PromoPricing.backorderIndicatorHtml === 'function'
+            ? PromoPricing.backorderIndicatorHtml(item, 'payment-item')
+            : '';
+        const backorderClass = backorderIcon ? ' payment-item--backorder' : '';
         return `
-            <article class="payment-item" data-id="${item.id}">
+            <article class="payment-item${backorderClass}" data-id="${item.id}">
                 <div class="payment-item__image">
                     <img src="${item.imagem}" alt="${item.nome}" loading="lazy">
                 </div>
                 <div class="payment-item__info">
                     <span class="payment-item__category">${item.categoria || ''}</span>
-                    <h3 class="payment-item__name">${item.nome}</h3>
+                    <div class="payment-item__name-row">
+                        <h3 class="payment-item__name">${item.nome}</h3>
+                        ${backorderIcon}
+                    </div>
                     ${item.sku ? `<p class="payment-item__sku">SKU ${item.sku}</p>` : ''}
                     <p class="payment-item__meta">${item.quantidade} × ${unit}</p>
                 </div>
@@ -83,6 +92,22 @@
         totalEl.textContent = Cart.formatBRL(totals.total);
     }
 
+    function backorderNoticeHtml(items) {
+        if (!window.__SELLER_BACKORDER__) return '';
+        const hasBackorder = items.some(item => {
+            const stock = Number(item.estoque);
+            return Number.isFinite(stock) && item.quantidade > Math.max(0, stock);
+        });
+        if (!hasBackorder) return '';
+        return `
+            <div class="payment-backorder-note" role="note">
+                <i class="fa-solid fa-box-open" aria-hidden="true"></i>
+                Este pedido tem itens sem estoque suficiente. O pagamento é integral;
+                os itens faltantes ficarão pendentes de retirada posterior pelo cliente.
+            </div>
+        `;
+    }
+
     function renderSummary() {
         const items = Cart.getItems();
         if (items.length === 0) {
@@ -90,7 +115,7 @@
             window.location.replace(CATALOG_URL);
             return;
         }
-        itemsEl.innerHTML = items.map(renderItem).join('');
+        itemsEl.innerHTML = backorderNoticeHtml(items) + items.map(renderItem).join('');
         updateSummaryTotals(Cart.getTotals());
     }
 
@@ -112,9 +137,17 @@
         renderSummary();
     }
 
-    function scheduleQuote() {
-        clearTimeout(quoteTimer);
-        quoteTimer = setTimeout(syncServerQuote, 120);
+    function startQuotePolling() {
+        stopQuotePolling();
+        void syncServerQuote();
+        quotePollTimer = setInterval(syncServerQuote, QUOTE_POLL_MS);
+    }
+
+    function stopQuotePolling() {
+        if (quotePollTimer) {
+            clearInterval(quotePollTimer);
+            quotePollTimer = null;
+        }
     }
 
     continueBtn.addEventListener('click', () => {
@@ -134,12 +167,12 @@
 
     Cart.subscribe(() => {
         renderSummary();
-        scheduleQuote();
         if (window.PaymentForm && typeof window.PaymentForm.syncInstallmentsFromCart === 'function') {
             window.PaymentForm.syncInstallmentsFromCart();
         }
     });
 
     renderSummary();
-    scheduleQuote();
+    startQuotePolling();
+    window.addEventListener('pagehide', stopQuotePolling);
 })();

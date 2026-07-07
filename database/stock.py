@@ -7,7 +7,23 @@ from typing import Dict, List, Optional, Tuple
 from .connection import _now_iso, get_conn
 from .products import _EVT_PRODUCTS_JOIN
 
-_VALID_TYPES = {"entrada", "saida", "venda", "ajuste", "inicial"}
+ACTIVE_MOVEMENT_TYPES = frozenset({"entrada", "saida", "venda"})
+_LEGACY_MOVEMENT_TYPES = frozenset({"ajuste", "inicial"})
+_VALID_TYPES = ACTIVE_MOVEMENT_TYPES | _LEGACY_MOVEMENT_TYPES
+
+
+def normalize_movement_type_filter(movement_type: Optional[str]) -> Optional[str]:
+    """Normaliza filtro de listagem; tipos legados ``ajuste``/``inicial`` foram unificados."""
+    mt = (movement_type or "").strip().lower()
+    if not mt or mt == "todos":
+        return None
+    if mt == "inicial":
+        return "entrada"
+    if mt == "ajuste":
+        return None
+    if mt in ACTIVE_MOVEMENT_TYPES:
+        return mt
+    return None
 
 
 def _apply_movement(
@@ -24,12 +40,12 @@ def _apply_movement(
 ) -> Dict:
     """Aplica uma movimentação e atualiza o saldo do produto.
 
-    - ``delta`` é **sinalizado** (positivo para entrada/ajuste+,
-      negativo para saída/venda/ajuste-).
+    - ``delta`` é **sinalizado** (positivo para entrada,
+      negativo para saída/venda).
     - Levanta ``ValueError`` se o saldo resultante ficaria negativo.
     - Deve ser chamado dentro de uma conexão já aberta (transação SQLite).
     """
-    if movement_type not in _VALID_TYPES:
+    if movement_type not in ACTIVE_MOVEMENT_TYPES:
         raise ValueError(f"Tipo de movimentação inválido: {movement_type}")
     if delta == 0:
         raise ValueError("Movimentação com quantidade zero.")
@@ -85,7 +101,7 @@ def _apply_movement(
 
 
 # ---------------------------------------------------------------------------
-# Entrada, saída e ajuste (API de alto nível do painel admin)
+# Entrada, saída e correção de inventário (API de alto nível do painel admin)
 # ---------------------------------------------------------------------------
 
 def register_stock_entry(
@@ -143,12 +159,15 @@ def register_stock_adjustment(
     reason: str,
     created_by: Optional[str] = None,
 ) -> Dict:
-    """Ajusta o estoque para um valor absoluto (conferência/inventário)."""
+    """Corrige o estoque para um valor absoluto (conferência/inventário).
+
+    Registra **entrada** ou **saída** conforme o delta necessário.
+    """
     target = int(new_stock)
     if target < 0:
         raise ValueError("O estoque final não pode ser negativo.")
     if not (reason or "").strip():
-        raise ValueError("Informe o motivo do ajuste.")
+        raise ValueError("Informe o motivo da correção.")
     with get_conn() as conn:
         row = conn.execute(
             "SELECT stock FROM products WHERE id = ?", (int(product_id),)
@@ -158,10 +177,11 @@ def register_stock_adjustment(
         delta = target - int(row["stock"] or 0)
         if delta == 0:
             raise ValueError("O estoque informado é igual ao atual.")
+        movement_type = "entrada" if delta > 0 else "saida"
         return _apply_movement(
             conn,
             product_id=product_id,
-            movement_type="ajuste",
+            movement_type=movement_type,
             delta=delta,
             reason=reason.strip(),
             created_by=created_by,
@@ -219,7 +239,9 @@ def _stock_movements_filter_sql(
     frag, extra = _stock_movements_product_search_sql(product_search)
     sql += frag
     params.extend(extra)
-    if movement_type and movement_type in _VALID_TYPES:
+    if movement_type:
+        movement_type = normalize_movement_type_filter(movement_type)
+    if movement_type and movement_type in ACTIVE_MOVEMENT_TYPES:
         sql += " AND m.movement_type = ?"
         params.append(movement_type)
     ref_norm = _normalize_order_reference(reference)
