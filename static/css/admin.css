@@ -2378,7 +2378,6 @@ html.admin-theme--dark .admin-tx__delivery-title {
     .admin-stock:has(.admin-stock__actions-head) .admin-stock__row {
         grid-template-columns:
             minmax(200px, 3.2fr)
-            minmax(92px, 0.98fr)
             minmax(84px, 0.75fr)
             minmax(64px, 0.52fr)
             minmax(56px, 0.52fr)
@@ -2389,7 +2388,6 @@ html.admin-theme--dark .admin-tx__delivery-title {
     .admin-stock:not(:has(.admin-stock__actions-head)) .admin-stock__row {
         grid-template-columns:
             minmax(200px, 3.35fr)
-            minmax(92px, 1.02fr)
             minmax(84px, 0.78fr)
             minmax(64px, 0.54fr)
             minmax(56px, 0.54fr)
@@ -2408,24 +2406,16 @@ html.admin-theme--dark .admin-tx__delivery-title {
         flex: 1 1 auto;
     }
 
-    /* Categoria: preenche a faixa, texto à esquerda */
-    .admin-stock__row > :nth-child(2) {
-        justify-self: stretch;
-        min-width: 0;
-        text-overflow: ellipsis;
-        text-align: left;
-    }
-
-    /* Preço, estoque, mínimo (quando a tabela tem coluna Mínimo): números centralizados */
-    .admin-stock__row > :nth-child(3),
-    .admin-stock__row > :nth-child(4),
-    .admin-stock__row > :nth-child(5) {
+    /* Preço, estoque, mínimo: números centralizados */
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(2),
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(3),
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(4) {
         justify-self: stretch;
         text-align: center;
     }
 
     /* Situação: badges no início da coluna (evita “colar” tudo à direita da row) */
-    .admin-stock__row > :nth-child(6) {
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(5) {
         display: flex;
         justify-content: flex-start;
         flex-wrap: wrap;
@@ -3481,7 +3471,6 @@ html.admin-theme--dark .admin-tx__delivery-title {
         grid-template-columns: minmax(0, 1fr) auto;
         grid-template-areas:
             "product qty"
-            "category category"
             "price   min"
             "status  status";
         align-items: start;
@@ -3496,7 +3485,6 @@ html.admin-theme--dark .admin-tx__delivery-title {
     .admin-stock__row:has(.admin-stock__actions) {
         grid-template-areas:
             "product qty"
-            "category category"
             "price   min"
             "status  actions";
     }
@@ -3525,25 +3513,25 @@ html.admin-theme--dark .admin-tx__delivery-title {
         min-width: 0;
     }
 
-    .admin-stock__row > :nth-child(1) {
+    .admin-stock.admin-stock--library .admin-stock__row > :nth-child(1) {
         grid-area: product;
         align-self: center;
     }
-    .admin-stock__row > :nth-child(2),
-    .admin-stock__row > :nth-child(3),
-    .admin-stock__row > :nth-child(5) {
+
+    .admin-stock.admin-stock--library .admin-stock__row > :nth-child(2) {
+        grid-area: category;
         display: inline-flex;
         align-items: center;
         min-width: 0;
         font-size: 14px;
         color: var(--color-text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
-    .admin-stock__row > :nth-child(2)::before { content: "Categoria"; }
-    .admin-stock__row > :nth-child(3)::before { content: "Preço"; }
-    .admin-stock__row > :nth-child(5)::before { content: "Mín."; }
-    .admin-stock__row > :nth-child(2)::before,
-    .admin-stock__row > :nth-child(3)::before,
-    .admin-stock__row > :nth-child(5)::before {
+
+    .admin-stock.admin-stock--library .admin-stock__row > :nth-child(2)::before {
+        content: "Categoria";
         margin-right: 6px;
         color: var(--color-text-muted);
         font-size: 14px;
@@ -3551,20 +3539,27 @@ html.admin-theme--dark .admin-tx__delivery-title {
         letter-spacing: 0.06em;
         text-transform: uppercase;
     }
-    .admin-stock__row > :nth-child(2) {
-        grid-area: category;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-    .admin-stock__row > :nth-child(3) {
+
+    .admin-stock.admin-stock--library .admin-stock__row > :nth-child(3) {
         grid-area: price;
+        display: inline-flex;
+        align-items: center;
+        min-width: 0;
+        font-size: 14px;
+        color: var(--color-text-muted);
     }
-    .admin-stock__row > :nth-child(5) {
-        grid-area: min;
-        justify-self: end;
+
+    .admin-stock.admin-stock--library .admin-stock__row > :nth-child(3)::before {
+        content: "Preço";
+        margin-right: 6px;
+        color: var(--color-text-muted);
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
     }
-    .admin-stock__row > :nth-child(4) {
+
+    .admin-stock.admin-stock--library .admin-stock__row > :nth-child(4) {
         grid-area: qty;
         align-self: center;
         justify-self: end;
@@ -3574,12 +3569,53 @@ html.admin-theme--dark .admin-tx__delivery-title {
         background: rgba(14, 22, 122, 0.08);
         text-align: center;
     }
-    .admin-stock__row > :nth-child(6) {
+
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(1) {
+        grid-area: product;
+        align-self: center;
+    }
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(2),
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(4) {
+        display: inline-flex;
+        align-items: center;
+        min-width: 0;
+        font-size: 14px;
+        color: var(--color-text-muted);
+    }
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(2)::before { content: "Preço"; }
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(4)::before { content: "Mín."; }
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(2)::before,
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(4)::before {
+        margin-right: 6px;
+        color: var(--color-text-muted);
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(2) {
+        grid-area: price;
+    }
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(4) {
+        grid-area: min;
+        justify-self: end;
+    }
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(3) {
+        grid-area: qty;
+        align-self: center;
+        justify-self: end;
+        min-width: 56px;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(5) {
         grid-area: status;
         align-self: center;
         min-width: 0;
     }
-    .admin-stock__row > :nth-child(7) {
+    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(6) {
         grid-area: actions;
         justify-content: flex-end;
         align-self: center;
@@ -4928,7 +4964,7 @@ html.admin-theme--dark .admin-tx__delivery-title {
 
 /* Grade do detalhe do evento (mesma que admin-stock mas sem coluna de Preço no vendedor) */
 .admin-event__row {
-    grid-template-columns: 2fr 0.9fr 0.7fr 0.7fr 0.7fr 0.9fr auto !important;
+    grid-template-columns: 2fr 0.7fr 0.7fr 0.7fr 0.9fr auto !important;
 }
 
 /* Painel inline de edição de estoque */

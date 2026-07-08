@@ -144,7 +144,6 @@
     >
         <div class="admin-table__head admin-stock__row" role="row">
             <span role="columnheader">Produto</span>
-            <span role="columnheader">Categoria</span>
             <span class="admin-table__col--num" role="columnheader">Preço</span>
             <span class="admin-table__col--num" role="columnheader">Estoque</span>
             <span class="admin-table__col--num" role="columnheader">Mínimo</span>
@@ -179,7 +178,6 @@
                         <small class="admin-stock__meta">ID: {{ p.id }} | SKU: <code class="admin-stock__sku-code">{{ p.sku or '—' }}</code></small>
                     </span>
                 </span>
-                <span>{{ p.categoria }}</span>
                 <span class="admin-table__col--num">{{ p.preco | brl }}</span>
                 <span class="admin-table__col--num admin-stock__qty" data-stock-qty><strong>{{ p.estoque }}</strong></span>
                 <span class="admin-table__col--num">{{ p.estoque_minimo }}</span>
