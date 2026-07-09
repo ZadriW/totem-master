@@ -265,7 +265,7 @@
                             </div>
                             {% for it in tx_items %}
                             <div class="admin-tx__items-row">
-                                {{ admin_tx_item_cells(it) }}
+                                {{ admin_tx_item_cells(it, event_id=tx.event_id) }}
                             </div>
                             {% endfor %}
                         </div>

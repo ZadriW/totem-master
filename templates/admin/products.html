@@ -12,11 +12,6 @@
                 {{ stock.units_in_stock }} unidades nos eventos
             </p>
         </div>
-        <a class="admin-btn admin-btn--ghost" href="{{ url_for('admin_events') }}"
-           title="Abrir lista de eventos; em cada evento use a aba Movimentações">
-            <i class="fa-solid fa-right-left" aria-hidden="true"></i>
-            Movimentações por evento
-        </a>
     </header>
 
     <form class="admin-filters" method="get" action="{{ url_for('admin_products') }}">

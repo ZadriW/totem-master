@@ -26,11 +26,6 @@
                 &middot; valor: {{ stats.stock_value | brl }}
             </p>
         </div>
-        <a class="admin-btn admin-btn--ghost"
-           href="{{ url_for('admin_event_movements', event_id=event.id) }}">
-            <i class="fa-solid fa-right-left" aria-hidden="true"></i>
-            Ver movimentações
-        </a>
     </header>
 
     <form class="admin-filters" method="get" action="{{ url_for('admin_event_stock', event_id=event.id) }}">

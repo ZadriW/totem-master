@@ -1,6 +1,20 @@
-{% macro admin_tx_item_cells(it) %}
+{% macro admin_tx_item_cells(it, event_id=None) %}
 <span class="admin-tx__product">
+    {% if it.product_id and event_id %}
+    <a class="admin-tx__product-link"
+       href="{{ url_for('admin_event_stock_product', event_id=event_id, product_id=it.product_id) }}"
+       title="Ver produto no estoque do evento">
+        {{ it.product_name }}
+    </a>
+    {% elif it.product_id %}
+    <a class="admin-tx__product-link"
+       href="{{ url_for('admin_product_detail', product_id=it.product_id) }}"
+       title="Ver produto no catálogo">
+        {{ it.product_name }}
+    </a>
+    {% else %}
     {{ it.product_name }}
+    {% endif %}
     {% if it.promotion_name %}
     <span class="admin-tx__promo-label">
         <i class="fa-solid fa-tag" aria-hidden="true"></i>

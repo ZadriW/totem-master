@@ -48,7 +48,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from data.products import CATEGORIES
 from database import (
-    EXPORT_MOVEMENTS_CSV_CAP,
     RULE_TYPE_LABELS,
     active_promotion_names_by_product_id,
     active_promotion_tooltip_by_product_id,
@@ -2460,83 +2459,6 @@ def _csv_attachment_response(filename: str, header: list[str], rows: list[list])
     )
 
 
-def _movement_export_table(movements: list[dict]) -> tuple[list[str], list[list]]:
-    # Ordem lógica: data/hora → tipo → produto → estoque → contexto → autoria → identificação
-    header = [
-        "Data",
-        "Hora",
-        "Tipo de Movimentação",
-        "Produto",
-        "SKU",
-        "Categoria",
-        "Qtd. na Operação",
-        "Variação de Estoque",
-        "Saldo Após",
-        "Evento",
-        "Referência (Pedido)",
-        "Motivo / Observação",
-        "Registrado por",
-        "Custo Unitário (R$)",
-        "ID Transação",
-        "ID Movimento",
-    ]
-    rows: list[list] = []
-    for m in movements:
-        mt = m.get("movement_type")
-        created = m.get("created_at")
-        rows.append(
-            [
-                _csv_fmt_date(created),
-                _csv_fmt_time(created),
-                mov_label_filter(mt),
-                _csv_cell(m.get("product_name")),
-                _csv_cell(m.get("product_sku")),
-                _csv_cell(m.get("product_category")),
-                _csv_cell(m.get("quantity")),
-                _csv_fmt_delta(m.get("delta")),
-                _csv_cell(m.get("balance_after")),
-                _csv_cell(m.get("event_name")),
-                _csv_cell(m.get("reference")),
-                _csv_cell(m.get("reason")),
-                _display_created_by(m.get("created_by")),
-                _csv_fmt_brl(m.get("unit_cost")),
-                _csv_cell(m.get("transaction_id")),
-                _csv_cell(m.get("id")),
-            ]
-        )
-    return header, rows
-
-
-@app.route("/admin/eventos/<int:event_id>/movimentacoes/export.csv")
-@admin_required
-def admin_event_movements_export_csv(event_id: int):
-    event = _event_or_404(event_id)
-    if event is None:
-        return redirect(url_for("admin_events"))
-
-    movement_type = (request.args.get("tipo") or "").strip()
-    q = (request.args.get("q") or "").strip()
-    pedido = (request.args.get("pedido") or "").strip()
-    event_sellers_rows = list_event_sellers(event_id)
-    event_seller_ids = {int(s["id"]) for s in event_sellers_rows}
-    seller_raw = _parse_int(request.args.get("vendedor"), 0)
-    seller_filter = seller_raw if seller_raw > 0 and seller_raw in event_seller_ids else None
-
-    movements = list_event_stock_movements(
-        event_id,
-        product_id=None,
-        product_search=q or None,
-        movement_type=movement_type or None,
-        reference=pedido or None,
-        seller_id=seller_filter,
-        limit=EXPORT_MOVEMENTS_CSV_CAP,
-    )
-    header, rows = _movement_export_table(movements)
-    safe_ev = re.sub(r"[^a-zA-Z0-9_-]+", "_", (event.get("name") or str(event_id)))[:40].strip("_") or str(event_id)
-    fname = f"movimentacoes_evento_{event_id}_{safe_ev}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-    return _csv_attachment_response(fname, header, rows)
-
-
 @app.route("/admin/eventos/<int:event_id>/vendas/export.csv")
 @admin_required
 def admin_event_sales_export_csv(event_id: int):
@@ -2787,14 +2709,12 @@ def admin_event_detail(event_id: int):
     stats = get_event_stock_stats(event_id)
     sales_day_page = max(1, _parse_int(request.args.get("sales_day_page"), 1))
     sales_dashboard = get_event_sales_dashboard(event_id, sales_days_page=sales_day_page)
-    recent_movements = list_event_stock_movements(event_id, limit=5)
     sellers = list_event_sellers(event_id)
     return render_template(
         "admin/event_detail.html",
         event=event,
         stats=stats,
         sales_dashboard=sales_dashboard,
-        recent_movements=recent_movements,
         sellers=sellers,
         active_event_tab="dashboard",
         **_admin_shell_context(active_section="eventos"),
@@ -3479,78 +3399,6 @@ def admin_event_promotion_delete(event_id: int, promo_id: int):
     except ValueError as exc:
         flash(str(exc), "error")
     return redirect(url_for("admin_event_promotions", event_id=event_id))
-
-
-# ---------------------------------------------------------------------------
-# Eventos — sub-página Movimentações
-# ---------------------------------------------------------------------------
-
-@app.route("/admin/eventos/<int:event_id>/movimentacoes")
-@admin_required
-def admin_event_movements(event_id: int):
-    event = _event_or_404(event_id)
-    if event is None:
-        return redirect(url_for("admin_events"))
-    movement_type = (request.args.get("tipo") or "").strip()
-    q = (request.args.get("q") or "").strip()
-    pedido = (request.args.get("pedido") or "").strip()
-    event_sellers_rows = list_event_sellers(event_id)
-    event_seller_ids = {int(s["id"]) for s in event_sellers_rows}
-    seller_raw = _parse_int(request.args.get("vendedor"), 0)
-    seller_filter = seller_raw if seller_raw > 0 and seller_raw in event_seller_ids else None
-    if seller_raw > 0 and seller_filter is None:
-        seller_raw = 0
-
-    movements = list_event_stock_movements(
-        event_id,
-        product_id=None,
-        product_search=q or None,
-        movement_type=movement_type or None,
-        reference=pedido or None,
-        seller_id=seller_filter,
-        limit=300,
-    )
-    stats = get_event_stock_stats(event_id)
-    return render_template(
-        "admin/event_movements.html",
-        event=event,
-        movements=movements,
-        stats=stats,
-        movement_filter_sellers=event_sellers_rows,
-        filters={
-            "tipo": movement_type or "todos",
-            "q": q,
-            "pedido": pedido,
-            "vendedor": seller_raw,
-        },
-        active_event_tab="movimentacoes",
-        **_admin_shell_context(active_section="eventos"),
-    )
-
-
-@app.route("/admin/api/eventos/<int:event_id>/movimentacoes")
-@admin_required
-def admin_api_event_movements(event_id: int):
-    movement_type = (request.args.get("tipo") or "").strip()
-    q = (request.args.get("q") or "").strip()
-    pedido = (request.args.get("pedido") or "").strip()
-    event_seller_ids = {int(s["id"]) for s in list_event_sellers(event_id)}
-    seller_raw = _parse_int(request.args.get("vendedor"), 0)
-    seller_filter = seller_raw if seller_raw > 0 and seller_raw in event_seller_ids else None
-
-    movements = list_event_stock_movements(
-        event_id,
-        product_id=None,
-        product_search=q or None,
-        movement_type=movement_type or None,
-        reference=pedido or None,
-        seller_id=seller_filter,
-        limit=300,
-    )
-    return jsonify({
-        "movements": [_event_movement_payload(m, event_id=event_id) for m in movements],
-        "latest_id": max([int(m["id"]) for m in movements], default=0),
-    })
 
 
 # ---------------------------------------------------------------------------

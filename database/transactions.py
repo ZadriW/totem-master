@@ -1351,6 +1351,7 @@ def list_transactions(limit: int = 200, seller_id: Optional[int] = None) -> List
             f"""
             SELECT id, order_number, created_at, total, items_count, status,
                    seller_id, seller_name, payment_method, card_installments, aut,
+                   event_id,
                    client_name, client_cpf, client_email, client_phone, client_zipcode, client_address,
                    client_number, client_complement, client_city, client_state,
                    client_cro_uf, client_cro_numero, delivery_status

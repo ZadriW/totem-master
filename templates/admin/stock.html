@@ -13,10 +13,6 @@
                 <strong>{{ stock.below_min }}</strong> abaixo do mínimo
             </p>
         </div>
-        <a class="admin-btn admin-btn--ghost" href="{{ url_for('admin_movements') }}">
-            <i class="fa-solid fa-right-left" aria-hidden="true"></i>
-            Ver movimentações
-        </a>
     </header>
 
     <form class="admin-filters" method="get" action="{{ url_for('admin_stock') }}">

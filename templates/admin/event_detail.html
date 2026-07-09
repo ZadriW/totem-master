@@ -304,66 +304,6 @@
     </div>
 </dialog>
 
-{# Movimentações recentes #}
-<section class="admin-section">
-    <header class="admin-section__header admin-section__header--row">
-        <div>
-            <h2 class="admin-section__title">Movimentações recentes</h2>
-            <p class="admin-section__subtitle">Últimas 5 movimentações registradas neste evento.</p>
-        </div>
-        <a class="admin-btn admin-btn--ghost" href="{{ url_for('admin_event_movements', event_id=event.id) }}">
-            <i class="fa-solid fa-right-left" aria-hidden="true"></i>
-            Ver todas
-        </a>
-    </header>
-
-    {% if recent_movements %}
-    <div class="admin-table" role="table" aria-label="Movimentações recentes do evento">
-        <div class="admin-table__head admin-mov__row admin-mov__row--wide admin-mov__row--wide-event-dash" role="row">
-            <span role="columnheader">Data/Hora</span>
-            <span role="columnheader">Produto</span>
-            <span role="columnheader">Tipo</span>
-            <span class="admin-table__col--num" role="columnheader">Delta</span>
-            <span class="admin-table__col--num" role="columnheader">Saldo após</span>
-            <span role="columnheader">Motivo / Ref.</span>
-        </div>
-        {% for m in recent_movements %}
-        <div class="admin-mov__wrapper" data-movement-id="{{ m.id }}">
-            <div class="admin-mov__row admin-mov__row--wide admin-mov__row--wide-event-dash" role="row">
-                <span>{{ m.created_at | datahora }}</span>
-                <span class="admin-mov__product">
-                    <a href="{{ url_for('admin_product_detail', product_id=m.product_id) }}">
-                        {{ m.product_name or '—' }}
-                    </a>
-                    <small>#{{ m.product_id }}{% if m.product_sku %} &middot; <code class="admin-mov__sku">{{ m.product_sku }}</code>{% endif %} &middot; {{ m.product_category or '-' }}</small>
-                </span>
-                <span class="admin-mov__type-cell">
-                    <span class="admin-badge admin-mov__badge admin-mov__badge--{{ m.movement_type }}">
-                        {{ m.movement_type | movlabel }}
-                    </span>
-                </span>
-                <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if m.delta > 0 %}positive{% elif m.delta < 0 %}negative{% else %}neutral{% endif %}">
-                    {{ m.delta | signed }}
-                </span>
-                <span class="admin-table__col--num"><strong>{{ m.balance_after }}</strong></span>
-                <span class="admin-mov__reason">
-                    {% if m.reference %}<code>{{ m.reference }}</code>{% endif %}
-                    {{ m.reason or '-' }}
-                </span>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="admin-empty">
-        <i class="fa-solid fa-right-left" aria-hidden="true"></i>
-        <p>Nenhuma movimentação registrada ainda.
-            <a href="{{ url_for('admin_event_stock', event_id=event.id) }}">Gerencie o estoque</a> para começar.
-        </p>
-    </div>
-    {% endif %}
-</section>
-
 {# Vendedores associados #}
 <section class="admin-section">
     <header class="admin-section__header admin-section__header--row">
