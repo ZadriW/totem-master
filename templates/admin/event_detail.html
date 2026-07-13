@@ -231,7 +231,7 @@
                         <span><code class="admin-event-dash-sales__sku">{{ item.sku }}</code></span>
                         <span class="admin-event-dash-sales__prod-name">
                             {% if item.product_id %}
-                            <a href="{{ url_for('admin_product_detail', product_id=item.product_id) }}">{{ item.product_name }}</a>
+                            <a href="{{ url_for('admin_event_stock_product', event_id=event.id, product_id=item.product_id) }}">{{ item.product_name }}</a>
                             {% else %}
                             {{ item.product_name }}
                             {% endif %}

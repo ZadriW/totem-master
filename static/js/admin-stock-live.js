@@ -231,7 +231,9 @@
                 }
             }
         }
-        if (movementsTable) mergeProductMovements(movementsTable, payload.movements || []);
+        if (movementsTable && movementsTable.hasAttribute('data-movements-live')) {
+            mergeProductMovements(movementsTable, payload.movements || []);
+        }
     }
 
     async function refreshProduct() {

@@ -3168,6 +3168,45 @@ html.admin-theme--dark .admin-tx__delivery-title {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* Vendedor — vendas do produto (/vendedor/estoque/<id>) */
+.admin-table--seller-product-sales .admin-mov__row {
+    grid-template-columns:
+        minmax(152px, 1.3fr)
+        minmax(96px, 0.72fr)
+        minmax(96px, 0.72fr)
+        minmax(240px, 2.2fr);
+    gap: 16px 28px;
+    padding: 14px 24px;
+}
+
+.admin-table--seller-product-sales.admin-table--seller-product-sales-events .admin-mov__row {
+    grid-template-columns:
+        minmax(152px, 1.25fr)
+        minmax(96px, 0.68fr)
+        minmax(96px, 0.68fr)
+        minmax(220px, 1.85fr)
+        minmax(128px, 1fr);
+}
+
+.admin-table--seller-product-sales .admin-mov__reason {
+    overflow: visible;
+    text-overflow: unset;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.45;
+}
+
+@media (min-width: 901px) {
+    .admin-table--seller-product-sales .admin-mov__row {
+        min-width: 640px;
+    }
+
+    .admin-table--seller-product-sales.admin-table--seller-product-sales-events .admin-mov__row {
+        min-width: 760px;
+    }
+}
+
 /* ==========================================================================
    Responsivo
    ========================================================================== */

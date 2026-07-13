@@ -100,6 +100,7 @@ from database import (
     list_active_product_stocks,
     list_distinct_product_categories,
     count_event_products_filtered,
+    count_stock_movements,
     count_transactions_for_event,
     count_transactions_for_seller,
     list_event_products,
@@ -1100,6 +1101,7 @@ def seller_dashboard():
         transactions=transactions,
         filters=filters,
         pagination=pagination,
+        seller_id=seller_id,
         **_seller_shell_context(active_section="dashboard"),
     )
 
@@ -1192,114 +1194,74 @@ def seller_stock():
     )
 
 
-@app.route("/vendedor/movimentacoes")
+@app.route("/vendedor/estoque/<int:product_id>")
 @seller_required
-def seller_movements():
+def seller_stock_product(product_id: int):
+    """Página de produto individual para vendedor: mostra apenas VENDAS dele."""
     seller_id = _current_seller_id()
-    q = (request.args.get("q") or "").strip()
-    if not q:
-        legacy_pid = _parse_int(request.args.get("produto") or "", 0)
-        if legacy_pid:
-            q = str(legacy_pid)
-    pedido = (request.args.get("pedido") or "").strip()
-    q_search = q or None
-
     seller_ev = _get_seller_event()
-
+    
     if seller_ev:
-        ev_id = seller_ev["id"]
-        movements = list_event_stock_movements(
-            ev_id,
-            product_id=None,
-            product_search=q_search,
-            reference=pedido or None,
-            seller_id=seller_id,
-            limit=500,
-        )
-        return render_template(
-            "seller/movements.html",
-            movements=movements,
-            filters={
-                "q": q,
-                "pedido": pedido,
-            },
-            **_seller_shell_context(active_section="movimentacoes"),
-        )
+        product = get_product_in_event(int(seller_ev["id"]), product_id)
+        if product is None:
+            flash("Produto não encontrado neste evento.", "error")
+            return redirect(url_for("seller_stock"))
+    else:
+        product = get_product(product_id)
+        if product is None:
+            flash("Produto não encontrado.", "error")
+            return redirect(url_for("seller_stock"))
+    
+    pedido = (request.args.get("pedido") or "").strip()
+    per_page = EVENT_PRODUCT_MOVEMENTS_PER_PAGE
+    page = max(1, _parse_int(request.args.get("page"), 1))
 
-    movements = list_stock_movements(
-        product_search=q_search,
+    # Busca apenas VENDAS (movement_type='venda') do vendedor
+    total = count_stock_movements(
+        product_id=product_id,
+        event_id=int(seller_ev["id"]) if seller_ev else None,
+        movement_type="venda",
         reference=pedido or None,
         seller_id=seller_id,
-        limit=500,
     )
-    return render_template(
-        "seller/movements.html",
-        movements=movements,
-        filters={
-            "q": q,
-            "pedido": pedido,
-        },
-        **_seller_shell_context(active_section="movimentacoes"),
+    total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
+    page = min(page, total_pages)
+    offset = (page - 1) * per_page
+
+    movements = list_stock_movements(
+        product_id=product_id,
+        event_id=int(seller_ev["id"]) if seller_ev else None,
+        movement_type="venda",
+        reference=pedido or None,
+        seller_id=seller_id,
+        limit=per_page,
+        offset=offset,
     )
 
-
-@app.route("/vendedor/movimentacoes/pdf")
-@seller_required
-def seller_movements_pdf():
-    """Renderiza a versão para impressão/PDF das movimentações do vendedor logado."""
-    seller_id = _current_seller_id()
-    seller = get_seller(seller_id)
-    q = (request.args.get("q") or "").strip()
-    pedido = (request.args.get("pedido") or "").strip()
-    q_search = q or None
-    seller_ev = _get_seller_event()
-
-    if seller_ev:
-        ev_id = seller_ev["id"]
-        movements = list_event_stock_movements(
-            ev_id,
-            product_id=None,
-            product_search=q_search,
-            reference=pedido or None,
-            seller_id=seller_id,
-            limit=2000,
-        )
-    else:
-        movements = list_stock_movements(
-            product_search=q_search,
-            reference=pedido or None,
-            seller_id=seller_id,
-            limit=2000,
-        )
-
-    sales_mvs = [m for m in movements if m.get("movement_type") == "venda"]
-    units_sold = sum(abs(m.get("delta", 0)) for m in sales_mvs)
-    entries_mvs = [m for m in movements if m.get("movement_type") == "entrada"]
-    units_entered = sum(m.get("delta", 0) for m in entries_mvs if (m.get("delta") or 0) > 0)
-
-    summary = {
-        "total": len(movements),
-        "sales_count": len(sales_mvs),
-        "units_sold": units_sold,
-        "entries_count": len(entries_mvs),
-        "units_entered": units_entered,
-    }
+    showing_from = offset + 1 if total > 0 else 0
+    showing_to = min(offset + len(movements), total) if total > 0 else 0
 
     filters = {
-        "q": q,
         "pedido": pedido,
     }
-    back_url = url_for("seller_movements", q=q, pedido=pedido)
+    pagination = {
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "showing_from": showing_from,
+        "showing_to": showing_to,
+    }
 
     return render_template(
-        "seller/movements_pdf.html",
+        "seller/stock_product.html",
+        product=product,
         movements=movements,
-        summary=summary,
         filters=filters,
-        seller=seller,
-        seller_event=seller_ev,
-        back_url=back_url,
-        now=datetime.now(),
+        pagination=pagination,
+        **_seller_shell_context(active_section="estoque"),
     )
 
 
@@ -1897,6 +1859,7 @@ def _admin_shell_context(**extra):
 ALLOWED_ADMIN_STOCK_PER_PAGE = (10, 25, 50, 100)
 DEFAULT_ADMIN_STOCK_PER_PAGE = 25
 DEFAULT_ADMIN_MOVEMENTS_PER_PAGE = 25
+EVENT_PRODUCT_MOVEMENTS_PER_PAGE = 20
 SELLER_DASHBOARD_TX_PER_PAGE = 20
 EVENT_IMPORT_XLS_MOTIVO_REF = "Importação por Planilha"
 
@@ -2831,12 +2794,71 @@ def admin_event_stock_product(event_id: int, product_id: int):
     if product is None:
         flash("Produto não encontrado neste evento.", "error")
         return redirect(url_for("admin_event_stock", event_id=event_id))
-    movements = list_event_stock_movements(event_id, product_id=product_id, limit=100)
+
+    pedido = (request.args.get("pedido") or "").strip()
+    tipo_raw = (request.args.get("tipo") or "").strip().lower()
+    valid_tipo = frozenset({"todos", "entrada", "venda", "saida"})
+    tipo_norm = tipo_raw if tipo_raw in valid_tipo else "todos"
+    movement_type_api = None if tipo_norm == "todos" else tipo_norm
+
+    event_sellers_rows = list_event_sellers(event_id)
+    event_seller_ids = {int(s["id"]) for s in event_sellers_rows}
+    seller_raw = _parse_int(request.args.get("vendedor"), 0)
+    seller_filter = seller_raw if seller_raw > 0 and seller_raw in event_seller_ids else None
+    if seller_raw > 0 and seller_filter is None:
+        seller_raw = 0
+
+    per_page = EVENT_PRODUCT_MOVEMENTS_PER_PAGE
+    page = max(1, _parse_int(request.args.get("page"), 1))
+
+    total = count_stock_movements(
+        product_id=product_id,
+        event_id=event_id,
+        movement_type=movement_type_api,
+        reference=pedido or None,
+        seller_id=seller_filter,
+    )
+    total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
+    page = min(page, total_pages)
+    offset = (page - 1) * per_page
+
+    movements = list_stock_movements(
+        product_id=product_id,
+        event_id=event_id,
+        movement_type=movement_type_api,
+        reference=pedido or None,
+        seller_id=seller_filter,
+        limit=per_page,
+        offset=offset,
+    )
+
+    showing_from = offset + 1 if total > 0 else 0
+    showing_to = min(offset + len(movements), total) if total > 0 else 0
+
+    filters = {
+        "pedido": pedido,
+        "tipo": tipo_norm,
+        "vendedor": seller_raw,
+    }
+    pagination = {
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "showing_from": showing_from,
+        "showing_to": showing_to,
+    }
+
     return render_template(
         "admin/event_stock_product.html",
         event=event,
         product=product,
         movements=movements,
+        movement_filter_sellers=event_sellers_rows,
+        filters=filters,
+        pagination=pagination,
         active_event_tab="estoque",
         **_admin_shell_context(active_section="eventos"),
     )
