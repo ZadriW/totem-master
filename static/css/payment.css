@@ -131,6 +131,10 @@ button.payment__back {
     line-height: 1.45;
 }
 
+.payment-backorder-note[hidden] {
+    display: none !important;
+}
+
 .payment-backorder-note i {
     margin-top: 2px;
 }
@@ -821,6 +825,11 @@ button.payment__back {
     font-size: 15px;
     letter-spacing: 0.04em;
     margin-bottom: 22px;
+}
+
+.payment__success-card .payment-backorder-note {
+    margin: 0 0 22px;
+    text-align: left;
 }
 
 .payment__success-actions {

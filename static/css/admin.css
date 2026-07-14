@@ -3316,7 +3316,7 @@ html.admin-theme--dark .admin-tx__delivery-title {
         border-top: 1px solid var(--color-border);
     }
 
-    /* Mobile estreito (≤767px): evento na marca + nav em slide (2 itens por página) */
+    /* Mobile estreito (≤767px): nav global em slide; nav do evento em grade 2×2 */
     @media (max-width: 767px) {
         .admin-topbar {
             justify-content: space-between;
@@ -3512,6 +3512,59 @@ html.admin-theme--dark .admin-tx__delivery-title {
         .admin-nav__pager-dot:focus-visible {
             outline: 2px solid var(--color-primary);
             outline-offset: 2px;
+        }
+
+        /* Nav do evento: badge fixo à esquerda + 4 seções em grade 2×2 */
+        .admin-nav--event {
+            display: block;
+            grid-template-columns: none;
+            grid-template-rows: none;
+            padding: 6px 0 4px;
+        }
+
+        .admin-nav--event .admin-event-nav__layout {
+            display: grid;
+            grid-template-columns: auto minmax(0, 1fr);
+            grid-template-rows: auto auto;
+            gap: 6px 8px;
+            align-items: start;
+            width: 100%;
+        }
+
+        .admin-nav--event .admin-event-nav__badge {
+            grid-column: 1;
+            grid-row: 1;
+            align-self: start;
+            height: auto;
+        }
+
+        .admin-nav--event .admin-event-nav__sep {
+            display: none;
+        }
+
+        .admin-nav--event .admin-event-nav__links {
+            grid-column: 2;
+            grid-row: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .admin-nav--event .admin-nav__item {
+            min-height: 44px;
+            padding: 8px 6px;
+            font-size: 12px;
+            gap: 5px;
+            border-radius: var(--radius-sm);
+        }
+
+        .admin-nav--event .admin-nav__item i {
+            font-size: 13px;
+        }
+
+        .admin-shell:has(.admin-nav--event) {
+            --admin-topbar-height: 168px;
         }
     }
 
@@ -5214,6 +5267,23 @@ html.admin-theme--dark .admin-tx__delivery-title {
     flex-shrink: 0;
     align-self: center;
     margin: 0 2px;
+}
+
+.admin-event-nav__layout {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    justify-content: center;
+    min-width: 0;
+}
+
+.admin-event-nav__links {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    min-width: 0;
 }
 
 /* Header do dashboard do evento — botão discreto de edição */

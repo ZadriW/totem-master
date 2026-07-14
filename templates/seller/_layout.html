@@ -109,6 +109,29 @@
 </div>
 
 {% include 'partials/admin_confirm_dialog.html' %}
+
+<dialog
+    id="admin-image-lightbox"
+    class="admin-image-lightbox"
+    aria-labelledby="admin-image-lightbox-title"
+>
+    <div class="admin-image-lightbox__panel" role="document">
+        <header class="admin-image-lightbox__header">
+            <p id="admin-image-lightbox-title" class="admin-image-lightbox__title">Imagem do produto</p>
+            <button
+                type="button"
+                class="admin-image-lightbox__close"
+                data-admin-image-lightbox-close
+                aria-label="Fechar visualização"
+            >
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+        </header>
+        <div class="admin-image-lightbox__body">
+            <img class="admin-image-lightbox__img" src="" alt="">
+        </div>
+    </div>
+</dialog>
 {% endblock %}
 
 {% block scripts %}
@@ -116,5 +139,6 @@
 <script src="{{ url_for('static', filename='js/admin-theme.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin-nav-slide.js') }}"></script>
+<script src="{{ url_for('static', filename='js/admin-image-lightbox.js') }}"></script>
 {% block seller_scripts %}{% endblock %}
 {% endblock %}

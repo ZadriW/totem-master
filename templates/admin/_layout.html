@@ -24,13 +24,8 @@
         {% if active_event_tab is defined and event is defined %}
         {# ── Nav do evento: substitui o nav global enquanto o admin navega dentro de um evento ── #}
         {% set ev_badge_style = event.badge_color | event_badge_style %}
-        <nav class="admin-nav admin-nav--event" aria-label="Seções do evento" data-admin-nav-slide>
-            <button type="button" class="admin-nav__slide-btn admin-nav__slide-btn--prev" data-admin-nav-prev aria-label="Seções anteriores" hidden>
-                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
-            </button>
-            <div class="admin-nav__viewport" data-admin-nav-viewport>
-                <div class="admin-nav__track" data-admin-nav-track>
-
+        <nav class="admin-nav admin-nav--event" aria-label="Seções do evento">
+            <div class="admin-event-nav__layout">
             {# Badge com select para trocar de evento #}
             <span class="admin-event-nav__badge"{% if ev_badge_style %} style="{{ ev_badge_style }}"{% endif %}>
                 <i class="fa-solid fa-calendar-star admin-event-nav__badge-icon" aria-hidden="true"></i>
@@ -58,10 +53,10 @@
                 ></i>
             </span>
 
-            {# Separador visual #}
+            {# Separador visual entre badge e itens de nav (desktop) #}
             <span class="admin-event-nav__sep" aria-hidden="true"></span>
 
-            {# Links de seções do evento #}
+            <div class="admin-event-nav__links">
             <a class="admin-nav__item {% if active_event_tab == 'dashboard' %}is-active{% endif %}"
                href="{{ url_for('admin_event_detail', event_id=event.id) }}" title="Dashboard do evento">
                 <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
@@ -82,13 +77,8 @@
                 <i class="fa-solid fa-tag" aria-hidden="true"></i>
                 <span>Promoções</span>
             </a>
-
-                </div>
             </div>
-            <button type="button" class="admin-nav__slide-btn admin-nav__slide-btn--next" data-admin-nav-next aria-label="Próximas seções" hidden>
-                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-            </button>
-            <div class="admin-nav__pager" data-admin-nav-pager hidden aria-hidden="true"></div>
+            </div>
         </nav>
 
         {% else %}

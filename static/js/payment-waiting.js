@@ -207,11 +207,14 @@
     function renderPendingDeliveryNotice(pendingItems) {
         const box = document.getElementById('successPendingDelivery');
         if (!box) return;
-        if (!Array.isArray(pendingItems) || pendingItems.length === 0) {
+        const pending = (Array.isArray(pendingItems) ? pendingItems : [])
+            .filter(p => Number(p.pending) > 0);
+        if (pending.length === 0) {
+            box.innerHTML = '';
             box.hidden = true;
             return;
         }
-        const rows = pendingItems
+        const rows = pending
             .map(p => `<li><strong>${p.pending}×</strong> ${p.product_name}</li>`)
             .join('');
         box.innerHTML = `
