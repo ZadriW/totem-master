@@ -374,6 +374,42 @@
     transform: none;
 }
 
+.cart-drawer__clear {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: var(--radius-pill);
+    background: #dc2626;
+    color: #ffffff;
+    border: none;
+    font-size: 15px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background var(--transition), transform var(--transition),
+        box-shadow var(--transition);
+    box-shadow: 0 6px 16px rgba(220, 38, 38, 0.22);
+}
+
+.cart-drawer__clear:hover:not(:disabled) {
+    background: #b91c1c;
+    transform: translateY(-1px);
+}
+
+.cart-drawer__clear:active:not(:disabled) {
+    transform: translateY(0);
+    background: #991b1b;
+}
+
+.cart-drawer__clear:disabled {
+    background: var(--color-border);
+    color: var(--color-text-muted);
+    box-shadow: none;
+    cursor: not-allowed;
+    transform: none;
+}
+
 body.cart-open {
     overflow: hidden;
 }

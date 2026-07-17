@@ -6,6 +6,7 @@ from typing import Dict, List, Optional, Tuple
 
 from .connection import _now_iso, get_conn
 from .products import _EVT_PRODUCTS_JOIN
+from .sku_helpers import _product_sku_label
 
 ACTIVE_MOVEMENT_TYPES = frozenset({"entrada", "saida", "venda"})
 _LEGACY_MOVEMENT_TYPES = frozenset({"ajuste", "inicial"})
@@ -54,7 +55,8 @@ def _apply_movement(
         "SELECT id, name, stock FROM products WHERE id = ?", (int(product_id),)
     ).fetchone()
     if row is None:
-        raise ValueError(f"Produto {product_id} não encontrado.")
+        sku = _product_sku_label(product_id, conn=conn)
+        raise ValueError(f"Produto {sku} não encontrado.")
 
     current = int(row["stock"] or 0)
     new_stock = current + int(delta)
@@ -173,7 +175,8 @@ def register_stock_adjustment(
             "SELECT stock FROM products WHERE id = ?", (int(product_id),)
         ).fetchone()
         if row is None:
-            raise ValueError(f"Produto {product_id} não encontrado.")
+            sku = _product_sku_label(product_id, conn=conn)
+            raise ValueError(f"Produto {sku} não encontrado.")
         delta = target - int(row["stock"] or 0)
         if delta == 0:
             raise ValueError("O estoque informado é igual ao atual.")

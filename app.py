@@ -69,7 +69,9 @@ from database import (
     create_event,
     create_seller_account,
     confirm_item_delivery,
+    confirm_items_delivery,
     confirm_transaction_with_aut,
+    count_event_product_ledger,
     count_pending_delivery_transactions,
     create_transaction,
     update_pending_transaction,
@@ -103,6 +105,7 @@ from database import (
     count_stock_movements,
     count_transactions_for_event,
     count_transactions_for_seller,
+    list_event_product_ledger,
     list_event_products,
     list_event_products_filtered_for_client,
     list_event_products_for_client,
@@ -121,6 +124,7 @@ from database import (
     list_transactions_for_seller,
     list_transactions_summary_for_event_period,
     normalize_event_badge_color,
+    pending_delivery_units_by_product_for_event,
     refund_transaction,
     register_event_stock_adjustment,
     register_event_stock_entry,
@@ -1134,6 +1138,39 @@ def seller_confirm_item_delivery(tx_id: int, item_id: int):
     return redirect(request.referrer or url_for("seller_dashboard"))
 
 
+@app.route("/vendedor/pedido/<int:tx_id>/entregar", methods=["POST"])
+@seller_required
+def seller_confirm_items_delivery(tx_id: int):
+    """Confirma a retirada de vários itens pendentes de um pedido."""
+    seller_id = _current_seller_id()
+    seller_ev = _get_seller_event()
+    row = get_seller(seller_id)
+    seller_name = (row or {}).get("name") or "Vendedor"
+    item_ids = request.form.getlist("item_ids")
+    try:
+        result = confirm_items_delivery(
+            tx_id,
+            item_ids,
+            seller_id=seller_id,
+            expected_event_id=int(seller_ev["id"]) if seller_ev else None,
+            created_by=f"vendedor:{seller_name}",
+        )
+        msg = (
+            f"Entrega confirmada: {result['items_count']} produto(s), "
+            f"{result['units_delivered']} un."
+        )
+        if result.get("errors"):
+            msg += " Alguns itens não puderam ser entregues (verifique o estoque)."
+            flash(msg, "warning")
+            for err in result["errors"][:5]:
+                flash(err, "error")
+        else:
+            flash(msg, "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(request.referrer or url_for("seller_dashboard"))
+
+
 @app.route("/vendedor/estoque")
 @seller_required
 def seller_stock():
@@ -1962,12 +1999,16 @@ def _seller_event_stock_page_view(event_id: int):
 def _admin_event_stock_page_view(event_id: int):
     """Lista paginada de produtos no evento com os mesmos filtros GET da biblioteca geral."""
     q_display, category, status, per_page, page = _admin_stock_list_query_params()
+    entrega_raw = (request.args.get("entrega") or "todos").strip().lower()
+    entrega_norm = entrega_raw if entrega_raw in {"todos", "pendente"} else "todos"
     q_lower = q_display.lower() if q_display else ""
     q_filter = q_lower or None
     cat_norm = category or "todos"
     stat_norm = status or "todos"
 
-    total = count_event_products_filtered(event_id, q_filter, cat_norm, stat_norm)
+    total = count_event_products_filtered(
+        event_id, q_filter, cat_norm, stat_norm, entrega=entrega_norm,
+    )
     total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
     page = min(page, total_pages)
     offset = (page - 1) * per_page
@@ -1978,7 +2019,14 @@ def _admin_event_stock_page_view(event_id: int):
         stat_norm,
         limit=per_page,
         offset=offset,
+        entrega=entrega_norm,
     )
+    pending_map = pending_delivery_units_by_product_for_event(
+        event_id,
+        product_ids=[int(p["product_id"]) for p in products],
+    )
+    for p in products:
+        p["pending_delivery_units"] = int(pending_map.get(int(p["product_id"]), 0))
 
     showing_from = offset + 1 if total > 0 else 0
     showing_to = min(offset + len(products), total) if total > 0 else 0
@@ -1987,6 +2035,7 @@ def _admin_event_stock_page_view(event_id: int):
         "q": q_display,
         "categoria": cat_norm,
         "status": stat_norm,
+        "entrega": entrega_norm,
         "per_page": per_page,
     }
     pagination = {
@@ -2007,10 +2056,14 @@ def _event_stock_return_filters_from_form() -> dict:
     per_page = _parse_int(request.form.get("ret_per_page"), DEFAULT_ADMIN_STOCK_PER_PAGE)
     if per_page not in ALLOWED_ADMIN_STOCK_PER_PAGE:
         per_page = DEFAULT_ADMIN_STOCK_PER_PAGE
+    entrega = (request.form.get("ret_entrega") or "todos").strip().lower()
+    if entrega not in {"todos", "pendente"}:
+        entrega = "todos"
     return {
         "q": (request.form.get("ret_q") or "").strip(),
         "categoria": (request.form.get("ret_categoria") or "todos").strip(),
         "status": (request.form.get("ret_status") or "todos").strip(),
+        "entrega": entrega,
         "per_page": per_page,
         "page": max(1, _parse_int(request.form.get("ret_page"), 1)),
     }
@@ -2028,6 +2081,7 @@ def _url_for_admin_event_stock_list(event_id: int, filters: dict, *, page_overri
         "event_id": event_id,
         "categoria": (filters.get("categoria") or "todos").strip(),
         "status": (filters.get("status") or "todos").strip(),
+        "entrega": (filters.get("entrega") or "todos").strip(),
         "per_page": per_page,
         "page": pg,
     }
@@ -2262,7 +2316,14 @@ def _event_stock_product_payload(event_id: int, product_id: int, *, limit: int =
     product = get_product_in_event(event_id, product_id)
     if product is None:
         raise ValueError("Produto não encontrado neste evento.")
-    movements = list_event_stock_movements(event_id, product_id=product_id, limit=limit)
+    pending_units = pending_delivery_units_by_product_for_event(
+        event_id, product_ids=[product_id],
+    ).get(int(product_id), 0)
+    product = dict(product)
+    product["pending_delivery_units"] = int(pending_units)
+    movements = list_event_product_ledger(
+        event_id, product_id, limit=limit, offset=0,
+    )
     return {
         "product": {
             **product,
@@ -2607,6 +2668,10 @@ def _event_movement_payload(movement: dict, *, event_id: int) -> dict:
         delta_kind = "negative"
     else:
         delta_kind = "neutral"
+    try:
+        product_id = int(movement["product_id"])
+    except (TypeError, ValueError, KeyError):
+        product_id = 0
     return {
         **movement,
         "event_badge_bg": ev_bg,
@@ -2616,7 +2681,8 @@ def _event_movement_payload(movement: dict, *, event_id: int) -> dict:
         "movement_label": mov_label_filter(movement_type),
         "delta_display": signed_filter(movement.get("delta")),
         "delta_kind": delta_kind,
-        "product_url": url_for("admin_product_detail", product_id=int(movement["product_id"])),
+        "product_url": url_for("admin_product_detail", product_id=product_id) if product_id else "",
+        "is_pending_delivery": bool(movement.get("is_pending_delivery")),
     }
 
 
@@ -2795,9 +2861,15 @@ def admin_event_stock_product(event_id: int, product_id: int):
         flash("Produto não encontrado neste evento.", "error")
         return redirect(url_for("admin_event_stock", event_id=event_id))
 
+    pending_units = pending_delivery_units_by_product_for_event(
+        event_id, product_ids=[product_id],
+    ).get(int(product_id), 0)
+    product = dict(product)
+    product["pending_delivery_units"] = int(pending_units)
+
     pedido = (request.args.get("pedido") or "").strip()
     tipo_raw = (request.args.get("tipo") or "").strip().lower()
-    valid_tipo = frozenset({"todos", "entrada", "venda", "saida"})
+    valid_tipo = frozenset({"todos", "entrada", "venda", "saida", "pendente"})
     tipo_norm = tipo_raw if tipo_raw in valid_tipo else "todos"
     movement_type_api = None if tipo_norm == "todos" else tipo_norm
 
@@ -2811,9 +2883,9 @@ def admin_event_stock_product(event_id: int, product_id: int):
     per_page = EVENT_PRODUCT_MOVEMENTS_PER_PAGE
     page = max(1, _parse_int(request.args.get("page"), 1))
 
-    total = count_stock_movements(
-        product_id=product_id,
-        event_id=event_id,
+    total = count_event_product_ledger(
+        event_id,
+        product_id,
         movement_type=movement_type_api,
         reference=pedido or None,
         seller_id=seller_filter,
@@ -2822,9 +2894,9 @@ def admin_event_stock_product(event_id: int, product_id: int):
     page = min(page, total_pages)
     offset = (page - 1) * per_page
 
-    movements = list_stock_movements(
-        product_id=product_id,
-        event_id=event_id,
+    movements = list_event_product_ledger(
+        event_id,
+        product_id,
         movement_type=movement_type_api,
         reference=pedido or None,
         seller_id=seller_filter,
@@ -3577,6 +3649,42 @@ def admin_event_confirm_item_delivery(event_id: int, tx_id: int, item_id: int):
     )
 
 
+@app.route(
+    "/admin/eventos/<int:event_id>/transacoes/<int:tx_id>/entregar",
+    methods=["POST"],
+)
+@admin_required
+def admin_event_confirm_items_delivery(event_id: int, tx_id: int):
+    """Confirma a retirada de vários itens pendentes de um pedido."""
+    if _event_or_404(event_id) is None:
+        flash("Evento não encontrado.", "error")
+        return redirect(url_for("admin_events"))
+    item_ids = request.form.getlist("item_ids")
+    try:
+        result = confirm_items_delivery(
+            tx_id,
+            item_ids,
+            expected_event_id=event_id,
+            created_by=_current_admin_user(),
+        )
+        msg = (
+            f"Entrega confirmada: {result['items_count']} produto(s), "
+            f"{result['units_delivered']} un."
+        )
+        if result.get("errors"):
+            msg += " Alguns itens não puderam ser entregues (verifique o estoque)."
+            flash(msg, "warning")
+            for err in result["errors"][:5]:
+                flash(err, "error")
+        else:
+            flash(msg, "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(
+        request.referrer or url_for("admin_event_transactions", event_id=event_id)
+    )
+
+
 # ---------------------------------------------------------------------------
 # Eventos — API de polling (estoque)
 # ---------------------------------------------------------------------------
@@ -3608,6 +3716,7 @@ def admin_api_event_stock(event_id: int):
                 "active_promo": int(p["product_id"]) in promo_ids,
                 "promo_tooltip": promo_tooltips.get(int(p["product_id"]), ""),
                 "promo_name": promo_names.get(int(p["product_id"]), ""),
+                "pending_delivery_units": int(p.get("pending_delivery_units") or 0),
             }
             for p in products
         ],
@@ -3722,6 +3831,7 @@ def mov_label_filter(value):
         "entrada": "Entrada",
         "saida": "Saída",
         "venda": "Venda",
+        "pendente": "Pendente",
         "ajuste": "Correção",
         "inicial": "Entrada",
     }.get(value, value or "-")

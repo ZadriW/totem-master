@@ -245,7 +245,7 @@
                             </div>
                             {% endfor %}
                         </div>
-                        {{ admin_tx_delivery_section(tx, 'seller_confirm_item_delivery') }}
+                        {{ admin_tx_delivery_section(tx, 'seller_confirm_item_delivery', batch_endpoint='seller_confirm_items_delivery') }}
                         {{ admin_tx_client_section(tx) }}
                         <div class="admin-tx__summary">
                             <div class="admin-tx__summary-row">

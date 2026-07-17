@@ -14,7 +14,20 @@
                 <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
                 Voltar ao estoque do evento
             </a>
-            <h1 class="admin-section__title">{{ product.nome }}</h1>
+            <h1 class="admin-section__title">
+                {{ product.nome }}
+                {% set pending_n = product.pending_delivery_units or 0 %}
+                {% if pending_n > 0 %}
+                <span class="admin-stock__delivery-wrap"
+                      title="{{ pending_n }} un. aguardando retirada">
+                    <span class="admin-badge admin-badge--warn admin-tx__delivery-badge"
+                          aria-label="Retirada pendente">
+                        <i class="fa-solid fa-box-open" aria-hidden="true"></i>
+                    </span>
+                    <span class="admin-stock__delivery-count">{{ pending_n }}</span>
+                </span>
+                {% endif %}
+            </h1>
             <p class="admin-section__subtitle">
                 <span class="admin-product__sku">SKU <strong>{{ product.sku }}</strong></span>
                 &middot; #{{ product.id }} &middot; {{ product.categoria }} &middot; {{ product.preco | brl }}
@@ -222,6 +235,7 @@
                 <option value="todos" {% if filters.tipo == 'todos' %}selected{% endif %}>Todos</option>
                 <option value="entrada" {% if filters.tipo == 'entrada' %}selected{% endif %}>Entrada</option>
                 <option value="venda" {% if filters.tipo == 'venda' %}selected{% endif %}>Venda</option>
+                <option value="pendente" {% if filters.tipo == 'pendente' %}selected{% endif %}>Pendente</option>
                 <option value="saida" {% if filters.tipo == 'saida' %}selected{% endif %}>Saída</option>
             </select>
         </label>
@@ -248,7 +262,16 @@
         </div>
     </form>
 
-    <div class="admin-table" role="table" aria-label="Movimentações do produto no evento" data-product-movements>
+    <div
+        class="admin-table"
+        role="table"
+        aria-label="Movimentações do produto no evento"
+        data-product-movements
+        data-movements-cap="{{ pagination.per_page }}"
+        {% if pagination.page == 1 and filters.tipo == 'todos' and not filters.pedido and filters.vendedor == 0 %}
+        data-movements-live
+        {% endif %}
+    >
         <div class="admin-table__head admin-mov__row" role="row">
             <span role="columnheader">Data/Hora</span>
             <span role="columnheader">Tipo</span>
@@ -260,7 +283,8 @@
 
         {% if movements %}
             {% for m in movements %}
-            <div class="admin-mov__wrapper" data-movement-id="{{ m.id }}">
+            <div class="admin-mov__wrapper" data-movement-id="{{ m.id }}"
+                 {% if m.is_pending_delivery %}data-pending-delivery{% endif %}>
                 <div class="admin-mov__row" role="row">
                     <span>{{ m.created_at | datahora }}</span>
                     <span class="admin-mov__type-cell">

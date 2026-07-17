@@ -332,6 +332,7 @@ def _event_products_admin_filter_clause(
     q: Optional[str],
     categoria: str,
     status: str,
+    entrega: str = "todos",
 ) -> Tuple[str, List]:
     """Cláusula AND … para filtros da grade de estoque do evento (admin)."""
     parts: List[str] = []
@@ -371,6 +372,19 @@ def _event_products_admin_filter_clause(
         parts.append("ep.stock <= 0")
     elif st == "inativo":
         parts.append("p.active = 0")
+    ent = (entrega or "todos").strip().lower()
+    if ent == "pendente":
+        parts.append(
+            """EXISTS (
+                SELECT 1
+                  FROM transaction_items ti
+                  JOIN transactions t ON t.id = ti.transaction_id
+                 WHERE t.event_id = ep.event_id
+                   AND LOWER(TRIM(COALESCE(t.status, ''))) = 'confirmado'
+                   AND CAST(ti.product_id AS INTEGER) = ep.product_id
+                   AND (ti.quantity - COALESCE(ti.quantity_delivered, 0)) > 0
+            )"""
+        )
     extra = f" AND {' AND '.join(parts)}" if parts else ""
     return extra, params
 
@@ -380,9 +394,10 @@ def count_event_products_filtered(
     q: Optional[str],
     categoria: str = "todos",
     status: str = "todos",
+    entrega: str = "todos",
 ) -> int:
     """Quantidade de vínculos evento–produto após filtros (lista admin)."""
-    extra, params = _event_products_admin_filter_clause(q, categoria, status)
+    extra, params = _event_products_admin_filter_clause(q, categoria, status, entrega)
     sql = f"SELECT COUNT(*) AS c {_EVENT_PRODUCTS_ADMIN_FROM}{extra}"
     with get_conn() as conn:
         row = conn.execute(sql, (event_id, *params)).fetchone()
@@ -397,9 +412,10 @@ def list_event_products_slice(
     *,
     limit: int,
     offset: int,
+    entrega: str = "todos",
 ) -> List[Dict]:
     """Página da grade de estoque do evento com os mesmos filtros da biblioteca geral."""
-    extra, params = _event_products_admin_filter_clause(q, categoria, status)
+    extra, params = _event_products_admin_filter_clause(q, categoria, status, entrega)
     sql = f"""
             SELECT
                 ep.id            AS ep_id,

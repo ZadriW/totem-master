@@ -1718,10 +1718,51 @@ a.kpi:hover .kpi__link-arrow,
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
     gap: 10px;
     padding: 8px 0;
     border-top: 1px dashed rgba(232, 137, 11, 0.35);
+}
+
+.admin-tx__delivery-batch {
+    margin: 0 0 4px;
+}
+
+.admin-tx__delivery-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 4px 0 10px;
+}
+
+.admin-tx__delivery-select-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.admin-tx__delivery-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    margin: 0;
+    cursor: pointer;
+}
+
+.admin-tx__delivery-checkbox,
+.admin-tx__delivery-check-all {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: #a5620a;
+    cursor: pointer;
 }
 
 .admin-tx__delivery-product {
@@ -1729,16 +1770,27 @@ a.kpi:hover .kpi__link-arrow,
     display: inline-flex;
     align-items: center;
     gap: 8px;
+    flex: 1 1 140px;
+    min-width: 0;
 }
 
 .admin-tx__delivery-qty {
     font-size: 13px;
     color: var(--color-text-muted);
     font-variant-numeric: tabular-nums;
+    margin-left: auto;
 }
 
 .admin-tx__delivery-form {
     margin: 0;
+}
+
+.admin-tx__delivery-sel-count:not([hidden])::before {
+    content: '(';
+}
+
+.admin-tx__delivery-sel-count:not([hidden])::after {
+    content: ')';
 }
 
 .admin-tx__delivery-badge {
@@ -1757,6 +1809,11 @@ html.admin-theme--dark .admin-tx__delivery {
 
 html.admin-theme--dark .admin-tx__delivery-title {
     color: #f3a83c;
+}
+
+html.admin-theme--dark .admin-tx__delivery-checkbox,
+html.admin-theme--dark .admin-tx__delivery-check-all {
+    accent-color: #f3a83c;
 }
 
 .admin-tx__summary-row--total strong {
@@ -2500,6 +2557,35 @@ html.admin-theme--dark .admin-tx__delivery-title {
     word-break: break-word;
 }
 
+.admin-stock__delivery-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+.admin-stock__delivery-wrap[hidden] {
+    display: none !important;
+}
+
+.admin-stock__delivery-count {
+    font-size: 13px;
+    font-weight: 800;
+    color: #a5620a;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+html.admin-theme--dark .admin-stock__delivery-count {
+    color: #f3a83c;
+}
+
+.admin-section__title .admin-stock__delivery-wrap {
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
 /* Promo no estoque: tooltip só ao passar o cursor (ou foco) sobre o ícone */
 .admin-stock__promo-wrap {
     position: relative;
@@ -3074,6 +3160,7 @@ html.admin-theme--dark .admin-tx__delivery-title {
 .admin-mov__badge--entrada { background: rgba(15, 157, 88, 0.15); color: #0c8a4d; }
 .admin-mov__badge--saida   { background: rgba(232, 137, 11, 0.15); color: #a5620a; }
 .admin-mov__badge--venda   { background: rgba(14, 22, 122, 0.12); color: var(--color-primary); }
+.admin-mov__badge--pendente { background: rgba(232, 137, 11, 0.18); color: #a5620a; }
 .admin-mov__badge--ajuste  { background: rgba(107, 114, 128, 0.15); color: #4b5563; }
 .admin-mov__badge--inicial { background: rgba(14, 22, 122, 0.08); color: var(--color-primary); white-space: nowrap; }
 

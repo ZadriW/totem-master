@@ -5,6 +5,7 @@ import sqlite3
 from typing import Dict, List, Optional
 
 from .connection import _now_iso, get_conn
+from .sku_helpers import _product_sku_label
 from .stock import (
     _normalize_order_reference,
     _stock_movements_product_search_sql,
@@ -100,7 +101,8 @@ def _apply_event_movement(
         (int(event_id), int(product_id)),
     ).fetchone()
     if ep is None:
-        raise ValueError(f"Produto {product_id} não pertence ao evento {event_id}.")
+        sku = _product_sku_label(product_id, conn=conn)
+        raise ValueError(f"Produto {sku} não pertence ao evento {event_id}.")
 
     current = int(ep["stock"] or 0)
     new_stock = current + int(delta)
@@ -215,7 +217,8 @@ def register_event_stock_adjustment(
             (int(event_id), int(product_id)),
         ).fetchone()
         if ep is None:
-            raise ValueError(f"Produto {product_id} não pertence ao evento {event_id}.")
+            sku = _product_sku_label(product_id, conn=conn)
+            raise ValueError(f"Produto {sku} não pertence ao evento {event_id}.")
         delta = target - int(ep["stock"] or 0)
         if delta == 0:
             raise ValueError("O estoque informado é igual ao atual.")

@@ -519,6 +519,7 @@
     const drawerCount = document.getElementById('cartDrawerCount');
     const drawerTotal = document.getElementById('cartDrawerTotal');
     const drawerCheckout = document.getElementById('cartDrawerCheckout');
+    const drawerClear = document.getElementById('cartDrawerClear');
 
     function openDrawer() {
         if (!drawer) return;
@@ -593,6 +594,7 @@
         drawerCount.textContent = totals.count;
         drawerTotal.textContent = Cart.formatBRL(totals.total);
         drawerCheckout.disabled = items.length === 0;
+        if (drawerClear) drawerClear.disabled = items.length === 0;
 
         if (items.length === 0) {
             drawerItems.innerHTML = '';
@@ -632,6 +634,14 @@
             if (Cart.isEmpty()) return;
             const payUrl = FLOW.payment || '/vendedor/pagamento';
             window.location.assign(payUrl);
+        });
+    }
+
+    if (drawerClear) {
+        drawerClear.addEventListener('click', () => {
+            if (Cart.isEmpty()) return;
+            if (!window.confirm('Remover todos os itens do carrinho?')) return;
+            Cart.clear();
         });
     }
 

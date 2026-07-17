@@ -8,10 +8,11 @@
 {% endif %}
 {%- endmacro %}
 
-{# Lista itens pendentes de retirada com botão de confirmação de entrega.
-   ``endpoint``: nome da rota POST (tx_id, item_id [, event_id]).
+{# Lista itens pendentes de retirada com seleção em lote e confirmação individual.
+   ``endpoint``: rota POST de um item (tx_id, item_id [, event_id]).
+   ``batch_endpoint``: rota POST de vários itens (tx_id [, event_id]).
    ``event_id``: obrigatório apenas nas rotas do admin (escopo do evento). #}
-{% macro admin_tx_delivery_section(tx, endpoint, event_id=None) %}
+{% macro admin_tx_delivery_section(tx, endpoint, event_id=None, batch_endpoint=None) %}
 {% if (tx.status or '')|lower == 'confirmado' %}
 {% set pending_items = [] %}
 {% for it in tx['items'] %}
@@ -21,17 +22,65 @@
     {% endif %}
 {% endfor %}
 {% if pending_items %}
-<div class="admin-tx__delivery">
+{% set batch_form_id = 'delivery-batch-' ~ tx.id %}
+<div class="admin-tx__delivery" data-delivery-panel>
     <h4 class="admin-tx__delivery-title">
         <i class="fa-solid fa-box-open" aria-hidden="true"></i>
         Itens aguardando retirada
     </h4>
     <p class="admin-tx__delivery-hint">
         Pagos no fechamento da venda, mas ainda não entregues.
-        Confirme a entrega quando o cliente retirar o produto (o estoque será baixado neste momento).
+        Selecione os produtos e confirme a entrega quando o cliente retirar
+        (o estoque será baixado neste momento).
     </p>
+
+    {% if batch_endpoint %}
+    <form method="post"
+          id="{{ batch_form_id }}"
+          {% if event_id %}
+          action="{{ url_for(batch_endpoint, event_id=event_id, tx_id=tx.id) }}"
+          {% else %}
+          action="{{ url_for(batch_endpoint, tx_id=tx.id) }}"
+          {% endif %}
+          class="admin-tx__delivery-batch"
+          data-delivery-batch
+          data-confirm="Confirmar a entrega dos itens selecionados? O estoque será baixado."
+          data-confirm-title="Confirmar entregas"
+          data-confirm-label="Confirmar entregas">
+        {% include 'partials/csrf_field.html' %}
+        <div class="admin-tx__delivery-toolbar">
+            <label class="admin-tx__delivery-select-all">
+                <input type="checkbox"
+                       class="admin-tx__delivery-check-all"
+                       data-delivery-check-all
+                       aria-label="Selecionar todos os itens pendentes">
+                <span>Selecionar todos</span>
+            </label>
+            <button type="submit"
+                    class="admin-btn admin-btn--primary admin-btn--sm"
+                    data-delivery-batch-submit
+                    disabled>
+                <i class="fa-solid fa-check-double" aria-hidden="true"></i>
+                Confirmar selecionados
+                <span class="admin-tx__delivery-sel-count" data-delivery-sel-count hidden></span>
+            </button>
+        </div>
+    </form>
+    {% endif %}
+
     {% for it, pending in pending_items %}
     <div class="admin-tx__delivery-row">
+        {% if batch_endpoint %}
+        <label class="admin-tx__delivery-check">
+            <input type="checkbox"
+                   name="item_ids"
+                   value="{{ it.id }}"
+                   form="{{ batch_form_id }}"
+                   class="admin-tx__delivery-checkbox"
+                   data-delivery-item
+                   aria-label="Selecionar {{ it.product_name }}">
+        </label>
+        {% endif %}
         <span class="admin-tx__delivery-product">
             {{ it.product_name }}
             {% if it.product_sku %}<code>{{ it.product_sku }}</code>{% endif %}

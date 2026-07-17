@@ -229,7 +229,7 @@
                             </div>
                             {% endfor %}
                         </div>
-                        {{ admin_tx_delivery_section(tx, 'admin_event_confirm_item_delivery', event_id=event.id) }}
+                        {{ admin_tx_delivery_section(tx, 'admin_event_confirm_item_delivery', event_id=event.id, batch_endpoint='admin_event_confirm_items_delivery') }}
                         {{ admin_tx_client_section(tx) }}
                         <div class="admin-tx__summary">
                             <div class="admin-tx__summary-row">

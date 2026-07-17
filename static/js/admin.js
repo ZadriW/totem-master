@@ -256,6 +256,60 @@
         }, 6000);
     });
 
+    // --- 3b. Seleção em lote — itens aguardando retirada ---------------------
+    function syncDeliveryPanel(panel) {
+        if (!panel) return;
+        const items = panel.querySelectorAll('[data-delivery-item]');
+        const checkAll = panel.querySelector('[data-delivery-check-all]');
+        const submitBtn = panel.querySelector('[data-delivery-batch-submit]');
+        const countEl = panel.querySelector('[data-delivery-sel-count]');
+        const batchForm = panel.querySelector('[data-delivery-batch]');
+        const selected = Array.from(items).filter(el => el.checked);
+        const n = selected.length;
+        const total = items.length;
+
+        if (submitBtn) submitBtn.disabled = n === 0;
+        if (countEl) {
+            if (n > 0) {
+                countEl.hidden = false;
+                countEl.textContent = String(n);
+            } else {
+                countEl.hidden = true;
+                countEl.textContent = '';
+            }
+        }
+        if (checkAll) {
+            checkAll.checked = total > 0 && n === total;
+            checkAll.indeterminate = n > 0 && n < total;
+        }
+        if (batchForm) {
+            const label = n === 1 ? '1 item selecionado' : `${n} itens selecionados`;
+            batchForm.setAttribute(
+                'data-confirm',
+                `Confirmar a entrega de ${label}? O estoque será baixado.`
+            );
+        }
+    }
+
+    document.querySelectorAll('[data-delivery-panel]').forEach(panel => {
+        syncDeliveryPanel(panel);
+        panel.addEventListener('change', event => {
+            const target = event.target;
+            if (!(target instanceof HTMLInputElement)) return;
+            if (target.matches('[data-delivery-check-all]')) {
+                panel.querySelectorAll('[data-delivery-item]').forEach(el => {
+                    el.checked = target.checked;
+                });
+            }
+            if (
+                target.matches('[data-delivery-check-all]')
+                || target.matches('[data-delivery-item]')
+            ) {
+                syncDeliveryPanel(panel);
+            }
+        });
+    });
+
     // --- 4. Altura real da admin-topbar — sticky do catálogo embutido (mobile + desktop) ---
     const adminShell = document.querySelector('.admin-shell');
     const adminTopbar = adminShell?.querySelector(':scope > .admin-topbar');

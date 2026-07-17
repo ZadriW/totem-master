@@ -4,6 +4,7 @@
 <input type="hidden" name="ret_q" value="{{ filters.q }}">
 <input type="hidden" name="ret_categoria" value="{{ filters.categoria }}">
 <input type="hidden" name="ret_status" value="{{ filters.status }}">
+<input type="hidden" name="ret_entrega" value="{{ filters.entrega }}">
 <input type="hidden" name="ret_per_page" value="{{ filters.per_page }}">
 <input type="hidden" name="ret_page" value="{{ pagination.page }}">
 {%- endmacro %}
@@ -61,6 +62,14 @@
                 <option value="baixo" {% if filters.status == 'baixo' %}selected{% endif %}>Abaixo do mínimo</option>
                 <option value="sem_estoque" {% if filters.status == 'sem_estoque' %}selected{% endif %}>Sem estoque</option>
                 <option value="inativo" {% if filters.status == 'inativo' %}selected{% endif %}>Inativo</option>
+            </select>
+        </label>
+
+        <label class="admin-filter">
+            <span class="admin-filter__label">Entrega</span>
+            <select name="entrega" class="admin-filter__input">
+                <option value="todos" {% if filters.entrega == 'todos' %}selected{% endif %}>Todas</option>
+                <option value="pendente" {% if filters.entrega == 'pendente' %}selected{% endif %}>Retirada pendente</option>
             </select>
         </label>
 
@@ -171,7 +180,7 @@
         role="table"
         aria-label="Produtos do evento {{ event.name }}"
         data-admin-event-stock
-        data-api-url="{{ url_for('admin_api_event_stock', event_id=event.id, q=filters.q, categoria=filters.categoria, status=filters.status, per_page=filters.per_page, page=pagination.page) }}"
+        data-api-url="{{ url_for('admin_api_event_stock', event_id=event.id, q=filters.q, categoria=filters.categoria, status=filters.status, entrega=filters.entrega, per_page=filters.per_page, page=pagination.page) }}"
     >
         <div class="admin-table__head admin-stock__row admin-event__row" role="row">
             <span role="columnheader">Produto</span>
@@ -194,6 +203,19 @@
                     <span>
                         <span class="admin-stock__product-name-row">
                             <strong>{{ p.name }}</strong>
+                            {% set pending_n = p.pending_delivery_units or 0 %}
+                            <span class="admin-stock__delivery-wrap"
+                                  data-stock-delivery-wrap
+                                  {% if pending_n <= 0 %}hidden{% endif %}
+                                  title="{{ pending_n }} un. aguardando retirada">
+                                <span class="admin-badge admin-badge--warn admin-tx__delivery-badge"
+                                      data-stock-delivery-badge
+                                      aria-label="Retirada pendente">
+                                    <i class="fa-solid fa-box-open" aria-hidden="true"></i>
+                                </span>
+                                <span class="admin-stock__delivery-count"
+                                      data-stock-delivery-count>{{ pending_n }}</span>
+                            </span>
                             {% set promo_tip = promo_tooltips.get(p.product_id, '') %}
                             <span class="admin-stock__promo-wrap"
                                   data-stock-promo-wrap
@@ -292,7 +314,7 @@
         <div class="admin-pagination__nav">
             {% if pagination.has_prev %}
             <a class="admin-btn admin-btn--ghost admin-btn--sm"
-               href="{{ url_for('admin_event_stock', event_id=event.id, q=filters.q, categoria=filters.categoria, status=filters.status, per_page=filters.per_page, page=pagination.page - 1) }}"
+               href="{{ url_for('admin_event_stock', event_id=event.id, q=filters.q, categoria=filters.categoria, status=filters.status, entrega=filters.entrega, per_page=filters.per_page, page=pagination.page - 1) }}"
                rel="prev">
                 <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
                 Anterior
@@ -305,7 +327,7 @@
             {% endif %}
             {% if pagination.has_next %}
             <a class="admin-btn admin-btn--ghost admin-btn--sm"
-               href="{{ url_for('admin_event_stock', event_id=event.id, q=filters.q, categoria=filters.categoria, status=filters.status, per_page=filters.per_page, page=pagination.page + 1) }}"
+               href="{{ url_for('admin_event_stock', event_id=event.id, q=filters.q, categoria=filters.categoria, status=filters.status, entrega=filters.entrega, per_page=filters.per_page, page=pagination.page + 1) }}"
                rel="next">
                 Próxima
                 <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>

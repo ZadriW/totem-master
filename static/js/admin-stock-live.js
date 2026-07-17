@@ -89,21 +89,25 @@
         return '<span class="admin-mov__event-cell"><span class="admin-mov__event-none" title="Movimentação no estoque global do catálogo (sem evento)">—</span></span>';
     }
 
-    function renderProductMovementRow(movement) {
+    function renderProductMovementRow(movement, { withEvent = false } = {}) {
         const reasonParts = [];
         if (movement.reference) reasonParts.push(`<code>${escapeHtml(movement.reference)}</code>`);
         reasonParts.push(escapeHtml(movement.reason || '-'));
+        const rowClass = withEvent ? 'admin-mov__row admin-mov__row--with-event' : 'admin-mov__row';
+        const pendingAttr = movement.is_pending_delivery || movement.movement_type === 'pendente'
+            ? ' data-pending-delivery'
+            : '';
 
         return `
-            <div class="admin-mov__wrapper" data-movement-id="${escapeHtml(movement.id)}">
-                <div class="admin-mov__row admin-mov__row--with-event" role="row">
+            <div class="admin-mov__wrapper" data-movement-id="${escapeHtml(movement.id)}"${pendingAttr}>
+                <div class="${rowClass}" role="row">
                     <span>${escapeHtml(movement.created_at_display)}</span>
                     <span class="admin-mov__type-cell">
                         <span class="admin-badge admin-mov__badge admin-mov__badge--${escapeHtml(movement.movement_type)}">
                             ${escapeHtml(movement.movement_label)}
                         </span>
                     </span>
-                    ${eventCell(movement)}
+                    ${withEvent ? eventCell(movement) : ''}
                     <span class="admin-table__col--num admin-mov__delta admin-mov__delta--${escapeHtml(movement.delta_kind)}">
                         ${escapeHtml(movement.delta_display)}
                     </span>
@@ -117,6 +121,30 @@
         `;
     }
 
+    function syncPendingDeliveryMovements(table, movements) {
+        if (!table) return;
+        const head = table.querySelector('.admin-table__head');
+        if (!head) return;
+        const pending = (movements || []).filter(
+            m => m && (m.is_pending_delivery || m.movement_type === 'pendente'),
+        );
+        const ids = new Set(pending.map(m => String(m.id)));
+        table.querySelectorAll('.admin-mov__wrapper[data-pending-delivery]').forEach(el => {
+            if (!ids.has(String(el.dataset.movementId))) el.remove();
+        });
+        const withEvent = movementsTableWithEvent(table);
+        const toAdd = pending.filter(m => {
+            const id = String(m.id).replace(/"/g, '');
+            return !table.querySelector(`.admin-mov__wrapper[data-movement-id="${id}"]`);
+        });
+        if (!toAdd.length) return;
+        table.querySelector('.admin-empty')?.remove();
+        head.insertAdjacentHTML(
+            'afterend',
+            toAdd.map(movement => renderProductMovementRow(movement, { withEvent })).join(''),
+        );
+    }
+
     function readLatestMovementIdFromDom(table) {
         let max = 0;
         if (!table) return max;
@@ -128,6 +156,20 @@
     }
 
     const productMovementsLatestByTable = new WeakMap();
+
+    function movementsTableWithEvent(table) {
+        const head = table.querySelector('.admin-table__head');
+        return Boolean(
+            table.hasAttribute('data-movements-with-event')
+            || head?.classList.contains('admin-mov__row--with-event'),
+        );
+    }
+
+    function movementsTableCap(table) {
+        const raw = Number(table.dataset.movementsCap);
+        if (Number.isFinite(raw) && raw > 0) return raw;
+        return 120;
+    }
 
     function mergeProductMovements(table, movements) {
         if (!table) return;
@@ -149,6 +191,7 @@
 
         if (nextLatest <= prevLatest) return;
 
+        const withEvent = movementsTableWithEvent(table);
         const newItems = [];
         for (let i = 0; i < list.length; i += 1) {
             const movement = list[i];
@@ -162,13 +205,41 @@
         if (!newItems.length) return;
 
         table.querySelector('.admin-empty')?.remove();
-        head.insertAdjacentHTML('afterend', newItems.map(renderProductMovementRow).join(''));
+        head.insertAdjacentHTML(
+            'afterend',
+            newItems.map(movement => renderProductMovementRow(movement, { withEvent })).join(''),
+        );
 
-        const trimCap = 120;
+        const trimCap = movementsTableCap(table);
         while (table.querySelectorAll('.admin-mov__wrapper').length > trimCap) {
             const wrappers = table.querySelectorAll('.admin-mov__wrapper');
             wrappers[wrappers.length - 1].remove();
         }
+
+        bumpMovementsSummary(table, newItems.length);
+    }
+
+    function bumpMovementsSummary(table, addedCount) {
+        if (!addedCount) return;
+        const section = table.closest('section') || table.parentElement;
+        if (!section) return;
+        const summary = section.querySelector('.admin-pagination__summary');
+        if (!summary) return;
+        const strongs = summary.querySelectorAll('strong');
+        if (strongs.length < 2) return;
+        const rangeEl = strongs[0];
+        const totalEl = strongs[1];
+        const total = Number(String(totalEl.textContent || '').replace(/\D/g, ''));
+        if (!Number.isFinite(total)) return;
+        const nextTotal = total + addedCount;
+        totalEl.textContent = String(nextTotal);
+        const rangeMatch = String(rangeEl.textContent || '').match(/(\d+)\s*[–-]\s*(\d+)/);
+        if (!rangeMatch) return;
+        const from = Number(rangeMatch[1]);
+        let to = Number(rangeMatch[2]) + addedCount;
+        const cap = movementsTableCap(table);
+        if (Number.isFinite(cap)) to = Math.min(to, cap, nextTotal);
+        rangeEl.textContent = `${from}–${to}`;
     }
 
     function isEditingLiveStockForm(root) {
@@ -233,6 +304,11 @@
         }
         if (movementsTable && movementsTable.hasAttribute('data-movements-live')) {
             mergeProductMovements(movementsTable, payload.movements || []);
+            syncPendingDeliveryMovements(movementsTable, payload.movements || []);
+        } else if (movementsTable && forceInputSync) {
+            /* Após POST local, atualiza o histórico mesmo sem poll contínuo. */
+            mergeProductMovements(movementsTable, payload.movements || []);
+            syncPendingDeliveryMovements(movementsTable, payload.movements || []);
         }
     }
 
@@ -320,6 +396,19 @@
                 const promoTipPanel = row.querySelector('[data-stock-promo-tooltip-panel]');
                 if (qty) qty.innerHTML = `<strong>${escapeHtml(product.estoque)}</strong>`;
                 updateStockStatusCell(row, product);
+                const deliveryWrap = row.querySelector('[data-stock-delivery-wrap]');
+                const deliveryCount = row.querySelector('[data-stock-delivery-count]');
+                if (deliveryWrap && Object.prototype.hasOwnProperty.call(product, 'pending_delivery_units')) {
+                    const pendingN = Number(product.pending_delivery_units) || 0;
+                    if (pendingN > 0) {
+                        deliveryWrap.removeAttribute('hidden');
+                        deliveryWrap.title = `${pendingN} un. aguardando retirada`;
+                        if (deliveryCount) deliveryCount.textContent = String(pendingN);
+                    } else {
+                        deliveryWrap.setAttribute('hidden', '');
+                        if (deliveryCount) deliveryCount.textContent = '0';
+                    }
+                }
                 const promoRoot = promoWrap || promoIcon;
                 if (promoRoot && promoIcon && Object.prototype.hasOwnProperty.call(product, 'active_promo')) {
                     if (product.active_promo) {
