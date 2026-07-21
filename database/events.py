@@ -292,6 +292,28 @@ def update_event_product_stock(
         )
 
 
+def update_event_product_backorder_limit(
+    event_id: int,
+    product_id: int,
+    backorder_limit: int,
+) -> None:
+    """Define o limite de unidades vendáveis como entrega pendente.
+
+    ``-1`` remove o limite (entrega pendente livre); ``0`` bloqueia qualquer
+    entrega pendente; ``> 0`` é o total de unidades pendentes permitidas.
+    """
+    now = _now_iso()
+    with get_conn() as conn:
+        conn.execute(
+            """
+            UPDATE event_products
+               SET backorder_limit = ?, updated_at = ?
+             WHERE event_id = ? AND product_id = ?
+            """,
+            (max(-1, int(backorder_limit)), now, event_id, product_id),
+        )
+
+
 def list_event_products(event_id: int) -> List[Dict]:
     """Lista produtos de um evento com dados do catálogo (JOIN com products)."""
     with get_conn() as conn:
@@ -1139,7 +1161,8 @@ def list_event_products_for_client(event_id: int) -> List[Dict]:
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT p.*, ep.stock AS event_stock, ep.min_stock AS event_min_stock
+            SELECT p.*, ep.stock AS event_stock, ep.min_stock AS event_min_stock,
+                   ep.backorder_limit AS event_backorder_limit
               FROM event_products ep
               JOIN products p ON p.id = ep.product_id
              WHERE ep.event_id = ? AND p.active = 1
@@ -1152,6 +1175,7 @@ def list_event_products_for_client(event_id: int) -> List[Dict]:
         d = _product_row_to_client(r)
         d["estoque"] = int(r["event_stock"] or 0)
         d["estoque_minimo"] = int(r["event_min_stock"] or 0)
+        d["backorder_limit"] = int(r["event_backorder_limit"] if r["event_backorder_limit"] is not None else -1)
         d["abaixo_minimo"] = d["estoque_minimo"] > 0 and d["estoque"] < d["estoque_minimo"]
         d["sem_estoque"] = d["estoque"] <= 0
         result.append(d)
@@ -1163,11 +1187,19 @@ def list_active_event_product_stocks(event_id: int) -> List[Dict]:
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT ep.product_id AS id, ep.stock AS estoque
+            SELECT ep.product_id AS id, ep.stock AS estoque,
+                   ep.backorder_limit
               FROM event_products ep
               JOIN products p ON p.id = ep.product_id
              WHERE ep.event_id = ? AND p.active = 1
             """,
             (int(event_id),),
         ).fetchall()
-    return [{"id": int(r["id"]), "estoque": int(r["estoque"] or 0)} for r in rows]
+    return [
+        {
+            "id": int(r["id"]),
+            "estoque": int(r["estoque"] or 0),
+            "backorder_limit": int(r["backorder_limit"] if r["backorder_limit"] is not None else -1),
+        }
+        for r in rows
+    ]

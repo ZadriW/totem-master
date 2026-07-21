@@ -67,6 +67,18 @@
                     <dd data-product-min-stock>{{ product.estoque_minimo }} un.</dd>
                 </div>
                 <div>
+                    <dt>Limite de entregas pendentes</dt>
+                    <dd data-product-backorder-limit>
+                        {% if product.backorder_limit is not none and product.backorder_limit == 0 %}
+                            Bloqueado (0 un.)
+                        {% elif product.backorder_limit is not none and product.backorder_limit > 0 %}
+                            {{ product.backorder_limit }} un.
+                        {% else %}
+                            Sem limite
+                        {% endif %}
+                    </dd>
+                </div>
+                <div>
                     <dt>Valor em estoque</dt>
                     <dd data-product-stock-value>{{ (product.estoque * product.preco) | brl }}</dd>
                 </div>
@@ -83,6 +95,33 @@
                            value="{{ product.estoque_minimo }}" class="admin-field__input" required>
                     <button type="submit" class="admin-btn admin-btn--primary">Salvar</button>
                 </div>
+            </form>
+
+            <form method="post"
+                  action="{{ url_for('admin_event_stock_backorder_limit', event_id=event.id, product_id=product.id) }}"
+                  class="admin-product__inline-form"
+                  data-live-stock-form>
+                {% include 'partials/csrf_field.html' %}
+                <label class="admin-field__label" for="backorder_limit">Novo limite de entregas pendentes</label>
+                <div class="admin-product__inline-wrap">
+                    <input id="backorder_limit" type="number" name="backorder_limit" min="0" step="1"
+                           value="{{ product.backorder_limit if product.backorder_limit and product.backorder_limit > 0 else 0 }}"
+                           class="admin-field__input" required>
+                    <button type="submit" name="backorder_action" value="set" class="admin-btn admin-btn--primary"
+                            title="Salvar limite" aria-label="Salvar limite">
+                        <i class="fa-solid fa-check" aria-hidden="true"></i>
+                    </button>
+                    <button type="submit" name="backorder_action" value="unlimited" formnovalidate
+                            class="admin-btn admin-btn--ghost"
+                            title="Remover limite (entregas pendentes livres)"
+                            aria-label="Remover limite (entregas pendentes livres)">
+                        <i class="fa-solid fa-infinity" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <p class="admin-field__hint">
+                    0 bloqueia entregas pendentes deste produto neste evento.
+                    Use <i class="fa-solid fa-infinity" aria-hidden="true"></i> para não ter limite.
+                </p>
             </form>
 
             <form method="post"

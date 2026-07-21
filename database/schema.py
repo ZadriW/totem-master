@@ -98,13 +98,14 @@ CREATE TABLE IF NOT EXISTS events (
 );
 
 CREATE TABLE IF NOT EXISTS event_products (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_id    INTEGER NOT NULL,
-    product_id  INTEGER NOT NULL,
-    stock       INTEGER NOT NULL DEFAULT 0,
-    min_stock   INTEGER NOT NULL DEFAULT 0,
-    created_at  TEXT    NOT NULL,
-    updated_at  TEXT    NOT NULL,
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id         INTEGER NOT NULL,
+    product_id       INTEGER NOT NULL,
+    stock            INTEGER NOT NULL DEFAULT 0,
+    min_stock        INTEGER NOT NULL DEFAULT 0,
+    backorder_limit  INTEGER NOT NULL DEFAULT -1,
+    created_at       TEXT    NOT NULL,
+    updated_at       TEXT    NOT NULL,
     UNIQUE (event_id, product_id),
     FOREIGN KEY (event_id)   REFERENCES events(id)   ON DELETE CASCADE,
     FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
@@ -247,13 +248,14 @@ def _ensure_events_tables(conn: sqlite3.Connection) -> None:
             updated_at   TEXT    NOT NULL
         );
         CREATE TABLE IF NOT EXISTS event_products (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_id    INTEGER NOT NULL,
-            product_id  INTEGER NOT NULL,
-            stock       INTEGER NOT NULL DEFAULT 0,
-            min_stock   INTEGER NOT NULL DEFAULT 0,
-            created_at  TEXT    NOT NULL,
-            updated_at  TEXT    NOT NULL,
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id         INTEGER NOT NULL,
+            product_id       INTEGER NOT NULL,
+            stock            INTEGER NOT NULL DEFAULT 0,
+            min_stock        INTEGER NOT NULL DEFAULT 0,
+            backorder_limit  INTEGER NOT NULL DEFAULT -1,
+            created_at       TEXT    NOT NULL,
+            updated_at       TEXT    NOT NULL,
             UNIQUE (event_id, product_id),
             FOREIGN KEY (event_id)   REFERENCES events(id)   ON DELETE CASCADE,
             FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
@@ -268,6 +270,53 @@ def _ensure_events_badge_color(conn: sqlite3.Connection) -> None:
     if "badge_color" in _table_columns(conn, "events"):
         return
     conn.execute("ALTER TABLE events ADD COLUMN badge_color TEXT")
+
+
+def _ensure_event_products_backorder_limit(conn: sqlite3.Connection) -> None:
+    """Acrescenta ``backorder_limit`` em ``event_products`` em bases antigas.
+
+    ``-1`` (padrão/"sem limite") permite entrega pendente livremente.
+    ``0`` bloqueia qualquer entrega pendente do produto no evento.
+    Um valor ``> 0`` é o total de unidades pendentes permitidas.
+    """
+    if "backorder_limit" not in _table_columns(conn, "event_products"):
+        conn.execute(
+            "ALTER TABLE event_products ADD COLUMN backorder_limit INTEGER NOT NULL DEFAULT -1"
+        )
+    _ensure_schema_migrations_table(conn)
+    migration_name = "event_products_backorder_limit_unlimited_sentinel"
+    if _migration_applied(conn, migration_name):
+        return
+    # A coluna foi introduzida com ``0`` significando "sem limite"; agora ``0``
+    # passa a significar "bloqueado", então valores antigos de ``0`` precisam
+    # ser convertidos para o novo sentinel de "sem limite" (``-1``).
+    conn.execute("UPDATE event_products SET backorder_limit = -1 WHERE backorder_limit = 0")
+    _mark_migration_applied(conn, migration_name)
+
+
+def _ensure_schema_migrations_table(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+            name        TEXT PRIMARY KEY,
+            applied_at  TEXT NOT NULL
+        )
+        """
+    )
+
+
+def _migration_applied(conn: sqlite3.Connection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM schema_migrations WHERE name = ?", (name,),
+    ).fetchone()
+    return row is not None
+
+
+def _mark_migration_applied(conn: sqlite3.Connection, name: str) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO schema_migrations (name, applied_at) VALUES (?, ?)",
+        (name, _now_iso()),
+    )
 
 
 def _ensure_event_extensions(conn: sqlite3.Connection) -> None:
@@ -530,6 +579,7 @@ def init_db() -> None:
         _ensure_promotions_extended_rule_types(conn)
         _ensure_events_badge_color(conn)
         _ensure_event_extensions(conn)
+        _ensure_event_products_backorder_limit(conn)
         _ensure_transaction_items_promo_columns(conn)
         _ensure_delivery_columns(conn)
         _consolidate_legacy_movement_types(conn)

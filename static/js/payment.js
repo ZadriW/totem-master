@@ -48,9 +48,16 @@
 
     let quotePollTimer = null;
 
+    const PAYMENT_ITEM_OPTIONS = { removable: true };
+
     function renderItem(item) {
         if (PromoPricing && typeof PromoPricing.renderLineItemHtml === 'function') {
-            return PromoPricing.renderLineItemHtml(item, Cart.formatBRL.bind(Cart), 'payment-item');
+            return PromoPricing.renderLineItemHtml(
+                item,
+                Cart.formatBRL.bind(Cart),
+                'payment-item',
+                PAYMENT_ITEM_OPTIONS,
+            );
         }
         const subtotal = Cart.formatBRL(item.subtotal != null ? item.subtotal : item.preco * item.quantidade);
         const unit = Cart.formatBRL(item.preco);
@@ -72,7 +79,12 @@
                     ${item.sku ? `<p class="payment-item__sku">SKU ${item.sku}</p>` : ''}
                     <p class="payment-item__meta">${item.quantidade} × ${unit}</p>
                 </div>
-                <div class="payment-item__total">${subtotal}</div>
+                <div class="payment-item__side">
+                    <div class="payment-item__total">${subtotal}</div>
+                    <button type="button" class="payment-item__remove" data-payment-action="remove" aria-label="Remover ${item.nome}">
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                    </button>
+                </div>
             </article>
         `;
     }
@@ -163,6 +175,14 @@
     cancelBtn.addEventListener('click', () => {
         clearResumePendingTxId();
         window.location.assign(CATALOG_URL);
+    });
+
+    itemsEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-payment-action="remove"]');
+        if (!btn) return;
+        const row = btn.closest('[data-id]');
+        if (!row || row.dataset.id == null || row.dataset.id === '') return;
+        Cart.remove(row.dataset.id);
     });
 
     Cart.subscribe(() => {

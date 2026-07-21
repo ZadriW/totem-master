@@ -259,6 +259,7 @@ def create_transaction(
                         f"Produto {_product_sku_label(pid, sku=sku_by_id.get(pid))} "
                         f"não está disponível neste evento."
                     )
+            _check_event_backorder_limits(conn, event_id, demand, sku_by_id)
         else:
             for pid in demand:
                 row = conn.execute(
@@ -526,6 +527,7 @@ def update_pending_transaction(
                         f"Produto {_product_sku_label(pid, sku=sku_by_id.get(pid))} "
                         f"não está disponível neste evento."
                     )
+            _check_event_backorder_limits(conn, event_id, demand, sku_by_id)
         else:
             for pid in demand:
                 pr = conn.execute(
@@ -1291,11 +1293,14 @@ def count_pending_delivery_transactions(
 PENDING_MOVEMENT_TYPE = "pendente"
 
 
-def pending_delivery_units_by_product_for_event(
+def _pending_delivery_units_by_product_for_event_conn(
+    conn: sqlite3.Connection,
     event_id: int,
     product_ids: Optional[Iterable[int]] = None,
+    *,
+    seller_id: Optional[int] = None,
 ) -> Dict[int, int]:
-    """Mapa ``product_id → unidades pendentes de retirada`` no evento."""
+    """Mapa ``product_id → unidades pendentes de retirada`` no evento (usa conexão dada)."""
     params: List = [int(event_id)]
     pid_filter = ""
     if product_ids is not None:
@@ -1305,6 +1310,10 @@ def pending_delivery_units_by_product_for_event(
         placeholders = ",".join("?" * len(pids))
         pid_filter = f" AND CAST(ti.product_id AS INTEGER) IN ({placeholders})"
         params.extend(pids)
+    seller_filter = ""
+    if seller_id is not None:
+        seller_filter = " AND COALESCE(t.seller_id, -1) = ?"
+        params.append(int(seller_id))
 
     sql = f"""
         SELECT CAST(ti.product_id AS INTEGER) AS product_id,
@@ -1316,13 +1325,88 @@ def pending_delivery_units_by_product_for_event(
            AND (ti.quantity - COALESCE(ti.quantity_delivered, 0)) > 0
            AND CAST(ti.product_id AS INTEGER) > 0
            {pid_filter}
+           {seller_filter}
          GROUP BY CAST(ti.product_id AS INTEGER)
     """
     out: Dict[int, int] = {}
-    with get_conn() as conn:
-        for r in conn.execute(sql, params).fetchall():
-            out[int(r["product_id"])] = int(r["pending_units"] or 0)
+    for r in conn.execute(sql, params).fetchall():
+        out[int(r["product_id"])] = int(r["pending_units"] or 0)
     return out
+
+
+def pending_delivery_units_by_product_for_event(
+    event_id: int,
+    product_ids: Optional[Iterable[int]] = None,
+    *,
+    seller_id: Optional[int] = None,
+) -> Dict[int, int]:
+    """Mapa ``product_id → unidades pendentes de retirada`` no evento."""
+    with get_conn() as conn:
+        return _pending_delivery_units_by_product_for_event_conn(
+            conn, event_id, product_ids, seller_id=seller_id,
+        )
+
+
+def _check_event_backorder_limits(
+    conn: sqlite3.Connection,
+    event_id: int,
+    demand: Dict[int, int],
+    sku_by_id: Optional[Dict[int, str]] = None,
+) -> None:
+    """Impede que um pedido supere o limite de entregas pendentes configurado no evento.
+
+    Para cada produto, ``entrega pendente`` = quantidade que excede o estoque
+    disponível no evento (o restante é entregue na hora). ``backorder_limit``:
+    ``-1`` (padrão) = sem limite; ``0`` = nenhuma entrega pendente permitida;
+    ``> 0`` = total de unidades pendentes permitidas no evento. Levanta
+    ``ValueError`` quando (pendentes já confirmados + novas unidades pendentes)
+    excede o limite.
+    """
+    if not demand:
+        return
+    pids = list(demand.keys())
+    placeholders = ",".join("?" * len(pids))
+    rows = conn.execute(
+        f"""
+        SELECT product_id, stock, backorder_limit
+          FROM event_products
+         WHERE event_id = ? AND product_id IN ({placeholders})
+        """,
+        (int(event_id), *pids),
+    ).fetchall()
+    limits_by_pid = {
+        int(r["product_id"]): (int(r["stock"] or 0), int(r["backorder_limit"] if r["backorder_limit"] is not None else -1))
+        for r in rows
+    }
+
+    new_backorder: Dict[int, int] = {}
+    for pid, qty in demand.items():
+        stock, limit = limits_by_pid.get(pid, (0, -1))
+        if limit < 0:
+            continue
+        needed = qty - stock
+        if needed > 0:
+            new_backorder[pid] = needed
+
+    if not new_backorder:
+        return
+
+    existing_pending = _pending_delivery_units_by_product_for_event_conn(
+        conn, event_id, new_backorder.keys(),
+    )
+    for pid, needed in new_backorder.items():
+        _, limit = limits_by_pid.get(pid, (0, -1))
+        already = existing_pending.get(pid, 0)
+        if already + needed > limit:
+            sku = _product_sku_label(pid, sku=(sku_by_id or {}).get(pid))
+            if limit == 0:
+                raise ValueError(
+                    f"Produto {sku}: entrega pendente não é permitida para este produto neste evento."
+                )
+            raise ValueError(
+                f"Produto {sku}: limite de entrega pendente atingido neste evento "
+                f"(limite {limit} un., já pendente {already} un.)."
+            )
 
 
 def list_pending_delivery_ledger_rows(
@@ -1931,6 +2015,7 @@ def list_transactions_for_seller(
     sql = f"""
         SELECT id, order_number, created_at, total, items_count, status,
                seller_id, seller_name, payment_method, card_installments, aut,
+               event_id,
                client_name, client_cpf, client_email, client_phone, client_zipcode, client_address,
                client_number, client_complement, client_city, client_state,
                client_cro_uf, client_cro_numero, delivery_status

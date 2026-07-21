@@ -1,4 +1,4 @@
-{# Conteúdo do catálogo (topbar + grid + carrinho). Requer: categories, categories_by_letter, products, catalog_brand_href, catalog_brand_aria #}
+{# Conteúdo do catálogo (topbar + grid + carrinho). Requer: products, catalog_brand_href, catalog_brand_aria #}
 {% from "macros/admin_brand_logo.html" import admin_brand_logo %}
 <header class="topbar">
     <a class="topbar__brand" href="{{ catalog_brand_href }}" aria-label="{{ catalog_brand_aria }}">
@@ -47,53 +47,6 @@
     <span class="catalog-toast__text">Produto adicionado ao carrinho!</span>
 </div>
 
-<div class="categories-bar">
-    {% set _letters = categories_by_letter if categories_by_letter is defined else [] %}
-    <nav class="categories" aria-label="Categorias">
-        <div class="categories__scroll">
-        <button class="category-chip category-chip--all is-active" type="button" data-category="todos">Todos</button>
-        {% for letter, names in _letters %}
-        <div class="category-dropdown" data-letter="{{ letter }}">
-            <button
-                type="button"
-                class="category-letter-trigger"
-                aria-expanded="false"
-                aria-haspopup="true"
-                aria-controls="categoryDropdownPanel{{ loop.index0 }}"
-            >
-                {% if letter == '#' %}0-9{% else %}{{ letter }}{% endif %}
-            </button>
-            <div
-                id="categoryDropdownPanel{{ loop.index0 }}"
-                class="category-dropdown__panel"
-                role="menu"
-                hidden
-                aria-label="Categorias — {% if letter == '#' %}0-9 e outros{% else %}{{ letter }}{% endif %}"
-            >
-                {% for category in names %}
-                <button
-                    type="button"
-                    class="category-chip category-dropdown__item"
-                    role="menuitem"
-                    data-category="{{ category }}"
-                >{{ category }}</button>
-                {% endfor %}
-            </div>
-        </div>
-        {% endfor %}
-        </div>
-    </nav>
-    <button
-        type="button"
-        class="categories-clear"
-        id="clearCatalogFilters"
-        aria-label="Limpar filtros de categoria e busca"
-    >
-        <i class="fa-solid fa-filter-circle-xmark" aria-hidden="true"></i>
-        Limpar filtros
-    </button>
-</div>
-
 <main class="catalog">
     <div class="catalog__header">
         <h1 class="catalog__title">Catálogo de Produtos</h1>
@@ -112,6 +65,7 @@
             {% set stock_tone = 'ok' %}
         {% endif %}
         {% set em_promo = product.em_promocao | default(false) %}
+        {% set pending_n = product.pending_delivery_units or 0 %}
         <article
             class="product-card{% if em_promo %} product-card--promo{% endif %}"
             data-id="{{ product.id }}"
@@ -122,11 +76,20 @@
             data-estoque-min="{{ sm }}"
             data-preco="{{ product.preco }}"
         >
-            <div data-promo-badge-root>
+            <div class="product-card__badges-row" data-promo-badge-root>
                 {% if em_promo and product.promo_badge %}
                 <div class="product-card__promo-badge">
                     <i class="fa-solid fa-tag" aria-hidden="true"></i>
                     {{ product.promo_badge }}
+                </div>
+                {% endif %}
+                {% if pending_n > 0 %}
+                <div class="product-card__delivery-badge product-card__delivery-badge--overlay"
+                     title="{{ pending_n }} un. aguardando retirada">
+                    <span class="admin-badge admin-badge--warn admin-tx__delivery-badge" aria-label="Retirada pendente">
+                        <i class="fa-solid fa-box-open" aria-hidden="true"></i>
+                    </span>
+                    <span class="admin-stock__delivery-count">{{ pending_n }}</span>
                 </div>
                 {% endif %}
             </div>
@@ -144,6 +107,12 @@
                 {% else %}
                 <span class="product-card__stock product-card__stock--{{ stock_tone }} product-card__stock--alone" data-stock-display>{{ product.estoque }} no estoque.</span>
                 {% endif %}
+                {% set bl = product.backorder_limit | default(-1) | int %}
+                <span class="product-card__backorder-info" data-backorder-info
+                      {% if q > 0 or bl < 0 %}hidden{% endif %}>
+                    <i class="fa-solid fa-truck-clock" aria-hidden="true"></i>
+                    <span data-backorder-limit-value>{{ bl }}</span> vendas futuras disp.
+                </span>
                 <div data-catalog-pricing>
                     {% set promo_tipo = product.promo_tipo | default('') %}
                     {% if em_promo and promo_tipo in ('percent', 'fixed') and product.preco_original is defined and product.preco_original > product.preco + 0.001 %}

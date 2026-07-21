@@ -25,7 +25,7 @@ A interface é responsiva e funciona em navegadores modernos em desktop, tablet 
 | Área | Descrição |
 |------|-----------|
 | **Login** | Acesso por e-mail e senha; vendedor vinculado a um evento ativo. |
-| **Venda / catálogo** | Busca, filtros por categoria, carrinho lateral, estoque ao vivo e promoções recalculadas (~30 s). |
+| **Venda / catálogo** | Busca, carrinho lateral, estoque ao vivo e promoções recalculadas (~15 s). |
 | **Pagamento** | Resumo do pedido, dados do cliente (nome, CRO, forma de pagamento, parcelas). |
 | **Confirmação AUT** | Pedido fica **pendente** até o vendedor informar o AUT; só então o estoque é baixado. |
 | **Restauração de checkout** | Retomar pedido pendente interrompido (sessão expirada, navegador fechado etc.). |

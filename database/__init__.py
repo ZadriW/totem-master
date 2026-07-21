@@ -73,6 +73,7 @@ from .events import (
     replace_seller_event_assignment,
     restore_event,
     update_event,
+    update_event_product_backorder_limit,
     update_event_product_stock,
 )
 from .event_stock import (
@@ -248,6 +249,7 @@ __all__ = [
     "sync_products_from_wake",
     "upsert_wake_variant",
     "update_event",
+    "update_event_product_backorder_limit",
     "update_event_product_stock",
     "update_pending_transaction",
     "update_product_min_stock",

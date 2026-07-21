@@ -6,10 +6,6 @@
     const cards = Array.from(grid.querySelectorAll('.product-card'));
     const searchInput = document.getElementById('searchInput');
     const categoryChips = document.querySelectorAll('.category-chip[data-category]');
-    const categoryDropdownRoots = document.querySelectorAll('.category-dropdown');
-    const categoryLetterTriggers = document.querySelectorAll('.category-letter-trigger');
-    const clearFiltersBtn = document.getElementById('clearCatalogFilters');
-    const categoriesScroll = document.querySelector('.categories__scroll');
     const emptyState = document.getElementById('emptyState');
     const resultsInfo = document.getElementById('resultsInfo');
     const cartCountEl = document.getElementById('cartCount');
@@ -39,116 +35,6 @@
 
     let stockStaleNotice = false;
     let promoStaleNotice = false;
-
-    function closeAllCategoryDropdowns() {
-        categoryDropdownRoots.forEach(drop => {
-            drop.classList.remove('is-open');
-            const panel = drop.querySelector('.category-dropdown__panel');
-            const trig = drop.querySelector('.category-letter-trigger');
-            if (panel) {
-                panel.hidden = true;
-                panel.style.top = '';
-                panel.style.left = '';
-                panel.style.width = '';
-                panel.style.maxWidth = '';
-                panel.style.maxHeight = '';
-            }
-            if (trig) trig.setAttribute('aria-expanded', 'false');
-        });
-    }
-
-    function positionCategoryPanel(drop) {
-        const trigger = drop.querySelector('.category-letter-trigger');
-        const panel = drop.querySelector('.category-dropdown__panel');
-        if (!trigger || !panel || panel.hidden) return;
-
-        const rect = trigger.getBoundingClientRect();
-        const gap = 6;
-        const margin = 8;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        const panelWidth = Math.min(360, Math.max(220, vw - margin * 2));
-
-        panel.style.width = `${panelWidth}px`;
-        panel.style.maxWidth = `${panelWidth}px`;
-
-        let left = rect.left;
-        if (left + panelWidth > vw - margin) {
-            left = vw - margin - panelWidth;
-        }
-        if (left < margin) {
-            left = margin;
-        }
-        panel.style.left = `${left}px`;
-
-        const belowTop = rect.bottom + gap;
-        const maxHBelow = Math.max(160, vh - belowTop - margin);
-        const maxHAbove = Math.max(160, rect.top - margin - gap);
-        panel.style.top = `${belowTop}px`;
-        panel.style.maxHeight = `${Math.min(320, maxHBelow)}px`;
-
-        requestAnimationFrame(() => {
-            const ph = panel.getBoundingClientRect().height;
-            const spaceBelow = vh - belowTop - margin;
-            const spaceAbove = rect.top - margin - gap;
-
-            if (ph > spaceBelow && spaceAbove > spaceBelow) {
-                const topAbove = rect.top - gap - ph;
-                panel.style.top = `${Math.max(margin, topAbove)}px`;
-                panel.style.maxHeight = `${Math.min(320, maxHAbove)}px`;
-            } else {
-                panel.style.top = `${belowTop}px`;
-                panel.style.maxHeight = `${Math.min(320, maxHBelow)}px`;
-            }
-        });
-    }
-
-    function closeDropdownsOnScrollOrResize(ev) {
-        if (ev && ev.type === 'scroll' && ev.target && typeof ev.target.closest === 'function') {
-            if (ev.target.closest('.category-dropdown__panel')) {
-                return;
-            }
-        }
-        if (document.querySelector('.category-dropdown.is-open')) {
-            closeAllCategoryDropdowns();
-        }
-    }
-
-    categoryLetterTriggers.forEach(trigger => {
-        trigger.addEventListener('click', e => {
-            e.preventDefault();
-            e.stopPropagation();
-            const drop = trigger.closest('.category-dropdown');
-            if (!drop) return;
-            const panel = drop.querySelector('.category-dropdown__panel');
-            const wasOpen = drop.classList.contains('is-open');
-            closeAllCategoryDropdowns();
-            if (!wasOpen) {
-                drop.classList.add('is-open');
-                if (panel) {
-                    panel.hidden = false;
-                    trigger.setAttribute('aria-expanded', 'true');
-                    requestAnimationFrame(() => {
-                        requestAnimationFrame(() => positionCategoryPanel(drop));
-                    });
-                }
-            }
-        });
-    });
-
-    document.addEventListener('click', () => {
-        closeAllCategoryDropdowns();
-    });
-
-    document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') closeAllCategoryDropdowns();
-    });
-
-    window.addEventListener('scroll', closeDropdownsOnScrollOrResize, { passive: true });
-    window.addEventListener('resize', closeDropdownsOnScrollOrResize);
-    if (categoriesScroll) {
-        categoriesScroll.addEventListener('scroll', closeDropdownsOnScrollOrResize, { passive: true });
-    }
 
     /* -------------------------------------------------------------------- */
     /* Utilidades do catálogo                                               */
@@ -202,7 +88,20 @@
         label.classList.add(tone);
     }
 
-    function applyStockToCard(card, estoqueRaw) {
+    function syncBackorderInfo(card, backorderLimit) {
+        const el = card.querySelector('[data-backorder-info]');
+        if (!el) return;
+        const stock = getStock(card);
+        const limit = Number.isFinite(backorderLimit) ? backorderLimit : -1;
+        if (stock <= 0 && limit >= 0) {
+            el.querySelector('[data-backorder-limit-value]').textContent = String(limit);
+            el.removeAttribute('hidden');
+        } else {
+            el.setAttribute('hidden', '');
+        }
+    }
+
+    function applyStockToCard(card, estoqueRaw, backorderLimitRaw) {
         const n = Math.max(0, Math.floor(Number(estoqueRaw)) || 0);
         card.dataset.estoque = String(n);
         const label = card.querySelector('[data-stock-display]');
@@ -215,6 +114,13 @@
         }
         const p = productsById.get(String(card.dataset.id));
         if (p) p.estoque = n;
+        if (backorderLimitRaw !== undefined) {
+            const bl = Number(backorderLimitRaw);
+            if (p) p.backorder_limit = Number.isFinite(bl) ? bl : -1;
+            syncBackorderInfo(card, Number.isFinite(bl) ? bl : -1);
+        } else {
+            syncBackorderInfo(card, p ? (p.backorder_limit ?? -1) : -1);
+        }
     }
 
     function escapeCatalogHtml(value) {
@@ -233,6 +139,23 @@
     function renderPromoBadgeMarkup(product) {
         if (!product.em_promocao || !product.promo_badge) return '';
         return `<div class="product-card__promo-badge"><i class="fa-solid fa-tag" aria-hidden="true"></i> ${escapeCatalogHtml(product.promo_badge)}</div>`;
+    }
+
+    function renderDeliveryBadgeMarkup(product) {
+        const pendingN = Math.max(0, Math.floor(Number(product.pending_delivery_units)) || 0);
+        if (pendingN <= 0) return '';
+        return `
+            <div class="product-card__delivery-badge product-card__delivery-badge--overlay" title="${pendingN} un. aguardando retirada">
+                <span class="admin-badge admin-badge--warn admin-tx__delivery-badge" aria-label="Retirada pendente">
+                    <i class="fa-solid fa-box-open" aria-hidden="true"></i>
+                </span>
+                <span class="admin-stock__delivery-count">${pendingN}</span>
+            </div>
+        `;
+    }
+
+    function renderBadgeRootMarkup(product) {
+        return renderPromoBadgeMarkup(product) + renderDeliveryBadgeMarkup(product);
     }
 
     function renderPricingBlockMarkup(product) {
@@ -262,14 +185,14 @@
         const minRaw = Math.max(0, Math.floor(Number(p.estoque_minimo)) || 0);
         card.dataset.estoqueMin = String(minRaw);
 
-        applyStockToCard(card, p.estoque);
+        applyStockToCard(card, p.estoque, p.backorder_limit);
 
         card.dataset.preco = String(Number(p.preco) || 0);
 
         card.classList.toggle('product-card--promo', !!p.em_promocao);
 
         const badgeRoot = card.querySelector('[data-promo-badge-root]');
-        if (badgeRoot) badgeRoot.innerHTML = renderPromoBadgeMarkup(p);
+        if (badgeRoot) badgeRoot.innerHTML = renderBadgeRootMarkup(p);
 
         const priceRoot = card.querySelector('[data-catalog-pricing]');
         if (priceRoot) priceRoot.innerHTML = renderPricingBlockMarkup(p);
@@ -324,13 +247,18 @@
             }
             const list = data.products;
             if (!Array.isArray(list)) return;
-            const byId = new Map(
-                list.map(row => [String(row.id), row.estoque]),
-            );
+            const byId = new Map(list.map(row => [String(row.id), row]));
             cards.forEach(card => {
                 const id = card.dataset.id;
-                if (!byId.has(id)) return;
-                applyStockToCard(card, byId.get(id));
+                const row = byId.get(id);
+                if (!row) return;
+                applyStockToCard(card, row.estoque, row.backorder_limit);
+                if (Object.prototype.hasOwnProperty.call(row, 'pending_delivery_units')) {
+                    const p = productsById.get(id);
+                    if (p) p.pending_delivery_units = row.pending_delivery_units;
+                    const badgeRoot = card.querySelector('[data-promo-badge-root]');
+                    if (badgeRoot && p) badgeRoot.innerHTML = renderBadgeRootMarkup(p);
+                }
             });
         } catch (err) {
             const T = window.TotemApiErrors;
@@ -344,18 +272,6 @@
                 resultsInfo.appendChild(hint);
             }
         }
-    }
-
-    function resetFiltersToDefault() {
-        clearTimeout(searchTimer);
-        state.category = 'todos';
-        state.query = '';
-        if (searchInput) searchInput.value = '';
-        closeAllCategoryDropdowns();
-        if (categoriesScroll) {
-            categoriesScroll.scrollTo({ left: 0, behavior: 'smooth' });
-        }
-        applyFilters();
     }
 
     function applyFilters() {
@@ -385,13 +301,6 @@
         categoryChips.forEach(c => {
             c.classList.toggle('is-active', c.dataset.category === state.category);
         });
-        categoryLetterTriggers.forEach(tr => {
-            const drop = tr.closest('.category-dropdown');
-            const match = state.category !== 'todos' && drop && Array.from(
-                drop.querySelectorAll('.category-chip[data-category]'),
-            ).some(el => el.dataset.category === state.category);
-            tr.classList.toggle('is-active', Boolean(match));
-        });
     }
 
     function updateCartBadge() {
@@ -408,25 +317,20 @@
         chip.addEventListener('click', e => {
             e.stopPropagation();
             state.category = chip.dataset.category;
-            closeAllCategoryDropdowns();
             applyFilters();
         });
     });
 
-    if (clearFiltersBtn) {
-        clearFiltersBtn.addEventListener('click', () => {
-            resetFiltersToDefault();
+    if (searchInput) {
+        searchInput.addEventListener('input', event => {
+            clearTimeout(searchTimer);
+            const value = event.target.value;
+            searchTimer = setTimeout(() => {
+                state.query = value;
+                applyFilters();
+            }, 120);
         });
     }
-
-    searchInput.addEventListener('input', event => {
-        clearTimeout(searchTimer);
-        const value = event.target.value;
-        searchTimer = setTimeout(() => {
-            state.query = value;
-            applyFilters();
-        }, 120);
-    });
 
     /* -------------------------------------------------------------------- */
     /* Toast — produto adicionado (canto superior direito)                   */
@@ -656,14 +560,16 @@
         });
     }
 
+    const CATALOG_POLL_MS = 15000;
+
     applyFilters();
     updateCartBadge();
 
     if (PROMO_REFRESH_API) {
         fetchCatalogPromoRefresh();
-        setInterval(fetchCatalogPromoRefresh, 30000);
+        setInterval(fetchCatalogPromoRefresh, CATALOG_POLL_MS);
     } else if (STOCK_API) {
         fetchCatalogStock();
-        setInterval(fetchCatalogStock, 30000);
+        setInterval(fetchCatalogStock, CATALOG_POLL_MS);
     }
 })();

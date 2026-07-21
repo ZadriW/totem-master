@@ -232,11 +232,36 @@ button.payment__back {
     margin-top: 4px;
 }
 
+.payment-item__side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
 .payment-item__total {
     font-size: 16px;
     font-weight: 800;
     color: var(--color-text);
     font-variant-numeric: tabular-nums;
+}
+
+.payment-item__remove {
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text-muted);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition);
+}
+
+.payment-item__remove:hover {
+    background: rgba(220, 38, 38, 0.10);
+    color: #dc2626;
 }
 
 .payment__summary-rows {

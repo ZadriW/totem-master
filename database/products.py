@@ -578,7 +578,8 @@ def get_product_in_event(event_id: int, product_id: int) -> Optional[Dict]:
         return None
     with get_conn() as conn:
         ep = conn.execute(
-            "SELECT stock, min_stock FROM event_products WHERE event_id = ? AND product_id = ?",
+            "SELECT stock, min_stock, backorder_limit FROM event_products "
+            "WHERE event_id = ? AND product_id = ?",
             (int(event_id), int(product_id)),
         ).fetchone()
     if ep is None:
@@ -588,6 +589,7 @@ def get_product_in_event(event_id: int, product_id: int) -> Optional[Dict]:
     out = dict(base)
     out["estoque"] = est
     out["estoque_minimo"] = mn
+    out["backorder_limit"] = int(ep["backorder_limit"] or 0)
     out["abaixo_minimo"] = mn > 0 and est < mn
     out["sem_estoque"] = est <= 0
     return out

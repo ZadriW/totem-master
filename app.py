@@ -14,11 +14,9 @@ import io
 import os
 import re
 import secrets
-import unicodedata
 
 import totem_env  # noqa: F401 — carrega .env / totem.env antes da integração Wake
 from receipt_tokens import sign_receipt_token, verify_receipt_token
-from collections import defaultdict
 from functools import wraps
 from datetime import datetime
 
@@ -136,6 +134,7 @@ from database import (
     set_product_active,
     upsert_wake_variant,
     update_event,
+    update_event_product_backorder_limit,
     update_event_product_stock,
     update_seller_account,
     update_seller_last_login,
@@ -195,39 +194,6 @@ AUTH_COOKIE_OPTIONS = {
     "httponly": True,
     "samesite": "Lax",
 }
-
-
-def _category_sort_key(name: str) -> str:
-    """Ordenação sem acentos (alinha ao normalize() do catálogo no JS)."""
-    if not name:
-        return ""
-    nfd = unicodedata.normalize("NFD", str(name))
-    stripped = "".join(c for c in nfd if unicodedata.category(c) != "Mn")
-    return stripped.lower()
-
-
-def _category_initial_letter(name: str) -> str:
-    """Inicial A-Z ou '#' para dígitos / símbolos / vazio."""
-    key = _category_sort_key(name)
-    if not key:
-        return "#"
-    ch = key[0]
-    if ch.isdigit():
-        return "#"
-    if "a" <= ch <= "z":
-        return ch.upper()
-    return "#"
-
-
-def _categories_by_initial(names: list[str]) -> list[tuple[str, list[str]]]:
-    """Agrupa nomes de categoria por letra inicial; '#' (último) = 0-9 e outros."""
-    buckets: dict[str, list[str]] = defaultdict(list)
-    for raw in sorted(names, key=_category_sort_key):
-        buckets[_category_initial_letter(raw)].append(raw)
-    letters = sorted(k for k in buckets if k != "#")
-    if "#" in buckets:
-        letters.append("#")
-    return [(letter, buckets[letter]) for letter in letters]
 
 
 def _url_if_registered(endpoint: str, *, fallback: str) -> str:
@@ -892,6 +858,24 @@ def _seller_payment_page_context() -> dict:
     }
 
 
+def _attach_pending_delivery_units(
+    products: list,
+    event_id: int,
+    *,
+    seller_id: int | None = None,
+) -> None:
+    """Anexa ``pending_delivery_units`` (retirada pendente) a cada produto do evento."""
+    if not products:
+        return
+    pending_map = pending_delivery_units_by_product_for_event(
+        event_id,
+        product_ids=[int(p["id"]) for p in products],
+        seller_id=seller_id,
+    )
+    for p in products:
+        p["pending_delivery_units"] = int(pending_map.get(int(p["id"]), 0))
+
+
 @app.route("/vendedor/venda", endpoint="seller_sale")
 @seller_required
 def seller_sale():
@@ -902,7 +886,10 @@ def seller_sale():
         promos = get_active_promotions_for_event(seller_ev["id"])
         promo_map = build_promo_display_map(promos)
         products = [enrich_product_with_promo(p, promo_map) for p in products]
-        # No modo evento, estoque + preços + promoções vêm do mesmo polling (30s).
+        _attach_pending_delivery_units(
+            products, seller_ev["id"], seller_id=_current_seller_id(),
+        )
+        # No modo evento, estoque + preços + promoções vêm do mesmo polling (15s).
         catalog_stock_api_url = ""
         catalog_promo_refresh_api_url = url_for(
             "seller_api_event_catalog_promos_refresh",
@@ -914,21 +901,8 @@ def seller_sale():
             fallback="/vendedor/api/catalogo/estoque",
         )
         catalog_promo_refresh_api_url = ""
-    category_names_set = {
-        str(p["categoria"]).strip()
-        for p in products
-        if (p.get("categoria") or "").strip()
-    }
-    if not seller_ev:
-        category_names_set.update(
-            str(c).strip() for c in CATEGORIES if c and str(c).strip()
-        )
-    categories_by_letter = _categories_by_initial(sorted(category_names_set))
-    categories = sorted(category_names_set) if seller_ev else CATEGORIES
     return render_template(
         "seller/catalog.html",
-        categories=categories,
-        categories_by_letter=categories_by_letter,
         products=products,
         totem_flow=_seller_totem_flow(),
         catalog_stock_api_url=catalog_stock_api_url,
@@ -1447,7 +1421,11 @@ def seller_api_event_catalog_stock():
     seller_ev = _get_seller_event()
     if seller_ev is None:
         return jsonify({"products": list_active_product_stocks()})
-    return jsonify({"products": list_active_event_product_stocks(seller_ev["id"])})
+    products = list_active_event_product_stocks(seller_ev["id"])
+    _attach_pending_delivery_units(
+        products, seller_ev["id"], seller_id=_current_seller_id(),
+    )
+    return jsonify({"products": products})
 
 
 @app.route(
@@ -1456,7 +1434,7 @@ def seller_api_event_catalog_stock():
 )
 @seller_required
 def seller_api_event_catalog_promos_refresh():
-    """Catálogo do evento com preços e promoções recalculados (polling ~30s no front).
+    """Catálogo do evento com preços e promoções recalculados (polling ~15s no front).
 
     Retorna o mesmo formato que ``list_event_products_for_client``, já enriquecido
     com ``em_promocao``, ``preco_original``, ``promo_badge``, etc.
@@ -1470,6 +1448,9 @@ def seller_api_event_catalog_promos_refresh():
     promos = get_active_promotions_for_event(seller_ev["id"])
     promo_map = build_promo_display_map(promos)
     products = [enrich_product_with_promo(p, promo_map) for p in products]
+    _attach_pending_delivery_units(
+        products, seller_ev["id"], seller_id=_current_seller_id(),
+    )
     return jsonify({"products": products})
 
 
@@ -1651,6 +1632,71 @@ def admin_sellers():
     )
 
 
+def _admin_seller_transactions_view(seller_id: int):
+    """Lista paginada de vendas do vendedor (admin) com filtros de status/entrega."""
+    pedido = (request.args.get("pedido") or "").strip()
+    status_raw = (request.args.get("status") or "").strip().lower()
+    valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado", "estornado"})
+    status_norm = status_raw if status_raw in valid_status else "todos"
+    status_api = None if status_norm == "todos" else status_norm
+
+    entrega_raw = (request.args.get("entrega") or "").strip().lower()
+    entrega_norm = entrega_raw if entrega_raw in ("completa", "parcial") else "todos"
+    delivery_api = None if entrega_norm == "todos" else entrega_norm
+
+    date_arg_raw = (request.args.get("data") or "").strip()
+    on_date = _parse_tx_filter_date_arg(date_arg_raw)
+    filter_date_display = on_date or ""
+
+    per_page = _parse_int(request.args.get("per_page"), DEFAULT_ADMIN_MOVEMENTS_PER_PAGE)
+    if per_page not in ALLOWED_ADMIN_STOCK_PER_PAGE:
+        per_page = DEFAULT_ADMIN_MOVEMENTS_PER_PAGE
+    page = max(1, _parse_int(request.args.get("page"), 1))
+
+    total = count_transactions_for_seller(
+        seller_id,
+        order_search=pedido or None,
+        status=status_api,
+        on_date=on_date,
+        delivery=delivery_api,
+    )
+    total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
+    page = min(page, total_pages)
+    offset = (page - 1) * per_page
+
+    transactions = list_transactions_for_seller(
+        seller_id,
+        order_search=pedido or None,
+        status=status_api,
+        on_date=on_date,
+        delivery=delivery_api,
+        limit=per_page,
+        offset=offset,
+    )
+
+    showing_from = offset + 1 if total > 0 else 0
+    showing_to = min(offset + len(transactions), total) if total > 0 else 0
+
+    filters = {
+        "pedido": pedido,
+        "status": status_norm,
+        "entrega": entrega_norm,
+        "data": filter_date_display,
+        "per_page": per_page,
+    }
+    pagination = {
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "total_pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": page < total_pages,
+        "showing_from": showing_from,
+        "showing_to": showing_to,
+    }
+    return transactions, filters, pagination
+
+
 @app.route("/admin/vendedores/<int:seller_id>")
 @admin_required
 def admin_seller_detail(seller_id: int):
@@ -1659,7 +1705,7 @@ def admin_seller_detail(seller_id: int):
         flash("Vendedor não encontrado.", "error")
         return redirect(url_for("admin_sellers"))
     stats = get_stats(seller_id=seller_id)
-    transactions = list_transactions(limit=200, seller_id=seller_id)
+    transactions, filters, pagination = _admin_seller_transactions_view(seller_id)
     events_for_seller_form = list_events(include_archived=True)
     seller_primary_event_id = get_seller_admin_event_selection_id(seller_id)
     return render_template(
@@ -1667,6 +1713,9 @@ def admin_seller_detail(seller_id: int):
         seller=seller,
         stats=stats,
         transactions=transactions,
+        filters=filters,
+        pagination=pagination,
+        allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
         seller_form=None,
         seller_form_errors={},
         events_for_seller_form=events_for_seller_form,
@@ -1687,7 +1736,7 @@ def admin_seller_update(seller_id: int):
     if seller_form_errors:
         flash(_first_seller_form_error_message(seller_form_errors), "error")
         stats = get_stats(seller_id=seller_id)
-        transactions = list_transactions(limit=200, seller_id=seller_id)
+        transactions, filters, pagination = _admin_seller_transactions_view(seller_id)
         events_for_seller_form = list_events(include_archived=True)
         seller_primary_event_id = get_seller_admin_event_selection_id(seller_id)
         return render_template(
@@ -1695,6 +1744,9 @@ def admin_seller_update(seller_id: int):
             seller=seller,
             stats=stats,
             transactions=transactions,
+            filters=filters,
+            pagination=pagination,
+            allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
             seller_form=seller_form,
             seller_form_errors=seller_form_errors,
             events_for_seller_form=events_for_seller_form,
@@ -1732,7 +1784,7 @@ def admin_seller_update(seller_id: int):
         seller_form["email"] = ""
         flash(_first_seller_form_error_message(seller_form_errors), "error")
         stats = get_stats(seller_id=seller_id)
-        transactions = list_transactions(limit=200, seller_id=seller_id)
+        transactions, filters, pagination = _admin_seller_transactions_view(seller_id)
         events_for_seller_form = list_events(include_archived=True)
         seller_primary_event_id = get_seller_admin_event_selection_id(seller_id)
         return render_template(
@@ -1740,6 +1792,9 @@ def admin_seller_update(seller_id: int):
             seller=seller,
             stats=stats,
             transactions=transactions,
+            filters=filters,
+            pagination=pagination,
+            allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
             seller_form=seller_form,
             seller_form_errors=seller_form_errors,
             events_for_seller_form=events_for_seller_form,
@@ -1757,6 +1812,75 @@ def admin_seller_update(seller_id: int):
     else:
         flash(f"Dados de {seller['name']} atualizados.", "success")
     return redirect(url_for("admin_seller_detail", seller_id=seller_id))
+
+
+@app.route(
+    "/admin/vendedores/<int:seller_id>/transacoes/<int:tx_id>/itens/<int:item_id>/entregar",
+    methods=["POST"],
+)
+@admin_required
+def admin_seller_confirm_item_delivery(seller_id: int, tx_id: int, item_id: int):
+    """Confirma a retirada de um item pendente (escopo do vendedor no admin)."""
+    seller = get_seller(seller_id)
+    if seller is None:
+        flash("Vendedor não encontrado.", "error")
+        return redirect(url_for("admin_sellers"))
+    try:
+        result = confirm_item_delivery(
+            tx_id,
+            item_id,
+            seller_id=seller_id,
+            created_by=_current_admin_user(),
+        )
+        msg = (
+            f"Entrega confirmada: {result['delivered_now']} un. de "
+            f"'{result['product_name']}'."
+        )
+        if result["still_pending"] > 0:
+            msg += f" Ainda pendente: {result['still_pending']} un."
+        flash(msg, "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(
+        request.referrer or url_for("admin_seller_detail", seller_id=seller_id)
+    )
+
+
+@app.route(
+    "/admin/vendedores/<int:seller_id>/transacoes/<int:tx_id>/entregar",
+    methods=["POST"],
+)
+@admin_required
+def admin_seller_confirm_items_delivery(seller_id: int, tx_id: int):
+    """Confirma a retirada de vários itens pendentes (escopo do vendedor no admin)."""
+    seller = get_seller(seller_id)
+    if seller is None:
+        flash("Vendedor não encontrado.", "error")
+        return redirect(url_for("admin_sellers"))
+    item_ids = request.form.getlist("item_ids")
+    try:
+        result = confirm_items_delivery(
+            tx_id,
+            item_ids,
+            seller_id=seller_id,
+            created_by=_current_admin_user(),
+        )
+        msg = (
+            f"Entrega confirmada: {result['items_count']} produto(s), "
+            f"{result['units_delivered']} un."
+        )
+        if result.get("errors"):
+            msg += " Alguns itens não puderam ser entregues (verifique o estoque)."
+            flash(msg, "warning")
+            for err in result["errors"][:5]:
+                flash(err, "error")
+        else:
+            flash(msg, "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(
+        request.referrer or url_for("admin_seller_detail", seller_id=seller_id)
+    )
 
 
 @app.route(
@@ -3333,6 +3457,32 @@ def admin_event_stock_min(event_id: int, product_id: int):
         min_val,
     )
     message = f"Estoque mínimo atualizado para {max(0, min_val)} un."
+    if _wants_json_response():
+        return _json_event_stock_success(message, event_id, product_id)
+    flash(message, "success")
+    return redirect(request.referrer or fallback)
+
+
+@app.route(
+    "/admin/eventos/<int:event_id>/produtos/<int:product_id>/limite-entrega-pendente",
+    methods=["POST"],
+)
+@admin_required
+def admin_event_stock_backorder_limit(event_id: int, product_id: int):
+    if _event_or_404(event_id) is None:
+        return redirect(url_for("admin_events"))
+    fallback = url_for("admin_event_stock_product", event_id=event_id, product_id=product_id)
+    action = (request.form.get("backorder_action") or "set").strip().lower()
+    if action == "unlimited":
+        limit_val = -1
+        message = "Limite de entregas pendentes removido (livre)."
+    else:
+        limit_val = max(0, _parse_int(request.form.get("backorder_limit"), 0))
+        if limit_val == 0:
+            message = "Entregas pendentes bloqueadas para este produto neste evento."
+        else:
+            message = f"Limite de entregas pendentes atualizado para {limit_val} un."
+    update_event_product_backorder_limit(event_id, product_id, limit_val)
     if _wants_json_response():
         return _json_event_stock_success(message, event_id, product_id)
     flash(message, "success")

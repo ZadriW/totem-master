@@ -1,7 +1,7 @@
 (() => {
     'use strict';
 
-    const POLL_MS = 2000;
+    const POLL_MS = 5000;
     const PROMO_ICON_FALLBACK_TITLE = 'Produto com promoção ativa neste evento';
 
     function escapeHtml(value) {
@@ -261,8 +261,10 @@
         const status = root.querySelector('[data-product-status]');
         const stock = root.querySelector('[data-product-stock]');
         const minStock = root.querySelector('[data-product-min-stock]');
+        const backorderLimit = root.querySelector('[data-product-backorder-limit]');
         const stockValue = root.querySelector('[data-product-stock-value]');
         const minInput = root.querySelector('input[name="min_stock"]');
+        const backorderLimitInput = root.querySelector('input[name="backorder_limit"]');
         const exitInput = root.querySelector('input[name="quantity"][max]');
         const exitButton = root.querySelector('.admin-card--saida button[type="submit"]');
         const adjustInput = root.querySelector('input[name="new_stock"]');
@@ -274,9 +276,23 @@
         if (status) status.innerHTML = badge(product.status);
         if (stock) stock.innerHTML = `<strong>${escapeHtml(product.estoque)}</strong> un.`;
         if (minStock) minStock.textContent = `${product.estoque_minimo} un.`;
+        if (backorderLimit && Object.prototype.hasOwnProperty.call(product, 'backorder_limit')) {
+            const limitVal = Number(product.backorder_limit);
+            if (limitVal === 0) {
+                backorderLimit.textContent = 'Bloqueado (0 un.)';
+            } else if (Number.isFinite(limitVal) && limitVal > 0) {
+                backorderLimit.textContent = `${limitVal} un.`;
+            } else {
+                backorderLimit.textContent = 'Sem limite';
+            }
+        }
         if (stockValue) stockValue.textContent = product.stock_value_display;
         if (!skipInputSync && minInput) {
             minInput.value = product.estoque_minimo;
+        }
+        if (!skipInputSync && backorderLimitInput) {
+            const limitVal = Number(product.backorder_limit);
+            backorderLimitInput.value = Number.isFinite(limitVal) && limitVal > 0 ? limitVal : 0;
         }
         /* Inventário: não sobrescrever no poll (evita apagar rascunho); só alinhar ao servidor após POST com forceInputSync. */
         if (forceInputSync && adjustInput) {
@@ -328,14 +344,17 @@
             form.addEventListener('submit', async event => {
                 if (event.defaultPrevented) return;
                 event.preventDefault();
-                const submit = form.querySelector('button[type="submit"]');
-                const originalDisabled = submit ? submit.disabled : false;
+                const submitButtons = Array.from(form.querySelectorAll('button[type="submit"]'));
+                const submitter = event.submitter || submitButtons[0] || null;
+                const originalDisabled = submitButtons.map(btn => btn.disabled);
                 let succeeded = false;
-                if (submit) submit.disabled = true;
+                submitButtons.forEach(btn => { btn.disabled = true; });
                 try {
+                    const formData = new FormData(form);
+                    if (submitter && submitter.name) formData.set(submitter.name, submitter.value);
                     const response = await fetch(form.action, {
                         method: 'POST',
-                        body: new FormData(form),
+                        body: formData,
                         headers: mergeHeadersForMethod('POST', {
                             Accept: 'application/json',
                             'X-Requested-With': 'fetch',
@@ -365,8 +384,8 @@
                         'error',
                     );
                 } finally {
-                    if (submit && (!succeeded || !form.closest('.admin-card--saida'))) {
-                        submit.disabled = originalDisabled;
+                    if (!succeeded || !form.closest('.admin-card--saida')) {
+                        submitButtons.forEach((btn, i) => { btn.disabled = originalDisabled[i]; });
                     }
                 }
             });

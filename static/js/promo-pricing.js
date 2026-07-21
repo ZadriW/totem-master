@@ -165,7 +165,7 @@
      * @param {function} formatBRL
      * @param {string} articleClass - ex. 'cart-item' ou 'payment-item'
      */
-    function renderLineItemHtml(item, formatBRL, articleClass) {
+    function renderLineItemHtml(item, formatBRL, articleClass, options = {}) {
         const qty = Number(item.quantidade) || 0;
         const unit = formatBRL(item.preco);
         const subtotal = formatBRL(item.subtotal != null ? item.subtotal : item.preco * qty);
@@ -182,6 +182,18 @@
             : '';
         const backorderIcon = backorderIndicatorHtml(item, articleClass);
         const backorderClass = backorderIcon ? ` ${articleClass}--backorder` : '';
+        const removable = !!options.removable;
+        const removeBtn = removable
+            ? `<button type="button" class="${articleClass}__remove" data-payment-action="remove" aria-label="Remover ${escapeHtml(item.nome)}">
+                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
+               </button>`
+            : '';
+        const totalCol = removable
+            ? `<div class="${articleClass}__side">
+                    <div class="${articleClass}__total">${subtotal}</div>
+                    ${removeBtn}
+               </div>`
+            : `<div class="${articleClass}__total">${subtotal}</div>`;
 
         return `
             <article class="${articleClass}${backorderClass}" data-id="${item.id}">
@@ -198,7 +210,7 @@
                     <p class="${articleClass}__meta">${qty} × ${unitHtml}</p>
                     ${promoHint || badge}
                 </div>
-                <div class="${articleClass}__total">${subtotal}</div>
+                ${totalCol}
             </article>
         `;
     }

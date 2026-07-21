@@ -6168,11 +6168,23 @@ html.admin-theme--dark .admin-stock__delivery-count {
     position: relative;
 }
 
-.product-card__promo-badge {
+/* Linha de badges sobre a imagem: promoção à esquerda, entrega pendente à
+   direita. Se o badge de promoção crescer o suficiente para ocupar a largura
+   toda, a margem automática do badge de entrega o empurra para a linha
+   seguinte (abaixo do badge de promoção), mantendo-se sempre à direita. */
+.product-card__badges-row {
     position: absolute;
     top: 10px;
     left: 10px;
+    right: 10px;
     z-index: 2;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    pointer-events: none;
+}
+
+.product-card__promo-badge {
     display: inline-flex;
     align-items: center;
     gap: 5px;
@@ -6215,6 +6227,50 @@ html.admin-theme--dark .admin-stock__delivery-count {
     border: 1px solid rgba(124, 58, 237, 0.18);
     padding: 2px 8px;
     border-radius: 99px;
+}
+
+.product-card__delivery-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #a5620a;
+    pointer-events: auto;
+}
+
+.product-card__delivery-badge .admin-tx__delivery-badge {
+    background: rgba(165, 98, 10, 0.18);
+    color: #a5620a;
+    border: 1px solid rgba(165, 98, 10, 0.38);
+}
+
+.product-card__delivery-badge .admin-stock__delivery-count {
+    color: #a5620a;
+}
+
+.product-card__delivery-badge--overlay {
+    margin-left: auto;
+    background: rgba(165, 98, 10, 0.08);
+    padding: 3px 9px 3px 3px;
+    border-radius: 99px;
+    border: 1px solid rgba(165, 98, 10, 0.32);
+}
+
+.product-card__delivery-badge--overlay .admin-tx__delivery-badge {
+    padding: 3px 5px;
+    background: rgba(165, 98, 10, 0.22);
+    border-color: rgba(165, 98, 10, 0.45);
+}
+
+html.admin-theme--dark .product-card__delivery-badge,
+html.admin-theme--dark .product-card__delivery-badge .admin-tx__delivery-badge,
+html.admin-theme--dark .product-card__delivery-badge .admin-stock__delivery-count {
+    color: #a5620a;
+}
+
+html.admin-theme--dark .product-card__delivery-badge--overlay {
+    background: rgba(165, 98, 10, 0.14);
+    border-color: rgba(165, 98, 10, 0.42);
+    box-shadow: 0 2px 10px rgba(165, 98, 10, 0.28);
 }
 
 .admin-event-badge-color-input {
@@ -6816,20 +6872,6 @@ html.admin-theme--dark .admin-main--catalog-embed .cart-item__counter {
 
 html.admin-theme--dark .admin-main--catalog-embed .cart-drawer__checkout {
     color: #03051a;
-}
-
-html.admin-theme--dark .admin-main--catalog-embed .category-dropdown__panel {
-    box-shadow: var(--shadow-lg);
-}
-
-html.admin-theme--dark .admin-main--catalog-embed .category-letter-trigger.is-active,
-html.admin-theme--dark .admin-main--catalog-embed .category-chip.is-active {
-    color: #03051a;
-}
-
-html.admin-theme--dark .admin-main--catalog-embed .categories-clear:hover {
-    background: var(--admin-tint);
-    box-shadow: none;
 }
 
 html.admin-theme--dark .admin-main--catalog-embed .product-card__counter-btn:hover {
