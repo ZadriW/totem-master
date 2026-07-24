@@ -83,12 +83,8 @@
 
         {% else %}
         {# ── Nav global do painel admin ── #}
-        <nav class="admin-nav admin-nav--admin" aria-label="Seções do painel" data-admin-nav-slide>
-            <button type="button" class="admin-nav__slide-btn admin-nav__slide-btn--prev" data-admin-nav-prev aria-label="Seções anteriores" hidden>
-                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
-            </button>
-            <div class="admin-nav__viewport" data-admin-nav-viewport>
-                <div class="admin-nav__track" data-admin-nav-track>
+        <nav class="admin-nav admin-nav--admin" aria-label="Seções do painel">
+            <div class="admin-nav__grid">
             <a class="admin-nav__item {% if active_section == 'produtos' %}is-active{% endif %}"
                href="{{ url_for('admin_products') }}">
                 <i class="fa-solid fa-tags" aria-hidden="true"></i>
@@ -109,12 +105,7 @@
                 <i class="fa-solid fa-chart-pie" aria-hidden="true"></i>
                 Financeiro
             </a>
-                </div>
             </div>
-            <button type="button" class="admin-nav__slide-btn admin-nav__slide-btn--next" data-admin-nav-next aria-label="Próximas seções" hidden>
-                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-            </button>
-            <div class="admin-nav__pager" data-admin-nav-pager hidden aria-hidden="true"></div>
         </nav>
         {% endif %}
 
@@ -270,7 +261,6 @@
 <script src="{{ url_for('static', filename='js/totem-api-errors.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin-theme.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
-<script src="{{ url_for('static', filename='js/admin-nav-slide.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin-image-lightbox.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin-reset.js') }}"></script>
 {% block admin_scripts %}{% endblock %}

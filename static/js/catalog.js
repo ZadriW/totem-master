@@ -145,7 +145,7 @@
         const pendingN = Math.max(0, Math.floor(Number(product.pending_delivery_units)) || 0);
         if (pendingN <= 0) return '';
         return `
-            <div class="product-card__delivery-badge product-card__delivery-badge--overlay" title="${pendingN} un. aguardando retirada">
+            <div class="product-card__delivery-badge" title="${pendingN} un. aguardando retirada">
                 <span class="admin-badge admin-badge--warn admin-tx__delivery-badge" aria-label="Retirada pendente">
                     <i class="fa-solid fa-box-open" aria-hidden="true"></i>
                 </span>
@@ -154,8 +154,12 @@
         `;
     }
 
-    function renderBadgeRootMarkup(product) {
-        return renderPromoBadgeMarkup(product) + renderDeliveryBadgeMarkup(product);
+    function syncCatalogBadges(card, product) {
+        const promoRoot = card.querySelector('[data-promo-badge-root]');
+        if (promoRoot) promoRoot.innerHTML = renderPromoBadgeMarkup(product);
+
+        const deliveryRoot = card.querySelector('[data-delivery-badge-root]');
+        if (deliveryRoot) deliveryRoot.innerHTML = renderDeliveryBadgeMarkup(product);
     }
 
     function renderPricingBlockMarkup(product) {
@@ -191,8 +195,7 @@
 
         card.classList.toggle('product-card--promo', !!p.em_promocao);
 
-        const badgeRoot = card.querySelector('[data-promo-badge-root]');
-        if (badgeRoot) badgeRoot.innerHTML = renderBadgeRootMarkup(p);
+        syncCatalogBadges(card, p);
 
         const priceRoot = card.querySelector('[data-catalog-pricing]');
         if (priceRoot) priceRoot.innerHTML = renderPricingBlockMarkup(p);
@@ -256,8 +259,7 @@
                 if (Object.prototype.hasOwnProperty.call(row, 'pending_delivery_units')) {
                     const p = productsById.get(id);
                     if (p) p.pending_delivery_units = row.pending_delivery_units;
-                    const badgeRoot = card.querySelector('[data-promo-badge-root]');
-                    if (badgeRoot && p) badgeRoot.innerHTML = renderBadgeRootMarkup(p);
+                    if (p) syncCatalogBadges(card, p);
                 }
             });
         } catch (err) {

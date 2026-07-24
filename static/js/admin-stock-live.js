@@ -259,6 +259,7 @@
         const skipInputSync = !forceInputSync && isEditingLiveStockForm(root);
 
         const status = root.querySelector('[data-product-status]');
+        const promoNameEl = root.querySelector('[data-product-promo-name]');
         const stock = root.querySelector('[data-product-stock]');
         const minStock = root.querySelector('[data-product-min-stock]');
         const backorderLimit = root.querySelector('[data-product-backorder-limit]');
@@ -274,6 +275,16 @@
             root.parentElement.querySelector('[data-product-movements]');
 
         if (status) status.innerHTML = badge(product.status);
+        if (promoNameEl && Object.prototype.hasOwnProperty.call(product, 'em_promocao')) {
+            const promoNome = String(product.promo_nome ?? '').trim();
+            if (product.em_promocao && promoNome) {
+                promoNameEl.textContent = promoNome;
+                promoNameEl.removeAttribute('hidden');
+            } else {
+                promoNameEl.textContent = '';
+                promoNameEl.setAttribute('hidden', '');
+            }
+        }
         if (stock) stock.innerHTML = `<strong>${escapeHtml(product.estoque)}</strong> un.`;
         if (minStock) minStock.textContent = `${product.estoque_minimo} un.`;
         if (backorderLimit && Object.prototype.hasOwnProperty.call(product, 'backorder_limit')) {

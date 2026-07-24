@@ -223,9 +223,29 @@ html.admin-theme--dark .topbar__brand .admin-brand-logo--dark {
 }
 
 .product-card__image {
+    position: relative;
     aspect-ratio: 1 / 1;
     background: var(--color-bg);
     overflow: hidden;
+}
+
+.product-card__promo-badge-slot,
+.product-card__delivery-badge-slot {
+    position: absolute;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.product-card__promo-badge-slot {
+    top: 8px;
+    left: 8px;
+    max-width: calc(100% - 16px);
+}
+
+.product-card__delivery-badge-slot {
+    right: 8px;
+    bottom: 8px;
+    pointer-events: auto;
 }
 
 .product-card__image img {
@@ -472,6 +492,27 @@ html.admin-theme--dark .topbar__brand .admin-brand-logo--dark {
     }
     .product-card__body {
         padding: 12px 14px 8px;
+    }
+    .product-card__promo-badge-slot {
+        top: 6px;
+        left: 6px;
+        max-width: calc(100% - 12px);
+    }
+    .product-card__delivery-badge-slot {
+        right: 6px;
+        bottom: 6px;
+    }
+    .product-card__promo-badge {
+        font-size: 10px;
+        padding: 3px 8px;
+    }
+    .product-card__delivery-badge {
+        padding: 2px 7px 2px 2px;
+        gap: 4px;
+    }
+    .product-card__delivery-badge .admin-stock__delivery-count {
+        font-size: 11px;
+        font-weight: 700;
     }
     .product-card__actions {
         margin: 0 14px 14px;

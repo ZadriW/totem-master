@@ -16,7 +16,12 @@
             <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
             Voltar ao estoque
         </a>
-        <h1 class="admin-section__title">{{ product.nome }}</h1>
+        <h1 class="admin-section__title">
+            {{ product.nome }}
+            {% if seller_event %}
+            {% include 'partials/product_promo_name_badge.html' %}
+            {% endif %}
+        </h1>
         <p class="admin-section__subtitle">
             <span class="admin-product__sku">SKU <strong>{{ product.sku }}</strong></span>
             &middot; #{{ product.id }}

@@ -1217,12 +1217,13 @@ def seller_stock_product(product_id: int):
         if product is None:
             flash("Produto não encontrado neste evento.", "error")
             return redirect(url_for("seller_stock"))
+        product = _enrich_product_promo_for_event(product, int(seller_ev["id"]))
     else:
         product = get_product(product_id)
         if product is None:
             flash("Produto não encontrado.", "error")
             return redirect(url_for("seller_stock"))
-    
+
     pedido = (request.args.get("pedido") or "").strip()
     per_page = EVENT_PRODUCT_MOVEMENTS_PER_PAGE
     page = max(1, _parse_int(request.args.get("page"), 1))
@@ -2436,6 +2437,23 @@ def _json_products_library_success(message: str, product_id: int, status_code: i
     return jsonify(payload), status_code
 
 
+def _enrich_product_promo_for_event(product: dict, event_id: int) -> dict:
+    """Acrescenta ``em_promocao`` / ``promo_nome`` ao produto no contexto do evento."""
+    promos = get_active_promotions_for_event(event_id)
+    promo_map = build_promo_display_map(promos)
+    return enrich_product_with_promo(dict(product), promo_map)
+
+
+def _attach_promo_name_to_product(product: dict, event_id: int) -> dict:
+    """Anexa campos de promoção ao produto sem alterar o preço de lista exibido."""
+    enriched = _enrich_product_promo_for_event(product, event_id)
+    out = dict(product)
+    out["em_promocao"] = bool(enriched.get("em_promocao"))
+    out["promo_nome"] = enriched.get("promo_nome") or ""
+    out["promo_badge"] = enriched.get("promo_badge") or ""
+    return out
+
+
 def _event_stock_product_payload(event_id: int, product_id: int, *, limit: int = 100) -> dict:
     product = get_product_in_event(event_id, product_id)
     if product is None:
@@ -2445,6 +2463,7 @@ def _event_stock_product_payload(event_id: int, product_id: int, *, limit: int =
     ).get(int(product_id), 0)
     product = dict(product)
     product["pending_delivery_units"] = int(pending_units)
+    product = _attach_promo_name_to_product(product, event_id)
     movements = list_event_product_ledger(
         event_id, product_id, limit=limit, offset=0,
     )
@@ -2990,6 +3009,7 @@ def admin_event_stock_product(event_id: int, product_id: int):
     ).get(int(product_id), 0)
     product = dict(product)
     product["pending_delivery_units"] = int(pending_units)
+    product = _attach_promo_name_to_product(product, event_id)
 
     pedido = (request.args.get("pedido") or "").strip()
     tipo_raw = (request.args.get("tipo") or "").strip().lower()

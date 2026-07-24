@@ -1907,25 +1907,18 @@ html.admin-theme--dark .admin-tx__delivery-check-all {
     font-size: 13px;
 }
 
+.admin-nav__grid {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
 .admin-nav__label {
     min-width: 0;
-}
-
-.admin-nav__viewport,
-.admin-nav__track {
-    min-width: 0;
-}
-
-.admin-nav__slide-btn,
-.admin-nav__pager {
-    display: none;
-}
-
-@media (min-width: 768px) {
-    .admin-nav__viewport,
-    .admin-nav__track {
-        display: contents;
-    }
 }
 
 /* ==========================================================================
@@ -2582,6 +2575,11 @@ html.admin-theme--dark .admin-stock__delivery-count {
 }
 
 .admin-section__title .admin-stock__delivery-wrap {
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+.admin-section__title .product-card__promo-name {
     margin-left: 8px;
     vertical-align: middle;
 }
@@ -3403,7 +3401,7 @@ html.admin-theme--dark .admin-stock__delivery-count {
         border-top: 1px solid var(--color-border);
     }
 
-    /* Mobile estreito (≤767px): nav global em slide; nav do evento em grade 2×2 */
+    /* Mobile estreito (≤767px): nav global em grade 2×2; nav do evento com badge + grade 2×2 */
     @media (max-width: 767px) {
         .admin-topbar {
             justify-content: space-between;
@@ -3472,133 +3470,46 @@ html.admin-theme--dark .admin-stock__delivery-count {
         }
 
         .admin-shell {
-            --admin-topbar-height: 154px;
+            --admin-topbar-height: 176px;
         }
 
         .admin-nav {
-            display: grid;
-            grid-template-columns: 34px minmax(0, 1fr) 34px;
-            grid-template-rows: auto auto;
-            align-items: center;
-            gap: 6px 4px;
+            display: block;
             padding: 6px 0 4px;
         }
 
-        .admin-nav__slide-btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 34px;
-            height: 40px;
-            padding: 0;
-            border: 1.5px solid var(--color-border);
-            border-radius: var(--radius-sm);
-            background: var(--color-bg);
-            color: var(--color-text-muted);
-            cursor: pointer;
-            flex-shrink: 0;
-            transition: border-color var(--transition), color var(--transition), background var(--transition);
-        }
-
-        .admin-nav__slide-btn--prev {
-            grid-column: 1;
-            grid-row: 1;
-        }
-
-        .admin-nav__slide-btn--next {
-            grid-column: 3;
-            grid-row: 1;
-        }
-
-        .admin-nav__slide-btn:not(:disabled):hover {
-            border-color: var(--color-primary);
-            color: var(--color-primary);
-            background: rgba(14, 22, 122, 0.06);
-        }
-
-        .admin-nav__slide-btn:disabled {
-            opacity: 0.35;
-            cursor: default;
-        }
-
-        .admin-nav__slide-btn:focus-visible {
-            outline: 2px solid var(--color-primary);
-            outline-offset: 2px;
-        }
-
-        .admin-nav__slide-btn i {
-            font-size: 12px;
-        }
-
-        .admin-nav__viewport {
-            display: block;
-            grid-column: 2;
-            grid-row: 1;
-            overflow: hidden;
-            min-width: 0;
-        }
-
-        .admin-nav__track {
-            display: flex;
-            width: max-content;
-            min-width: 100%;
-            transition: transform 0.28s ease;
-            will-change: transform;
-        }
-
-        .admin-nav__track .admin-nav__item {
-            flex: 0 0 auto;
-            box-sizing: border-box;
-            min-height: 46px;
-            padding: 10px 8px;
-            font-size: 13px;
+        .admin-nav__grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 6px;
+            width: 100%;
         }
 
-        .admin-nav__track .admin-nav__item i {
-            font-size: 14px;
-        }
-
-        .admin-nav--admin .admin-nav__track .admin-nav__item {
-            min-height: 42px;
+        .admin-nav__grid .admin-nav__item {
+            min-height: 44px;
             padding: 8px 6px;
             font-size: 12px;
             gap: 5px;
+            border-radius: var(--radius-sm);
+            justify-content: center;
         }
 
-        .admin-nav--admin .admin-nav__track .admin-nav__item i {
+        .admin-nav__grid .admin-nav__item i {
+            font-size: 13px;
+        }
+
+        /* Ímpar sozinho na última linha (ex.: 3º item do vendedor) ocupa a linha inteira */
+        .admin-nav__grid .admin-nav__item:nth-child(odd):last-child {
+            grid-column: 1 / -1;
+        }
+
+        .admin-nav--admin .admin-nav__grid .admin-nav__item {
+            min-height: 42px;
             font-size: 12px;
         }
 
-        .admin-nav__pager {
-            display: flex;
-            grid-column: 1 / -1;
-            grid-row: 2;
-            justify-content: center;
-            align-items: center;
-            gap: 6px;
-            min-height: 10px;
-        }
-
-        .admin-nav__pager-dot {
-            width: 6px;
-            height: 6px;
-            padding: 0;
-            border: none;
-            border-radius: 999px;
-            background: var(--color-border);
-            cursor: pointer;
-            transition: width var(--transition), background var(--transition);
-        }
-
-        .admin-nav__pager-dot.is-active {
-            width: 18px;
-            background: var(--color-primary);
-        }
-
-        .admin-nav__pager-dot:focus-visible {
-            outline: 2px solid var(--color-primary);
-            outline-offset: 2px;
+        .admin-nav--admin .admin-nav__grid .admin-nav__item i {
+            font-size: 12px;
         }
 
         /* Nav do evento: badge fixo à esquerda + 4 seções em grade 2×2 */
@@ -4364,6 +4275,94 @@ html.admin-theme--dark .admin-stock__delivery-count {
         color: var(--color-text-muted);
     }
 
+    /* Vendedor — vendas do produto (/vendedor/estoque/<id>): mesma distribuição da
+       página do produto do Admin (delta/saldo em pílulas, motivo/ref. abaixo), mas
+       com 4-5 colunas (sem "Tipo"), então sobrescreve o grid genérico acima. */
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) {
+        grid-template-columns: minmax(0, 1fr) auto;
+        grid-template-areas:
+            "date date"
+            "delta balance"
+            "reason reason";
+    }
+    .admin-table--seller-product-sales-events .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) {
+        grid-template-areas:
+            "date date"
+            "delta balance"
+            "reason reason"
+            "event event";
+    }
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(1) {
+        grid-area: date;
+        justify-self: start;
+    }
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(2) {
+        grid-area: delta;
+        justify-self: start;
+        align-self: auto;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(3) {
+        grid-area: balance;
+        justify-self: end;
+        padding: 8px 10px;
+        border-radius: 14px;
+        background: rgba(14, 22, 122, 0.08);
+        text-align: center;
+    }
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(4) {
+        grid-area: reason;
+        white-space: normal;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(5) {
+        grid-area: event;
+    }
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(2)::before {
+        content: "Quantidade";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(3)::before {
+        content: "Saldo após";
+        display: block;
+        margin-bottom: 2px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(4)::before {
+        content: "Ref. / Pedido";
+        display: block;
+        margin-bottom: 4px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+    .admin-table--seller-product-sales.admin-table--seller-product-sales-events .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(5)::before {
+        content: "Evento";
+        display: block;
+        margin-bottom: 4px;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--color-text-muted);
+    }
+
     /* Biblioteca — histórico do produto com coluna Evento (7 colunas) */
     .admin-product__movements-table .admin-mov__wrapper .admin-mov__row--with-event {
         grid-template-areas:
@@ -4691,17 +4690,22 @@ html.admin-theme--dark .admin-stock__delivery-count {
         order: 3;
         flex: 0 0 100%;
         width: 100%;
-        display: flex;
-        flex-wrap: nowrap;
-        justify-content: space-between;
-        align-items: stretch;
-        gap: 6px;
+        display: block;
         min-height: 48px;
         padding: 6px 0 2px;
         border-top: 1px solid var(--color-border);
     }
 
-    .admin-nav__item {
+    .admin-nav__grid {
+        display: flex;
+        flex-wrap: nowrap;
+        justify-content: space-between;
+        align-items: stretch;
+        gap: 6px;
+        width: 100%;
+    }
+
+    .admin-nav__grid .admin-nav__item {
         flex: 1 1 0;
         min-width: 0;
         min-height: 46px;
@@ -4711,23 +4715,26 @@ html.admin-theme--dark .admin-stock__delivery-count {
         gap: 6px;
     }
 
-    .admin-nav__item i {
+    .admin-nav__grid .admin-nav__item i {
         font-size: 14px;
     }
 
     .admin-nav--admin {
         min-height: 42px;
+    }
+
+    .admin-nav--admin .admin-nav__grid {
         gap: 4px;
     }
 
-    .admin-nav--admin .admin-nav__item {
+    .admin-nav--admin .admin-nav__grid .admin-nav__item {
         min-height: 40px;
         padding: 8px 5px;
         font-size: 12px;
         gap: 5px;
     }
 
-    .admin-nav--admin .admin-nav__item i {
+    .admin-nav--admin .admin-nav__grid .admin-nav__item i {
         font-size: 12px;
     }
 
@@ -4747,6 +4754,7 @@ html.admin-theme--dark .admin-stock__delivery-count {
     .admin-topbar {
         padding: 12px 16px;
     }
+    
     .admin-main {
         padding: 24px 16px 44px;
     }
@@ -4833,11 +4841,14 @@ html.admin-theme--dark .admin-stock__delivery-count {
         white-space: normal;
     }
 
-    /* Fechado (mobile): faixa estreita — pedido | badge; data em largura total; vendedor abaixo (só tx-wide) */
-    .admin-table--tx-wide,
-    .admin-table--with-payment:not(.admin-table--tx-wide) {
-        max-width: min(100%, 400px);
+    /* Celular (≤767px): faixa estreita nas transações com pagamento; tablets/iPads (≥768px) mantêm largura total */
+    @media (max-width: 767px) {
+        .admin-table--with-payment:not(.admin-table--tx-wide) {
+            max-width: min(100%, 400px);
+        }
     }
+
+    /* Fechado (mobile): faixa estreita — pedido | badge; data em largura total; vendedor abaixo (só tx-wide) */
     .admin-table--tx-wide .admin-tx__row:not(.is-open),
     .admin-table--with-payment:not(.admin-table--tx-wide) .admin-tx__row:not(.is-open) {
         display: grid;
@@ -6168,22 +6179,6 @@ html.admin-theme--dark .admin-stock__delivery-count {
     position: relative;
 }
 
-/* Linha de badges sobre a imagem: promoção à esquerda, entrega pendente à
-   direita. Se o badge de promoção crescer o suficiente para ocupar a largura
-   toda, a margem automática do badge de entrega o empurra para a linha
-   seguinte (abaixo do badge de promoção), mantendo-se sempre à direita. */
-.product-card__badges-row {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    right: 10px;
-    z-index: 2;
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    pointer-events: none;
-}
-
 .product-card__promo-badge {
     display: inline-flex;
     align-items: center;
@@ -6235,30 +6230,21 @@ html.admin-theme--dark .admin-stock__delivery-count {
     gap: 5px;
     color: #a5620a;
     pointer-events: auto;
-}
-
-.product-card__delivery-badge .admin-tx__delivery-badge {
-    background: rgba(165, 98, 10, 0.18);
-    color: #a5620a;
-    border: 1px solid rgba(165, 98, 10, 0.38);
-}
-
-.product-card__delivery-badge .admin-stock__delivery-count {
-    color: #a5620a;
-}
-
-.product-card__delivery-badge--overlay {
-    margin-left: auto;
     background: rgba(165, 98, 10, 0.08);
     padding: 3px 9px 3px 3px;
     border-radius: 99px;
     border: 1px solid rgba(165, 98, 10, 0.32);
 }
 
-.product-card__delivery-badge--overlay .admin-tx__delivery-badge {
+.product-card__delivery-badge .admin-tx__delivery-badge {
     padding: 3px 5px;
     background: rgba(165, 98, 10, 0.22);
-    border-color: rgba(165, 98, 10, 0.45);
+    color: #a5620a;
+    border: 1px solid rgba(165, 98, 10, 0.45);
+}
+
+.product-card__delivery-badge .admin-stock__delivery-count {
+    color: #a5620a;
 }
 
 html.admin-theme--dark .product-card__delivery-badge,
@@ -6267,7 +6253,7 @@ html.admin-theme--dark .product-card__delivery-badge .admin-stock__delivery-coun
     color: #a5620a;
 }
 
-html.admin-theme--dark .product-card__delivery-badge--overlay {
+html.admin-theme--dark .product-card__delivery-badge {
     background: rgba(165, 98, 10, 0.14);
     border-color: rgba(165, 98, 10, 0.42);
     box-shadow: 0 2px 10px rgba(165, 98, 10, 0.28);
@@ -6429,18 +6415,6 @@ html.admin-theme--dark .admin-nav__item:hover {
 html.admin-theme--dark .admin-nav__item.is-active {
     background: var(--admin-tint-strong);
     color: var(--color-primary-light);
-}
-
-html.admin-theme--dark .admin-nav__slide-btn {
-    background: var(--color-bg);
-    border-color: var(--color-border);
-    color: var(--color-text-muted);
-}
-
-html.admin-theme--dark .admin-nav__slide-btn:not(:disabled):hover {
-    background: var(--admin-tint);
-    border-color: var(--color-primary);
-    color: var(--color-primary);
 }
 
 html.admin-theme--dark .admin-event-nav__badge {

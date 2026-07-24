@@ -76,24 +76,26 @@
             data-estoque-min="{{ sm }}"
             data-preco="{{ product.preco }}"
         >
-            <div class="product-card__badges-row" data-promo-badge-root>
-                {% if em_promo and product.promo_badge %}
-                <div class="product-card__promo-badge">
-                    <i class="fa-solid fa-tag" aria-hidden="true"></i>
-                    {{ product.promo_badge }}
-                </div>
-                {% endif %}
-                {% if pending_n > 0 %}
-                <div class="product-card__delivery-badge product-card__delivery-badge--overlay"
-                     title="{{ pending_n }} un. aguardando retirada">
-                    <span class="admin-badge admin-badge--warn admin-tx__delivery-badge" aria-label="Retirada pendente">
-                        <i class="fa-solid fa-box-open" aria-hidden="true"></i>
-                    </span>
-                    <span class="admin-stock__delivery-count">{{ pending_n }}</span>
-                </div>
-                {% endif %}
-            </div>
             <div class="product-card__image">
+                <div class="product-card__promo-badge-slot" data-promo-badge-root>
+                    {% if em_promo and product.promo_badge %}
+                    <div class="product-card__promo-badge">
+                        <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                        {{ product.promo_badge }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="product-card__delivery-badge-slot" data-delivery-badge-root>
+                    {% if pending_n > 0 %}
+                    <div class="product-card__delivery-badge"
+                         title="{{ pending_n }} un. aguardando retirada">
+                        <span class="admin-badge admin-badge--warn admin-tx__delivery-badge" aria-label="Retirada pendente">
+                            <i class="fa-solid fa-box-open" aria-hidden="true"></i>
+                        </span>
+                        <span class="admin-stock__delivery-count">{{ pending_n }}</span>
+                    </div>
+                    {% endif %}
+                </div>
                 <img src="{{ product.imagem }}" alt="{{ product.nome }}" loading="lazy">
             </div>
             <div class="product-card__body">

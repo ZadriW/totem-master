@@ -26,12 +26,8 @@
             {{ seller_event_badge('admin-topbar__event-badge--in-brand') }}
         </a>
 
-        <nav class="admin-nav" aria-label="Seções do painel do vendedor" data-admin-nav-slide>
-            <button type="button" class="admin-nav__slide-btn admin-nav__slide-btn--prev" data-admin-nav-prev aria-label="Seções anteriores" hidden>
-                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
-            </button>
-            <div class="admin-nav__viewport" data-admin-nav-viewport>
-                <div class="admin-nav__track" data-admin-nav-track>
+        <nav class="admin-nav" aria-label="Seções do painel do vendedor">
+            <div class="admin-nav__grid">
             <a class="admin-nav__item {% if active_section == 'venda' %}is-active{% endif %}"
                href="{{ seller_venda_url|default('/vendedor/venda', true) }}">
                 <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
@@ -47,12 +43,7 @@
                 <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
                 <span class="admin-nav__label">Estoque</span>
             </a>
-                </div>
             </div>
-            <button type="button" class="admin-nav__slide-btn admin-nav__slide-btn--next" data-admin-nav-next aria-label="Próximas seções" hidden>
-                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
-            </button>
-            <div class="admin-nav__pager" data-admin-nav-pager hidden aria-hidden="true"></div>
         </nav>
 
         <div class="admin-topbar__meta">
@@ -138,7 +129,6 @@
 <script src="{{ url_for('static', filename='js/totem-api-errors.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin-theme.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
-<script src="{{ url_for('static', filename='js/admin-nav-slide.js') }}"></script>
 <script src="{{ url_for('static', filename='js/admin-image-lightbox.js') }}"></script>
 {% block seller_scripts %}{% endblock %}
 {% endblock %}

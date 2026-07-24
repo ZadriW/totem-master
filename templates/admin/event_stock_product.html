@@ -16,6 +16,7 @@
             </a>
             <h1 class="admin-section__title">
                 {{ product.nome }}
+                {% include 'partials/product_promo_name_badge.html' %}
                 {% set pending_n = product.pending_delivery_units or 0 %}
                 {% if pending_n > 0 %}
                 <span class="admin-stock__delivery-wrap"
