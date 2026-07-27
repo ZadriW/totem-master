@@ -5,6 +5,7 @@
 {% from "macros/admin_tx_status_badge.html" import admin_tx_status_badge %}
 {% from "macros/admin_tx_item_cells.html" import admin_tx_item_cells, admin_tx_discount_summary %}
 {% from "macros/admin_tx_delivery.html" import admin_tx_delivery_badge, admin_tx_delivery_section %}
+{% from "macros/admin_tx_handover.html" import admin_tx_handover_action %}
 
 {% block title %}{{ seller.name }} - Vendedores - Admin | Dental Odonto Master{% endblock %}
 
@@ -215,19 +216,19 @@
             <span class="admin-filter__label">Status</span>
             <select name="status" class="admin-filter__input">
                 <option value="todos" {% if filters.status == 'todos' %}selected{% endif %}>Todos</option>
-                <option value="confirmado" {% if filters.status == 'confirmado' %}selected{% endif %}>Confirmado</option>
+                <option value="confirmado" {% if filters.status == 'confirmado' %}selected{% endif %}>Pago</option>
                 <option value="pendente" {% if filters.status == 'pendente' %}selected{% endif %}>Pendente</option>
                 <option value="cancelado" {% if filters.status == 'cancelado' %}selected{% endif %}>Cancelado</option>
                 <option value="estornado" {% if filters.status == 'estornado' %}selected{% endif %}>Estornado</option>
+                <option value="entregue" {% if filters.status == 'entregue' %}selected{% endif %}>Entregue</option>
             </select>
         </label>
 
         <label class="admin-filter">
-            <span class="admin-filter__label">Entrega</span>
+            <span class="admin-filter__label">Entrega futura</span>
             <select name="entrega" class="admin-filter__input"
-                    title="Situação de entrega dos itens (pedidos confirmados)">
+                    title="Pedidos com itens aguardando retirada (estoque ainda não baixado)">
                 <option value="todos" {% if filters.entrega == 'todos' %}selected{% endif %}>Todas</option>
-                <option value="completa" {% if filters.entrega == 'completa' %}selected{% endif %}>Entrega completa</option>
                 <option value="parcial" {% if filters.entrega == 'parcial' %}selected{% endif %}>Retirada pendente</option>
             </select>
         </label>
@@ -322,6 +323,7 @@
                         <span class="admin-tx__status-stack">
                             {{ admin_tx_status_badge(tx) }}
                             {{ admin_tx_delivery_badge(tx) }}
+                            {{ admin_tx_handover_action(tx, 'admin_seller_confirm_transaction_handover', seller_id=seller.id) }}
                             {{ admin_tx_receipt_link(tx) }}
                         </span>
                     </span>

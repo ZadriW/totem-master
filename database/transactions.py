@@ -19,7 +19,9 @@ from .promotions import (
 from .sku_helpers import _build_sku_by_product_id, _default_sku_for_id, _product_sku_label
 from .stock import _apply_movement, _normalize_order_reference
 
-TX_FILTER_STATUSES = frozenset({"confirmado", "pendente", "cancelado", "estornado"})
+TX_FILTER_STATUSES = frozenset(
+    {"confirmado", "pendente", "cancelado", "estornado", "entregue"}
+)
 
 # ---------------------------------------------------------------------------
 # Transações (vendas)
@@ -1268,6 +1270,66 @@ def confirm_items_delivery(
     }
 
 
+def confirm_transaction_handover(
+    tx_id: int,
+    *,
+    seller_id: Optional[int] = None,
+    expected_event_id: Optional[int] = None,
+) -> Dict:
+    """Marca o pedido inteiro como entregue/retirado pelo cliente no balcão.
+
+    Não altera estoque nem ``delivery_status``/``quantity_delivered`` dos itens:
+    a confirmação de retirada pendente por item (com baixa de estoque) continua
+    funcionando de forma independente (ver ``confirm_item_delivery``). Este
+    controle apenas sinaliza, para acompanhamento, que o pedido foi entregue.
+
+    - ``seller_id``: quando informado, exige que a transação pertença ao vendedor.
+    - ``expected_event_id``: quando informado, exige que a transação pertença ao evento.
+    """
+    with get_conn() as conn:
+        tx = conn.execute(
+            "SELECT * FROM transactions WHERE id = ?", (int(tx_id),)
+        ).fetchone()
+        if tx is None:
+            raise ValueError("Transação não encontrada.")
+        tx_row = dict(tx)
+        if str(tx_row.get("status") or "").lower() != "confirmado":
+            raise ValueError(
+                "Somente pedidos pagos (confirmados) podem ser marcados como entregues."
+            )
+        if seller_id is not None and int(tx_row.get("seller_id") or 0) != int(seller_id):
+            raise ValueError("Você não pode alterar esta transação.")
+
+        event_id_raw = tx_row.get("event_id")
+        event_id: Optional[int] = int(event_id_raw) if event_id_raw is not None else None
+        if expected_event_id is not None and (
+            event_id is None or int(event_id) != int(expected_event_id)
+        ):
+            raise ValueError("Esta transação não pertence a este evento.")
+
+        if str(tx_row.get("handover_status") or "").lower() == "entregue":
+            return {
+                "id": int(tx_id),
+                "handover_status": "entregue",
+                "handover_confirmed_at": tx_row.get("handover_confirmed_at"),
+                "already_confirmed": True,
+            }
+
+        now = _now_iso()
+        conn.execute(
+            "UPDATE transactions "
+            "SET handover_status = 'entregue', handover_confirmed_at = ? "
+            "WHERE id = ?",
+            (now, int(tx_id)),
+        )
+        return {
+            "id": int(tx_id),
+            "handover_status": "entregue",
+            "handover_confirmed_at": now,
+            "already_confirmed": False,
+        }
+
+
 def count_pending_delivery_transactions(
     seller_id: Optional[int] = None,
     event_id: Optional[int] = None,
@@ -1798,7 +1860,8 @@ def list_transactions(limit: int = 200, seller_id: Optional[int] = None) -> List
                    event_id,
                    client_name, client_cpf, client_email, client_phone, client_zipcode, client_address,
                    client_number, client_complement, client_city, client_state,
-                   client_cro_uf, client_cro_numero, delivery_status
+                   client_cro_uf, client_cro_numero, delivery_status,
+                   handover_status, handover_confirmed_at
               FROM transactions
              {where}
              ORDER BY datetime(created_at) DESC, id DESC
@@ -1815,10 +1878,10 @@ def list_transactions(limit: int = 200, seller_id: Optional[int] = None) -> List
 
 
 def _delivery_filter_sql_parts(delivery: Optional[str]) -> List[str]:
-    """Cláusulas do filtro de entrega (aplicado só a transações confirmadas).
+    """Cláusulas do filtro de entrega futura (aplicado só a transações confirmadas).
 
-    - ``completa``: pedidos totalmente entregues.
     - ``parcial``: pedidos confirmados com itens aguardando retirada.
+    - ``completa``: mantido por compatibilidade com URLs antigas.
     """
     dv = (delivery or "").strip().lower()
     if dv == "completa":
@@ -1861,8 +1924,13 @@ def _transactions_event_filter_sql_params(
         params.extend([ref, ref])
     st = (status or "").strip().lower()
     if st and st != "todos" and st in TX_FILTER_STATUSES:
-        parts.append("LOWER(TRIM(COALESCE(t.status, ''))) = ?")
-        params.append(st)
+        if st == "entregue":
+            parts.append(
+                "LOWER(TRIM(COALESCE(t.handover_status, ''))) = 'entregue'"
+            )
+        else:
+            parts.append("LOWER(TRIM(COALESCE(t.status, ''))) = ?")
+            params.append(st)
     if on_date:
         parts.append("DATE(t.created_at) = DATE(?)")
         params.append(on_date)
@@ -1921,7 +1989,8 @@ def list_transactions_for_event(
                seller_id, seller_name, payment_method, card_installments, aut,
                client_name, client_cpf, client_email, client_phone, client_zipcode, client_address,
                client_number, client_complement, client_city, client_state,
-               client_cro_uf, client_cro_numero, delivery_status
+               client_cro_uf, client_cro_numero, delivery_status,
+               handover_status, handover_confirmed_at
           FROM transactions t
          WHERE {wh}
          ORDER BY datetime(t.created_at) DESC, t.id DESC
@@ -1961,8 +2030,13 @@ def _transactions_seller_scope_filter_sql_params(
         params.extend([ref, ref])
     st = (status or "").strip().lower()
     if st and st != "todos" and st in TX_FILTER_STATUSES:
-        parts.append("LOWER(TRIM(COALESCE(t.status, ''))) = ?")
-        params.append(st)
+        if st == "entregue":
+            parts.append(
+                "LOWER(TRIM(COALESCE(t.handover_status, ''))) = 'entregue'"
+            )
+        else:
+            parts.append("LOWER(TRIM(COALESCE(t.status, ''))) = ?")
+            params.append(st)
     if on_date:
         parts.append("DATE(t.created_at) = DATE(?)")
         params.append(on_date)
@@ -2018,7 +2092,8 @@ def list_transactions_for_seller(
                event_id,
                client_name, client_cpf, client_email, client_phone, client_zipcode, client_address,
                client_number, client_complement, client_city, client_state,
-               client_cro_uf, client_cro_numero, delivery_status
+               client_cro_uf, client_cro_numero, delivery_status,
+               handover_status, handover_confirmed_at
           FROM transactions t
          WHERE {wh}
          ORDER BY datetime(t.created_at) DESC, t.id DESC

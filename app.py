@@ -68,6 +68,7 @@ from database import (
     create_seller_account,
     confirm_item_delivery,
     confirm_items_delivery,
+    confirm_transaction_handover,
     confirm_transaction_with_aut,
     count_event_product_ledger,
     count_pending_delivery_transactions,
@@ -977,11 +978,11 @@ def _seller_dashboard_transactions_view() -> tuple:
 
     pedido = (request.args.get("pedido") or "").strip()
     status_raw = (request.args.get("status") or "").strip().lower()
-    valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado", "estornado"})
+    valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado", "estornado", "entregue"})
     status_norm = status_raw if status_raw in valid_status else "todos"
 
     entrega_raw = (request.args.get("entrega") or "").strip().lower()
-    entrega_norm = entrega_raw if entrega_raw in ("completa", "parcial") else "todos"
+    entrega_norm = entrega_raw if entrega_raw == "parcial" else "todos"
     delivery_api = None if entrega_norm == "todos" else entrega_norm
 
     date_arg_raw = (request.args.get("data") or "").strip()
@@ -1140,6 +1141,24 @@ def seller_confirm_items_delivery(tx_id: int):
                 flash(err, "error")
         else:
             flash(msg, "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(request.referrer or url_for("seller_dashboard"))
+
+
+@app.route("/vendedor/pedido/<int:tx_id>/entregue", methods=["POST"])
+@seller_required
+def seller_confirm_transaction_handover(tx_id: int):
+    """Marca o pedido inteiro como entregue/retirado pelo cliente."""
+    seller_id = _current_seller_id()
+    seller_ev = _get_seller_event()
+    try:
+        confirm_transaction_handover(
+            tx_id,
+            seller_id=seller_id,
+            expected_event_id=int(seller_ev["id"]) if seller_ev else None,
+        )
+        flash("Pedido marcado como entregue.", "success")
     except ValueError as exc:
         flash(str(exc), "error")
     return redirect(request.referrer or url_for("seller_dashboard"))
@@ -1637,12 +1656,12 @@ def _admin_seller_transactions_view(seller_id: int):
     """Lista paginada de vendas do vendedor (admin) com filtros de status/entrega."""
     pedido = (request.args.get("pedido") or "").strip()
     status_raw = (request.args.get("status") or "").strip().lower()
-    valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado", "estornado"})
+    valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado", "estornado", "entregue"})
     status_norm = status_raw if status_raw in valid_status else "todos"
     status_api = None if status_norm == "todos" else status_norm
 
     entrega_raw = (request.args.get("entrega") or "").strip().lower()
-    entrega_norm = entrega_raw if entrega_raw in ("completa", "parcial") else "todos"
+    entrega_norm = entrega_raw if entrega_raw == "parcial" else "todos"
     delivery_api = None if entrega_norm == "todos" else entrega_norm
 
     date_arg_raw = (request.args.get("data") or "").strip()
@@ -1877,6 +1896,27 @@ def admin_seller_confirm_items_delivery(seller_id: int, tx_id: int):
                 flash(err, "error")
         else:
             flash(msg, "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(
+        request.referrer or url_for("admin_seller_detail", seller_id=seller_id)
+    )
+
+
+@app.route(
+    "/admin/vendedores/<int:seller_id>/transacoes/<int:tx_id>/entregue",
+    methods=["POST"],
+)
+@admin_required
+def admin_seller_confirm_transaction_handover(seller_id: int, tx_id: int):
+    """Marca o pedido inteiro como entregue/retirado (escopo do vendedor no admin)."""
+    seller = get_seller(seller_id)
+    if seller is None:
+        flash("Vendedor não encontrado.", "error")
+        return redirect(url_for("admin_sellers"))
+    try:
+        confirm_transaction_handover(tx_id, seller_id=seller_id)
+        flash("Pedido marcado como entregue.", "success")
     except ValueError as exc:
         flash(str(exc), "error")
     return redirect(
@@ -3678,11 +3718,11 @@ def admin_event_transactions(event_id: int):
 
     pedido = (request.args.get("pedido") or "").strip()
     status_raw = (request.args.get("status") or "").strip().lower()
-    valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado", "estornado"})
+    valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado", "estornado", "entregue"})
     status_norm = status_raw if status_raw in valid_status else "todos"
 
     entrega_raw = (request.args.get("entrega") or "").strip().lower()
-    entrega_norm = entrega_raw if entrega_raw in ("completa", "parcial") else "todos"
+    entrega_norm = entrega_raw if entrega_raw == "parcial" else "todos"
     delivery_api = None if entrega_norm == "todos" else entrega_norm
 
     date_arg_raw = (request.args.get("data") or "").strip()
@@ -3848,6 +3888,26 @@ def admin_event_confirm_items_delivery(event_id: int, tx_id: int):
                 flash(err, "error")
         else:
             flash(msg, "success")
+    except ValueError as exc:
+        flash(str(exc), "error")
+    return redirect(
+        request.referrer or url_for("admin_event_transactions", event_id=event_id)
+    )
+
+
+@app.route(
+    "/admin/eventos/<int:event_id>/transacoes/<int:tx_id>/entregue",
+    methods=["POST"],
+)
+@admin_required
+def admin_event_confirm_transaction_handover(event_id: int, tx_id: int):
+    """Marca o pedido inteiro como entregue/retirado pelo cliente."""
+    if _event_or_404(event_id) is None:
+        flash("Evento não encontrado.", "error")
+        return redirect(url_for("admin_events"))
+    try:
+        confirm_transaction_handover(tx_id, expected_event_id=event_id)
+        flash("Pedido marcado como entregue.", "success")
     except ValueError as exc:
         flash(str(exc), "error")
     return redirect(

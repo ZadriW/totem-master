@@ -428,6 +428,29 @@ def _ensure_delivery_columns(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_transactions_handover_status(conn: sqlite3.Connection) -> None:
+    """Confirmação geral de entrega do pedido (retirada no balcão pelo cliente).
+
+    - ``transactions.handover_status``: ``pendente`` | ``entregue``.
+    - ``transactions.handover_confirmed_at``: data/hora da confirmação.
+
+    Independente do controle de retirada pendente por item (``delivery_status``
+    / ``quantity_delivered``), que continua exigindo baixa de estoque. Este
+    campo apenas sinaliza, para fins de acompanhamento, que o pedido como um
+    todo já foi entregue ao cliente.
+    """
+    cols = _table_columns(conn, "transactions")
+    if "handover_status" not in cols:
+        conn.execute(
+            "ALTER TABLE transactions "
+            "ADD COLUMN handover_status TEXT NOT NULL DEFAULT 'pendente'"
+        )
+    if "handover_confirmed_at" not in cols:
+        conn.execute(
+            "ALTER TABLE transactions ADD COLUMN handover_confirmed_at TEXT"
+        )
+
+
 def _ensure_sellers_columns(conn: sqlite3.Connection) -> None:
     """Migrações leves para contas de vendedores."""
     cols = _table_columns(conn, "sellers")
@@ -582,6 +605,7 @@ def init_db() -> None:
         _ensure_event_products_backorder_limit(conn)
         _ensure_transaction_items_promo_columns(conn)
         _ensure_delivery_columns(conn)
+        _ensure_transactions_handover_status(conn)
         _consolidate_legacy_movement_types(conn)
         _purge_invalid_product_ids(conn)
         _purge_legacy_demo_products(conn)

@@ -1473,6 +1473,59 @@ a.kpi:hover .kpi__link-arrow,
     font-size: 13px;
 }
 
+.admin-tx__handover-form {
+    display: inline-flex;
+    margin: 0;
+    padding: 0;
+}
+
+.admin-tx__handover-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: background 0.12s, transform 0.1s, color 0.12s;
+}
+
+.admin-tx__handover-btn:hover {
+    background: rgba(15, 157, 88, 0.14);
+    color: #0c8a4d;
+}
+
+.admin-tx__handover-btn:active {
+    transform: scale(0.96);
+}
+
+.admin-tx__handover-btn:focus-visible {
+    outline: 2px solid #0c8a4d;
+    outline-offset: 2px;
+}
+
+.admin-tx__handover-btn i {
+    font-size: 15px;
+}
+
+.admin-tx__handover-done {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    color: #0c8a4d;
+}
+
+.admin-tx__handover-done i {
+    font-size: 15px;
+}
+
 .admin-tx__row[role="button"]:focus-visible {
     outline: 2px solid var(--color-primary);
     outline-offset: 2px;
@@ -1495,6 +1548,11 @@ a.kpi:hover .kpi__link-arrow,
 .admin-badge--neutral {
     background: var(--color-bg);
     color: var(--color-text-muted);
+}
+
+.admin-badge--info {
+    background: rgba(37, 99, 235, 0.12);
+    color: #1d4ed8;
 }
 
 /* ---------- Detalhes da transação ---------- */
@@ -6330,6 +6388,8 @@ html.admin-theme--dark {
     --admin-warn-bg: rgba(232, 148, 32, 0.14);
     --admin-danger: #f07178;
     --admin-danger-bg: rgba(240, 113, 120, 0.14);
+    --admin-info: #6ba8f5;
+    --admin-info-bg: rgba(107, 168, 245, 0.14);
 }
 
 html.admin-theme--dark ::selection {
@@ -6537,6 +6597,15 @@ html.admin-theme--dark .admin-tx__restore-cart:hover {
     color: var(--color-primary-light);
 }
 
+html.admin-theme--dark .admin-tx__handover-btn:hover {
+    background: var(--admin-success-bg);
+    color: var(--admin-success);
+}
+
+html.admin-theme--dark .admin-tx__handover-done {
+    color: var(--admin-success);
+}
+
 html.admin-theme--dark .admin-mov__note-btn:hover {
     background: var(--admin-tint-hover);
 }
@@ -6598,6 +6667,11 @@ html.admin-theme--dark .admin-badge--warn {
 html.admin-theme--dark .admin-badge--danger {
     background: var(--admin-danger-bg);
     color: var(--admin-danger);
+}
+
+html.admin-theme--dark .admin-badge--info {
+    background: var(--admin-info-bg);
+    color: var(--admin-info);
 }
 
 html.admin-theme--dark .admin-badge--neutral {
