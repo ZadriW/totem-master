@@ -1209,10 +1209,10 @@ def seller_stock():
 @app.route("/vendedor/estoque/<int:product_id>")
 @seller_required
 def seller_stock_product(product_id: int):
-    """Página de produto individual para vendedor: mostra apenas VENDAS dele."""
+    """Página de produto individual para vendedor: vendas e retiradas pendentes dele."""
     seller_id = _current_seller_id()
     seller_ev = _get_seller_event()
-    
+
     if seller_ev:
         product = get_product_in_event(int(seller_ev["id"]), product_id)
         if product is None:
@@ -1229,27 +1229,44 @@ def seller_stock_product(product_id: int):
     per_page = EVENT_PRODUCT_MOVEMENTS_PER_PAGE
     page = max(1, _parse_int(request.args.get("page"), 1))
 
-    # Busca apenas VENDAS (movement_type='venda') do vendedor
-    total = count_stock_movements(
-        product_id=product_id,
-        event_id=int(seller_ev["id"]) if seller_ev else None,
-        movement_type="venda",
-        reference=pedido or None,
-        seller_id=seller_id,
-    )
-    total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
-    page = min(page, total_pages)
-    offset = (page - 1) * per_page
-
-    movements = list_stock_movements(
-        product_id=product_id,
-        event_id=int(seller_ev["id"]) if seller_ev else None,
-        movement_type="venda",
-        reference=pedido or None,
-        seller_id=seller_id,
-        limit=per_page,
-        offset=offset,
-    )
+    if seller_ev:
+        # Mescla vendas confirmadas + linhas sintéticas de retirada pendente (como no admin).
+        ev_id = int(seller_ev["id"])
+        total = count_event_product_ledger(
+            ev_id,
+            product_id,
+            reference=pedido or None,
+            seller_id=seller_id,
+        )
+        total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
+        page = min(page, total_pages)
+        offset = (page - 1) * per_page
+        movements = list_event_product_ledger(
+            ev_id,
+            product_id,
+            reference=pedido or None,
+            seller_id=seller_id,
+            limit=per_page,
+            offset=offset,
+        )
+    else:
+        total = count_stock_movements(
+            product_id=product_id,
+            movement_type="venda",
+            reference=pedido or None,
+            seller_id=seller_id,
+        )
+        total_pages = max(1, (total + per_page - 1) // per_page) if total > 0 else 1
+        page = min(page, total_pages)
+        offset = (page - 1) * per_page
+        movements = list_stock_movements(
+            product_id=product_id,
+            movement_type="venda",
+            reference=pedido or None,
+            seller_id=seller_id,
+            limit=per_page,
+            offset=offset,
+        )
 
     showing_from = offset + 1 if total > 0 else 0
     showing_to = min(offset + len(movements), total) if total > 0 else 0
@@ -2837,6 +2854,17 @@ def _event_movement_payload(movement: dict, *, event_id: int) -> dict:
         product_id = int(movement["product_id"])
     except (TypeError, ValueError, KeyError):
         product_id = 0
+    reference = (movement.get("reference") or "").strip()
+    try:
+        tx_id = int(movement["transaction_id"]) if movement.get("transaction_id") else 0
+    except (TypeError, ValueError):
+        tx_id = 0
+    tx_url = ""
+    if reference and tx_id > 0 and event_id:
+        tx_url = (
+            url_for("admin_event_transactions", event_id=int(event_id), pedido=reference)
+            + f"#tx-{tx_id}"
+        )
     return {
         **movement,
         "event_badge_bg": ev_bg,
@@ -2848,6 +2876,7 @@ def _event_movement_payload(movement: dict, *, event_id: int) -> dict:
         "delta_kind": delta_kind,
         "product_url": url_for("admin_product_detail", product_id=product_id) if product_id else "",
         "is_pending_delivery": bool(movement.get("is_pending_delivery")),
+        "tx_url": tx_url,
     }
 
 

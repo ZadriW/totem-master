@@ -91,7 +91,20 @@
 
     function renderProductMovementRow(movement, { withEvent = false } = {}) {
         const reasonParts = [];
-        if (movement.reference) reasonParts.push(`<code>${escapeHtml(movement.reference)}</code>`);
+        const ref = String(movement.reference || '').trim();
+        const txUrl = String(movement.tx_url || '').trim();
+        if (ref) {
+            if (txUrl) {
+                reasonParts.push(
+                    `<a href="${escapeHtml(txUrl)}" class="admin-mov__order-link"`
+                    + ` title="Abrir pedido ${escapeHtml(ref)} no histórico de transações"`
+                    + ` aria-label="Abrir pedido ${escapeHtml(ref)} no histórico de transações">`
+                    + `<code>${escapeHtml(ref)}</code></a>`
+                );
+            } else {
+                reasonParts.push(`<code>${escapeHtml(ref)}</code>`);
+            }
+        }
         reasonParts.push(escapeHtml(movement.reason || '-'));
         const rowClass = withEvent ? 'admin-mov__row admin-mov__row--with-event' : 'admin-mov__row';
         const pendingAttr = movement.is_pending_delivery || movement.movement_type === 'pendente'

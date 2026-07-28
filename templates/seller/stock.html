@@ -129,7 +129,9 @@
     </form>
     {% endif %}
 
+    {% with show_delivery=false %}
     {% include 'partials/admin_stock_legend.html' %}
+    {% endwith %}
 
     <div
         class="admin-table admin-stock"

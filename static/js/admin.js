@@ -137,6 +137,26 @@
         toggleAdminTxRowAccordion(btn);
     });
 
+    /** Abre a linha do pedido indicado no fragmento ``#tx-<id>`` (vindo do motivo/ref do estoque). */
+    function openAdminTxFromHash() {
+        const match = /^#tx-(\d+)$/i.exec(window.location.hash || '');
+        if (!match) return;
+        const txId = match[1];
+        const txRoot = document.querySelector(`.admin-tx[data-tx-id="${txId}"]`);
+        if (!txRoot) return;
+        const row = txRoot.querySelector('.admin-tx__row');
+        if (!row) return;
+        if (row.getAttribute('aria-expanded') !== 'true') {
+            toggleAdminTxRowAccordion(row);
+        }
+        requestAnimationFrame(() => {
+            txRoot.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    }
+
+    openAdminTxFromHash();
+    window.addEventListener('hashchange', openAdminTxFromHash);
+
     // --- 2. Diálogo de confirmação (substitui window.confirm) ---------------
     const confirmDialog = document.getElementById('admin-confirm-dialog');
     const confirmMessageEl = document.getElementById('admin-confirm-message');

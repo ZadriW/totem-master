@@ -1,4 +1,5 @@
 {% extends "admin/_layout.html" %}
+{% from "macros/admin_mov_order_ref.html" import admin_mov_order_ref %}
 
 {% block title %}{{ product.nome }} — Estoque — {{ event.name }} | Dental Odonto Master{% endblock %}
 
@@ -337,7 +338,12 @@
                     </span>
                     <span class="admin-table__col--num"><strong>{{ m.balance_after }}</strong></span>
                     <span class="admin-mov__reason">
-                        {% if m.reference %}<code>{{ m.reference }}</code>{% endif %}
+                        {% if m.reference and m.transaction_id %}
+                        {% set tx_url = url_for('admin_event_transactions', event_id=event.id, pedido=m.reference) ~ '#tx-' ~ m.transaction_id %}
+                        {% else %}
+                        {% set tx_url = None %}
+                        {% endif %}
+                        {{ admin_mov_order_ref(m.reference, tx_url) }}
                         {{ m.reason or '-' }}
                     </span>
                     <span class="admin-mov__user-cell">

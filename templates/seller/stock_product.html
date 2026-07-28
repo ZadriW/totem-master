@@ -1,4 +1,5 @@
 {% extends "seller/_layout.html" %}
+{% from "macros/admin_mov_order_ref.html" import admin_mov_order_ref %}
 
 {% block title %}{{ product.nome }} — Minhas Vendas — Vendedor | Dental Odonto Master{% endblock %}
 
@@ -116,6 +117,7 @@
             <div class="admin-table admin-table--seller-product-sales{% if not seller_event %} admin-table--seller-product-sales-events{% endif %}" role="table" aria-label="Minhas vendas do produto">
                 <div class="admin-table__head admin-mov__row" role="row">
                     <span role="columnheader">Data/Hora</span>
+                    <span role="columnheader">Tipo</span>
                     <span role="columnheader" class="admin-table__col--num">Quantidade</span>
                     <span role="columnheader" class="admin-table__col--num">Saldo após</span>
                     <span role="columnheader">Ref. / Pedido</span>
@@ -126,15 +128,27 @@
 
                 {% if movements %}
                     {% for m in movements %}
-                    <div class="admin-mov__wrapper" data-movement-id="{{ m.id }}">
+                    {% set mov_type = m.movement_type or 'venda' %}
+                    <div class="admin-mov__wrapper" data-movement-id="{{ m.id }}"
+                         {% if m.is_pending_delivery or mov_type == 'pendente' %}data-pending-delivery{% endif %}>
                         <div class="admin-mov__row" role="row">
                             <span>{{ m.created_at | datahora }}</span>
-                            <span class="admin-table__col--num admin-mov__delta admin-mov__delta--negative">
+                            <span class="admin-mov__type-cell">
+                                <span class="admin-badge admin-mov__badge admin-mov__badge--{{ mov_type }}">
+                                    {{ mov_type | movlabel }}
+                                </span>
+                            </span>
+                            <span class="admin-table__col--num admin-mov__delta admin-mov__delta--{% if (m.delta or 0) > 0 %}positive{% elif (m.delta or 0) < 0 %}negative{% else %}neutral{% endif %}">
                                 {{ m.delta | signed }}
                             </span>
                             <span class="admin-table__col--num"><strong>{{ m.balance_after }}</strong></span>
                             <span class="admin-mov__reason">
-                                {% if m.reference %}<code>{{ m.reference }}</code>{% endif %}
+                                {% if m.reference and m.transaction_id %}
+                                {% set tx_url = url_for('seller_dashboard', pedido=m.reference) ~ '#tx-' ~ m.transaction_id %}
+                                {% else %}
+                                {% set tx_url = None %}
+                                {% endif %}
+                                {{ admin_mov_order_ref(m.reference, tx_url) }}
                                 {{ m.reason or '-' }}
                             </span>
                             {% if not seller_event %}

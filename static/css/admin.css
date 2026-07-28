@@ -3368,24 +3368,59 @@ html.admin-theme--dark .admin-stock__delivery-count {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.admin-mov__order-link {
+    display: inline;
+    text-decoration: none;
+    color: inherit;
+    vertical-align: baseline;
+}
+
+.admin-mov__order-link code {
+    margin-right: 6px;
+    transition: background 0.12s, color 0.12s, box-shadow 0.12s;
+}
+
+.admin-mov__order-link:hover code {
+    background: rgba(14, 22, 122, 0.12);
+    color: var(--color-primary-dark, #0a1060);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.admin-mov__order-link:focus-visible {
+    outline: none;
+}
+
+.admin-mov__order-link:focus-visible code {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+html.admin-theme--dark .admin-mov__order-link:hover code {
+    background: var(--admin-tint-strong);
+    color: var(--color-primary-light);
+}
+
 /* Vendedor — vendas do produto (/vendedor/estoque/<id>) */
 .admin-table--seller-product-sales .admin-mov__row {
     grid-template-columns:
-        minmax(152px, 1.3fr)
-        minmax(96px, 0.72fr)
-        minmax(96px, 0.72fr)
-        minmax(240px, 2.2fr);
+        minmax(140px, 1.15fr)
+        minmax(88px, 0.7fr)
+        minmax(96px, 0.7fr)
+        minmax(96px, 0.7fr)
+        minmax(220px, 2fr);
     gap: 16px 28px;
     padding: 14px 24px;
 }
 
 .admin-table--seller-product-sales.admin-table--seller-product-sales-events .admin-mov__row {
     grid-template-columns:
-        minmax(152px, 1.25fr)
-        minmax(96px, 0.68fr)
-        minmax(96px, 0.68fr)
-        minmax(220px, 1.85fr)
-        minmax(128px, 1fr);
+        minmax(132px, 1.1fr)
+        minmax(84px, 0.65fr)
+        minmax(88px, 0.65fr)
+        minmax(88px, 0.65fr)
+        minmax(200px, 1.7fr)
+        minmax(120px, 1fr);
 }
 
 .admin-table--seller-product-sales .admin-mov__reason {
@@ -3399,11 +3434,11 @@ html.admin-theme--dark .admin-stock__delivery-count {
 
 @media (min-width: 901px) {
     .admin-table--seller-product-sales .admin-mov__row {
-        min-width: 640px;
+        min-width: 720px;
     }
 
     .admin-table--seller-product-sales.admin-table--seller-product-sales-events .admin-mov__row {
-        min-width: 760px;
+        min-width: 860px;
     }
 }
 
@@ -4391,18 +4426,17 @@ html.admin-theme--dark .admin-stock__delivery-count {
     }
 
     /* Vendedor — vendas do produto (/vendedor/estoque/<id>): mesma distribuição da
-       página do produto do Admin (delta/saldo em pílulas, motivo/ref. abaixo), mas
-       com 4-5 colunas (sem "Tipo"), então sobrescreve o grid genérico acima. */
+       página do produto do Admin (tipo + delta/saldo em pílulas, motivo/ref. abaixo). */
     .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) {
         grid-template-columns: minmax(0, 1fr) auto;
         grid-template-areas:
-            "date date"
+            "date type"
             "delta balance"
             "reason reason";
     }
     .admin-table--seller-product-sales-events .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) {
         grid-template-areas:
-            "date date"
+            "date type"
             "delta balance"
             "reason reason"
             "event event";
@@ -4412,6 +4446,18 @@ html.admin-theme--dark .admin-stock__delivery-count {
         justify-self: start;
     }
     .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(2) {
+        grid-area: type;
+        justify-self: end;
+        align-self: start;
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        text-align: right;
+    }
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(2)::before {
+        content: none;
+    }
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(3) {
         grid-area: delta;
         justify-self: start;
         align-self: auto;
@@ -4420,7 +4466,7 @@ html.admin-theme--dark .admin-stock__delivery-count {
         background: rgba(14, 22, 122, 0.08);
         text-align: center;
     }
-    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(3) {
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(4) {
         grid-area: balance;
         justify-self: end;
         padding: 8px 10px;
@@ -4428,16 +4474,16 @@ html.admin-theme--dark .admin-stock__delivery-count {
         background: rgba(14, 22, 122, 0.08);
         text-align: center;
     }
-    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(4) {
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(5) {
         grid-area: reason;
         white-space: normal;
         font-size: 12px;
         line-height: 1.4;
     }
-    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(5) {
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(6) {
         grid-area: event;
     }
-    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(2)::before {
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(3)::before {
         content: "Quantidade";
         display: block;
         margin-bottom: 2px;
@@ -4447,7 +4493,7 @@ html.admin-theme--dark .admin-stock__delivery-count {
         text-transform: uppercase;
         color: var(--color-text-muted);
     }
-    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(3)::before {
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(4)::before {
         content: "Saldo após";
         display: block;
         margin-bottom: 2px;
@@ -4457,7 +4503,7 @@ html.admin-theme--dark .admin-stock__delivery-count {
         text-transform: uppercase;
         color: var(--color-text-muted);
     }
-    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(4)::before {
+    .admin-table--seller-product-sales .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(5)::before {
         content: "Ref. / Pedido";
         display: block;
         margin-bottom: 4px;
@@ -4467,7 +4513,7 @@ html.admin-theme--dark .admin-stock__delivery-count {
         text-transform: uppercase;
         color: var(--color-text-muted);
     }
-    .admin-table--seller-product-sales.admin-table--seller-product-sales-events .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(5)::before {
+    .admin-table--seller-product-sales.admin-table--seller-product-sales-events .admin-mov__wrapper .admin-mov__row:not(.admin-mov__row--wide) > :nth-child(6)::before {
         content: "Evento";
         display: block;
         margin-bottom: 4px;

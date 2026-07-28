@@ -9,6 +9,7 @@
             </span>
             <span class="admin-stock-legend__text">— Produto com condições promocionais</span>
         </li>
+        {% if show_delivery | default(true) %}
         <li class="admin-stock-legend__item">
             <span class="admin-stock-legend__sample admin-stock-legend__sample--delivery">
                 <span class="admin-stock__delivery-wrap" aria-hidden="true">
@@ -20,5 +21,6 @@
             </span>
             <span class="admin-stock-legend__text">— Produto com retirada pendente; seguido da quantidade pendente para retirada</span>
         </li>
+        {% endif %}
     </ul>
 </div>
