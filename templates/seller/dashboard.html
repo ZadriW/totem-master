@@ -6,7 +6,6 @@
 {% from "macros/admin_tx_pending_actions.html" import admin_tx_pending_actions %}
 {% from "macros/admin_tx_item_cells.html" import admin_tx_item_cells, admin_tx_discount_summary %}
 {% from "macros/admin_tx_delivery.html" import admin_tx_delivery_badge, admin_tx_delivery_section %}
-{% from "macros/admin_tx_handover.html" import admin_tx_handover_action %}
 
 {% block title %}Dashboard do vendedor - Vendedor | Dental Odonto Master{% endblock %}
 
@@ -182,6 +181,8 @@
         </div>
     </header>
 
+    {% include 'partials/admin_tx_legend.html' %}
+
     <div class="admin-table admin-table--with-payment" role="table" aria-label="Histórico de transações do vendedor">
         <div class="admin-table__head" role="row">
             <span class="admin-table__col admin-table__col--toggle" aria-hidden="true"></span>
@@ -216,7 +217,6 @@
                         <span class="admin-tx__status-stack">
                             {{ admin_tx_status_badge(tx) }}
                             {{ admin_tx_delivery_badge(tx) }}
-                            {{ admin_tx_handover_action(tx, 'seller_confirm_transaction_handover') }}
                             {{ admin_tx_receipt_link(tx) }}
                             {{ admin_tx_pending_actions(tx) }}
                         </span>

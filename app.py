@@ -1146,24 +1146,6 @@ def seller_confirm_items_delivery(tx_id: int):
     return redirect(request.referrer or url_for("seller_dashboard"))
 
 
-@app.route("/vendedor/pedido/<int:tx_id>/entregue", methods=["POST"])
-@seller_required
-def seller_confirm_transaction_handover(tx_id: int):
-    """Marca o pedido inteiro como entregue/retirado pelo cliente."""
-    seller_id = _current_seller_id()
-    seller_ev = _get_seller_event()
-    try:
-        confirm_transaction_handover(
-            tx_id,
-            seller_id=seller_id,
-            expected_event_id=int(seller_ev["id"]) if seller_ev else None,
-        )
-        flash("Pedido marcado como entregue.", "success")
-    except ValueError as exc:
-        flash(str(exc), "error")
-    return redirect(request.referrer or url_for("seller_dashboard"))
-
-
 @app.route("/vendedor/estoque")
 @seller_required
 def seller_stock():

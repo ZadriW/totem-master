@@ -2436,6 +2436,63 @@ html.admin-theme--dark .admin-tx__delivery-check-all {
 /* ==========================================================================
    Tabela de estoque
    ========================================================================== */
+
+/* Legenda acima da tabela de estoque (promoção e retirada pendente) */
+.admin-stock-legend {
+    margin: 0 0 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--color-text-muted);
+}
+
+.admin-stock-legend__list {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.admin-stock-legend__item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.admin-stock-legend__sample {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.admin-stock-legend__sample--promo .admin-stock__promo-tag-icon {
+    cursor: default;
+}
+
+.admin-stock-legend__sample--delivery .admin-stock__delivery-wrap {
+    pointer-events: none;
+}
+
+.admin-stock-legend__sample--tx-delivery .admin-tx__delivery-badge {
+    pointer-events: none;
+}
+
+.admin-stock-legend__text {
+    color: var(--color-text-muted);
+}
+
+html.admin-theme--dark .admin-stock-legend {
+    background: var(--admin-surface-raised, var(--color-bg));
+    border-color: var(--color-border);
+}
+
 .admin-stock {
     font-size: 14px;
 }
