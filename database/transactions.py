@@ -283,7 +283,7 @@ def create_transaction(
         items_count = sum(i["quantity"] for i in normalized)
         card_installments_store = _normalize_card_installments_for_db(
             payment_method, total, card_installments if card_installments is not None else 1,
-        )
+                    )
 
         order_number = generate_order_number(conn)
         created_at = _now_iso()
@@ -1736,16 +1736,16 @@ def get_pending_transaction_restore_payload(tx_id: int, seller_id: int) -> Optio
             has_promo = it.get("promotion_id") is not None and subtotal < round(list_p * qty, 2) - 0.001
 
             entry: Dict = {
-                "id": pid,
-                "sku": (pr["sku"] or "").strip(),
+                    "id": pid,
+                    "sku": (pr["sku"] or "").strip(),
                 "nome": it.get("product_name") or pr["name"],
                 "categoria": it.get("category") or pr["category"] or "",
                 "preco_lista": list_p,
                 "preco": unit_p,
                 "subtotal": subtotal,
-                "imagem": imagem,
-                "estoque": estoque,
-                "quantidade": qty,
+                    "imagem": imagem,
+                    "estoque": estoque,
+                    "quantidade": qty,
                 "em_promocao": has_promo or bool(promo_nome),
                 "promo_nome": promo_nome,
                 "promo_aplicada": has_promo,

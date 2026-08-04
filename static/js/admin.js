@@ -86,6 +86,7 @@
         if (!btn) return;
         if (event.target.closest('a')) return;
         if (event.target.closest('.admin-tx__discard-form')) return;
+        if (event.target.closest('.admin-tx__handover-form')) return;
         toggleAdminTxRowAccordion(btn);
     });
 
@@ -133,6 +134,7 @@
         if (btn.getAttribute('role') !== 'button') return;
         if (event.target.closest('a')) return;
         if (event.target.closest('.admin-tx__discard-form')) return;
+        if (event.target.closest('.admin-tx__handover-form')) return;
         event.preventDefault();
         toggleAdminTxRowAccordion(btn);
     });

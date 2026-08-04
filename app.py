@@ -3720,13 +3720,8 @@ def admin_event_promotion_delete(event_id: int, promo_id: int):
 # Eventos — sub-página Transações
 # ---------------------------------------------------------------------------
 
-@app.route("/admin/eventos/<int:event_id>/transacoes")
-@admin_required
-def admin_event_transactions(event_id: int):
-    event = _event_or_404(event_id)
-    if event is None:
-        return redirect(url_for("admin_events"))
-
+def _admin_event_transactions_page_data(event_id: int) -> dict:
+    """Filtros, lista e paginação das transações do evento (página + polling)."""
     pedido = (request.args.get("pedido") or "").strip()
     status_raw = (request.args.get("status") or "").strip().lower()
     valid_status = frozenset({"todos", "confirmado", "pendente", "cancelado", "estornado", "entregue"})
@@ -3780,34 +3775,44 @@ def admin_event_transactions(event_id: int):
     showing_from = offset + 1 if total > 0 else 0
     showing_to = min(offset + len(transactions), total) if total > 0 else 0
 
-    filters = {
-        "pedido": pedido,
-        "status": status_norm,
-        "entrega": entrega_norm,
-        "vendedor": seller_raw,
-        "per_page": per_page,
-        "data": filter_date_display,
-    }
-    pagination = {
-        "page": page,
-        "per_page": per_page,
-        "total": total,
-        "total_pages": total_pages,
-        "has_prev": page > 1,
-        "has_next": page < total_pages,
-        "showing_from": showing_from,
-        "showing_to": showing_to,
+    return {
+        "transactions": transactions,
+        "movement_filter_sellers": event_sellers_rows,
+        "filters": {
+            "pedido": pedido,
+            "status": status_norm,
+            "entrega": entrega_norm,
+            "vendedor": seller_raw,
+            "per_page": per_page,
+            "data": filter_date_display,
+        },
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total": total,
+            "total_pages": total_pages,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
+            "showing_from": showing_from,
+            "showing_to": showing_to,
+        },
+        "allowed_per_page": ALLOWED_ADMIN_STOCK_PER_PAGE,
     }
 
+
+@app.route("/admin/eventos/<int:event_id>/transacoes")
+@admin_required
+def admin_event_transactions(event_id: int):
+    event = _event_or_404(event_id)
+    if event is None:
+        return redirect(url_for("admin_events"))
+
+    page_data = _admin_event_transactions_page_data(event_id)
     return render_template(
         "admin/event_transactions.html",
         event=event,
-        transactions=transactions,
-        movement_filter_sellers=event_sellers_rows,
-        filters=filters,
-        pagination=pagination,
-        allowed_per_page=ALLOWED_ADMIN_STOCK_PER_PAGE,
         active_event_tab="transacoes",
+        **page_data,
         **_admin_shell_context(active_section="eventos"),
     )
 
@@ -3927,8 +3932,23 @@ def admin_event_confirm_transaction_handover(event_id: int, tx_id: int):
 
 
 # ---------------------------------------------------------------------------
-# Eventos — API de polling (estoque)
+# Eventos — API de polling (estoque / transações)
 # ---------------------------------------------------------------------------
+
+@app.route("/admin/api/eventos/<int:event_id>/transacoes")
+@admin_required
+def admin_api_event_transactions(event_id: int):
+    """Fragmento HTML da listagem de transações (polling ~30s no admin)."""
+    event = _event_or_404(event_id)
+    if event is None:
+        return ("", 404)
+    page_data = _admin_event_transactions_page_data(event_id)
+    return render_template(
+        "admin/partials/event_transactions_live.html",
+        event=event,
+        **page_data,
+    )
+
 
 @app.route("/admin/api/eventos/<int:event_id>/estoque")
 @admin_required
