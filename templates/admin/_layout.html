@@ -51,6 +51,60 @@
             {% endif %}
         </div>
 
+        {% if active_event_tab is defined and event is defined %}
+        {# ── Nav do evento (desktop): seções; badge do evento fica no brand ── #}
+        <nav class="admin-nav admin-nav--event" aria-label="Seções do evento">
+            <div class="admin-event-nav__links">
+                <a class="admin-nav__item {% if active_event_tab == 'dashboard' %}is-active{% endif %}"
+                   href="{{ url_for('admin_event_detail', event_id=event.id) }}" title="Dashboard do evento">
+                    <i class="fa-solid fa-gauge-high" aria-hidden="true"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a class="admin-nav__item {% if active_event_tab == 'estoque' %}is-active{% endif %}"
+                   href="{{ url_for('admin_event_stock', event_id=event.id) }}" title="Estoque do evento">
+                    <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
+                    <span>Estoque</span>
+                </a>
+                <a class="admin-nav__item {% if active_event_tab == 'transacoes' %}is-active{% endif %}"
+                   href="{{ url_for('admin_event_transactions', event_id=event.id) }}" title="Transações do evento">
+                    <i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i>
+                    <span>Transações</span>
+                </a>
+                <a class="admin-nav__item {% if active_event_tab == 'promocoes' %}is-active{% endif %}"
+                   href="{{ url_for('admin_event_promotions', event_id=event.id) }}" title="Promoções do evento">
+                    <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                    <span>Promoções</span>
+                </a>
+            </div>
+        </nav>
+        {% else %}
+        {# ── Nav global do painel admin (desktop) ── #}
+        <nav class="admin-nav admin-nav--admin" aria-label="Seções do painel">
+            <div class="admin-nav__grid">
+                <a class="admin-nav__item {% if active_section == 'produtos' %}is-active{% endif %}"
+                   href="{{ url_for('admin_products') }}">
+                    <i class="fa-solid fa-tags" aria-hidden="true"></i>
+                    Produtos
+                </a>
+                <a class="admin-nav__item {% if active_section == 'eventos' %}is-active{% endif %}"
+                   href="{{ url_for('admin_events') }}">
+                    <i class="fa-solid fa-calendar-days" aria-hidden="true"></i>
+                    Eventos
+                </a>
+                <a class="admin-nav__item {% if active_section == 'vendedores' %}is-active{% endif %}"
+                   href="{{ url_for('admin_sellers') }}">
+                    <i class="fa-solid fa-users" aria-hidden="true"></i>
+                    Vendedores
+                </a>
+                <a class="admin-nav__item {% if active_section == 'financeiro' %}is-active{% endif %}"
+                   href="{{ url_for('admin_financeiro') }}">
+                    <i class="fa-solid fa-chart-pie" aria-hidden="true"></i>
+                    Financeiro
+                </a>
+            </div>
+        </nav>
+        {% endif %}
+
         <div class="admin-topbar__meta">
             <span class="admin-topbar__user">
                 <i class="fa-solid fa-user" aria-hidden="true"></i>
@@ -112,7 +166,7 @@
         {% block admin_body %}{% endblock %}
     </main>
 
-    {# ── Navegação inferior: seções do painel (global ou do evento) ── #}
+    {# ── Navegação inferior mobile (≤767px); no desktop usa admin-nav na topbar ── #}
     <nav class="admin-bottom-nav{% if active_event_tab is defined and event is defined %} admin-bottom-nav--event{% else %} admin-bottom-nav--admin{% endif %}"
          aria-label="{% if active_event_tab is defined and event is defined %}Seções do evento{% else %}Seções do painel{% endif %}">
         {% if active_event_tab is defined and event is defined %}
