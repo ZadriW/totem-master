@@ -2695,7 +2695,7 @@ html.admin-theme--dark .admin-stock-legend {
         flex: 1 1 auto;
     }
 
-    /* Preço, estoque, mínimo: números centralizados */
+    /* Vendas/Preço, estoque, mínimo: números centralizados */
     .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(2),
     .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(3),
     .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(4) {
@@ -2741,11 +2741,32 @@ html.admin-theme--dark .admin-stock-legend {
     justify-content: center;
 }
 
+.admin-stock__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 12px;
+}
+
 .admin-stock__product {
     display: inline-flex;
     align-items: center;
     gap: 12px;
     min-width: 0;
+}
+
+.admin-stock__select-checkbox {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+
+.admin-stock__product-head {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .admin-stock__product strong {
@@ -3866,7 +3887,8 @@ html.admin-theme--dark .admin-mov__order-link:hover code {
         font-size: 14px;
         color: var(--color-text-muted);
     }
-    .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(2)::before { content: "Preço"; }
+    .admin-stock:not(.admin-stock--library):not([data-admin-event-stock]) .admin-stock__row > :nth-child(2)::before { content: "Preço"; }
+    [data-admin-event-stock] .admin-stock__row > :nth-child(2)::before { content: "Vendas"; }
     .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(4)::before { content: "Mín."; }
     .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(2)::before,
     .admin-stock:not(.admin-stock--library) .admin-stock__row > :nth-child(4)::before {
@@ -5304,7 +5326,7 @@ html.admin-theme--dark .admin-mov__order-link:hover code {
     color: var(--color-text);
 }
 
-/* Grade do detalhe do evento (mesma que admin-stock mas sem coluna de Preço no vendedor) */
+/* Grade do estoque do evento (Produto | Vendas | Estoque | Mínimo | Situação | Ações) */
 .admin-event__row {
     grid-template-columns: 2fr 0.7fr 0.7fr 0.7fr 0.9fr auto !important;
 }
@@ -5401,20 +5423,19 @@ html.admin-theme--dark .admin-mov__order-link:hover code {
     .admin-event__row {
         grid-template-columns: minmax(0, 1fr) auto !important;
         grid-template-areas:
-            "product  actions"
-            "category category"
-            "stock    min"
-            "status   status";
+            "product qty"
+            "price   min"
+            "status  actions";
         gap: 8px 12px;
         padding: 14px 16px;
         align-items: start;
     }
     .admin-event__row > :nth-child(1) { grid-area: product; }
-    .admin-event__row > :nth-child(2) { grid-area: category; font-size: 12px; color: var(--color-text-muted); }
-    .admin-event__row > :nth-child(3) { display: none; }
-    .admin-event__row > :nth-child(5) { grid-area: min; justify-self: end; }
-    .admin-event__row > :nth-child(6) { grid-area: status; }
-    .admin-event__row > :nth-child(7) { grid-area: actions; justify-self: end; align-self: start; }
+    .admin-event__row > :nth-child(2) { grid-area: price; }
+    .admin-event__row > :nth-child(3) { grid-area: qty; }
+    .admin-event__row > :nth-child(4) { grid-area: min; justify-self: end; }
+    .admin-event__row > :nth-child(5) { grid-area: status; }
+    .admin-event__row > :nth-child(6) { grid-area: actions; justify-self: end; align-self: start; }
     .admin-table__head.admin-event__row { display: none; }
 
     .admin-event__edit-form {
@@ -5726,11 +5747,64 @@ html.admin-theme--dark .admin-mov__order-link:hover code {
     gap: 10px;
     flex-wrap: wrap;
     margin-top: 4px;
+    padding: 15px;
 }
 
 /* Modal — adicionar produto a evento */
 .admin-modal--add-event {
     max-width: 500px;
+}
+
+.admin-modal--bulk-stock {
+    max-width: 560px;
+    width: 92vw;
+}
+
+.bulk-stock-modal__list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 42vh;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.bulk-stock-modal__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--color-bg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+}
+
+.bulk-stock-modal__row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.bulk-stock-modal__row-info strong {
+    font-size: 14px;
+    color: var(--color-text);
+}
+
+.bulk-stock-modal__row-info small {
+    color: var(--color-text-muted);
+    font-size: 12px;
+}
+
+.bulk-stock-modal__row-qty {
+    flex-shrink: 0;
+    width: 110px;
+    margin: 0;
+}
+
+.bulk-stock-modal__row-qty .admin-field__label {
+    font-size: 11px;
 }
 
 .admin-modal__product-strip {

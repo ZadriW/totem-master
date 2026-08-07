@@ -54,12 +54,12 @@
         <a class="kpi kpi--link {% if pending_sales_count > 0 %}kpi--warn{% endif %}"
            href="{{ url_for('seller_dashboard', status='pendente') }}"
            data-dash-kpi-card="pending_sales"
-           title="Ver suas vendas pendentes{% if seller_event %} no evento {{ seller_event.name }}{% endif %}">
+           title="Ver carrinhos abandonados{% if seller_event %} no evento {{ seller_event.name }}{% endif %}">
             <span class="kpi__link-arrow" aria-hidden="true"><i class="fa-solid fa-arrow-right"></i></span>
-            <span class="kpi__icon"><i class="fa-solid fa-hourglass-half" aria-hidden="true"></i></span>
-            <span class="kpi__label">Vendas pendentes{% if seller_event %} no evento{% endif %}</span>
+            <span class="kpi__icon"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i></span>
+            <span class="kpi__label">Carrinho abandonado{% if seller_event %} no evento{% endif %}</span>
             <span class="kpi__value" data-dash-kpi="pending_sales">{{ pending_sales_count }}</span>
-            <span class="kpi__hint">Aguardando confirmação de AUT — toque para ver</span>
+            <span class="kpi__hint">Checkout não finalizado (AUT) — toque para ver</span>
         </a>
 
         <a class="kpi kpi--link {% if pending_delivery_count > 0 %}kpi--warn{% endif %}"
@@ -80,7 +80,7 @@
         <div>
             <h2 class="admin-section__title">
                 {% if filters.status == 'pendente' %}
-                    Vendas pendentes
+                    Carrinho abandonado{% if seller_event %} no evento{% endif %}
                 {% elif filters.entrega == 'parcial' %}
                     Retiradas pendentes
                 {% else %}
@@ -90,10 +90,10 @@
             <p class="admin-section__subtitle">
                 {% if filters.status == 'pendente' %}
                     {% if seller_event %}
-                    Seus pedidos aguardando confirmação de AUT no evento <strong>{{ seller_event.name }}</strong>.
-                    Você pode retomar o checkout ou descartar cada um.
+                    Seus pedidos com checkout iniciado e ainda sem confirmação de AUT no evento <strong>{{ seller_event.name }}</strong>.
+                    Você pode retomar o carrinho ou descartar cada um.
                     {% else %}
-                    Seus pedidos aguardando confirmação de AUT. Você pode retomar o checkout ou descartar cada um.
+                    Seus pedidos com checkout iniciado e ainda sem confirmação de AUT. Você pode retomar o carrinho ou descartar cada um.
                     {% endif %}
                 {% elif filters.entrega == 'parcial' %}
                     Pedidos pagos com itens ainda não entregues.

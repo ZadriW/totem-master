@@ -10,6 +10,9 @@ _ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_DIR = os.path.join(_ROOT_DIR, "database")
 DB_PATH = os.path.join(DB_DIR, "totem.sqlite3")
 
+# Estoque mínimo padrão para produtos novos (biblioteca e eventos).
+DEFAULT_MIN_STOCK = 5
+
 
 def _ensure_dir() -> None:
     os.makedirs(DB_DIR, exist_ok=True)

@@ -1409,6 +1409,43 @@ def pending_delivery_units_by_product_for_event(
         )
 
 
+def units_sold_by_product_for_event(
+    event_id: int,
+    product_ids: Optional[Iterable[int]] = None,
+) -> Dict[int, int]:
+    """Mapa ``product_id → unidades vendidas`` em pedidos confirmados do evento.
+
+    Conta ``SUM(transaction_items.quantity)`` apenas em transações com
+    ``status = confirmado`` e ``event_id`` correspondente. Estornos não entram.
+    """
+    params: List = [int(event_id)]
+    pid_filter = ""
+    if product_ids is not None:
+        pids = sorted({int(p) for p in product_ids if p is not None})
+        if not pids:
+            return {}
+        placeholders = ",".join("?" * len(pids))
+        pid_filter = f" AND CAST(ti.product_id AS INTEGER) IN ({placeholders})"
+        params.extend(pids)
+
+    sql = f"""
+        SELECT CAST(ti.product_id AS INTEGER) AS product_id,
+               COALESCE(SUM(ti.quantity), 0) AS units_sold
+          FROM transaction_items ti
+          JOIN transactions t ON t.id = ti.transaction_id
+         WHERE t.event_id = ?
+           AND LOWER(TRIM(COALESCE(t.status, ''))) = 'confirmado'
+           AND CAST(ti.product_id AS INTEGER) > 0
+           {pid_filter}
+         GROUP BY CAST(ti.product_id AS INTEGER)
+    """
+    out: Dict[int, int] = {}
+    with get_conn() as conn:
+        for r in conn.execute(sql, params).fetchall():
+            out[int(r["product_id"])] = int(r["units_sold"] or 0)
+    return out
+
+
 def _check_event_backorder_limits(
     conn: sqlite3.Connection,
     event_id: int,

@@ -55,7 +55,7 @@
 
     <div class="product-grid" id="productGrid">
         {% for product in products %}
-        {% set sm = (product.estoque_minimo | default(0)) | int %}
+        {% set sm = (product.estoque_minimo | default(5)) | int %}
         {% set q = product.estoque | int %}
         {% if q <= 0 %}
             {% set stock_tone = 'empty' %}

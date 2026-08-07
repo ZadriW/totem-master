@@ -246,8 +246,8 @@
                         type="number"
                         name="min_stock"
                         min="0"
-                        value="0"
-                        placeholder="0"
+                        value="5"
+                        placeholder="5"
                     >
                 </div>
             </div>
@@ -497,7 +497,7 @@
         const body = new FormData();
         body.append('event_id',      chosenEventId);
         body.append('initial_stock', stockIn.value || '0');
-        body.append('min_stock',     minIn.value   || '0');
+        body.append('min_stock',     minIn.value   || '5');
         body.append('link_note',     note);
         const csrfMeta = document.querySelector('meta[name="csrf-token"]');
         if (csrfMeta && csrfMeta.content) {

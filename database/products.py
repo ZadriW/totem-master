@@ -5,7 +5,7 @@ import logging
 import sqlite3
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from .connection import _now_iso, get_conn
+from .connection import DEFAULT_MIN_STOCK, _now_iso, get_conn
 from .sku_helpers import (
     _default_sku_for_id,
     _ensure_distinct_sku,
@@ -136,7 +136,7 @@ def sync_products_from_wake(
                     """,
                     (
                         variant_id, sku, name, category, description, price, image,
-                        0, 5, 1, wake_product_id, variant_name or None,
+                        0, DEFAULT_MIN_STOCK, 1, wake_product_id, variant_name or None,
                         main_variant, now, now,
                     ),
                 )
@@ -528,10 +528,10 @@ def upsert_wake_variant(p: Dict) -> Optional[Dict]:
                     INSERT INTO products
                         (id, sku, name, category, description, price, image,
                          stock, min_stock, active, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, 1, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 1, ?, ?)
                     """,
                     (local_id, sku, name, category, description,
-                     price, image, now, now),
+                     price, image, DEFAULT_MIN_STOCK, now, now),
                 )
             else:
                 conn.execute(

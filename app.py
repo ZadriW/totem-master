@@ -72,6 +72,7 @@ from database import (
     confirm_transaction_with_aut,
     count_event_product_ledger,
     count_pending_delivery_transactions,
+    EXPORT_STOCK_CSV_CAP,
     create_transaction,
     update_pending_transaction,
     delete_seller,
@@ -97,6 +98,7 @@ from database import (
     get_stats,
     get_transaction_by_order_number,
     init_db,
+    DEFAULT_MIN_STOCK,
     list_active_event_product_stocks,
     list_active_product_stocks,
     list_distinct_product_categories,
@@ -124,6 +126,7 @@ from database import (
     list_transactions_summary_for_event_period,
     normalize_event_badge_color,
     pending_delivery_units_by_product_for_event,
+    units_sold_by_product_for_event,
     refund_transaction,
     register_event_stock_adjustment,
     register_event_stock_entry,
@@ -2185,12 +2188,19 @@ def _admin_event_stock_page_view(event_id: int):
         offset=offset,
         entrega=entrega_norm,
     )
+    product_ids = [int(p["product_id"]) for p in products]
     pending_map = pending_delivery_units_by_product_for_event(
         event_id,
-        product_ids=[int(p["product_id"]) for p in products],
+        product_ids=product_ids,
+    )
+    sold_map = units_sold_by_product_for_event(
+        event_id,
+        product_ids=product_ids,
     )
     for p in products:
-        p["pending_delivery_units"] = int(pending_map.get(int(p["product_id"]), 0))
+        pid = int(p["product_id"])
+        p["pending_delivery_units"] = int(pending_map.get(pid, 0))
+        p["units_sold"] = int(sold_map.get(pid, 0))
 
     showing_from = offset + 1 if total > 0 else 0
     showing_to = min(offset + len(products), total) if total > 0 else 0
@@ -2306,7 +2316,7 @@ def admin_product_add_to_event(product_id: int):
     if event is None:
         return jsonify({"error": "Evento não encontrado."}), 400
     initial_stock = max(0, _parse_int(request.form.get("initial_stock") or "", 0))
-    min_stock = max(0, _parse_int(request.form.get("min_stock") or "", 0))
+    min_stock = max(0, _parse_int(request.form.get("min_stock") or "", DEFAULT_MIN_STOCK))
     link_note = (request.form.get("link_note") or "").strip()
     if not link_note:
         return jsonify({"error": "Informe Motivo / Ref."}), 400
@@ -3044,6 +3054,78 @@ def admin_event_stock(event_id: int):
     )
 
 
+@app.route("/admin/eventos/<int:event_id>/estoque/export.csv")
+@admin_required
+def admin_event_stock_export_csv(event_id: int):
+    """Exporta a grade de estoque do evento em CSV, respeitando os filtros ativos."""
+    event = _event_or_404(event_id)
+    if event is None:
+        return redirect(url_for("admin_events"))
+
+    q_display, category, status, _per_page, _page = _admin_stock_list_query_params()
+    entrega_raw = (request.args.get("entrega") or "todos").strip().lower()
+    entrega_norm = entrega_raw if entrega_raw in {"todos", "pendente"} else "todos"
+    q_filter = q_display.lower() if q_display else None
+    cat_norm = category or "todos"
+    stat_norm = status or "todos"
+
+    products = list_event_products_slice(
+        event_id,
+        q_filter,
+        cat_norm,
+        stat_norm,
+        limit=EXPORT_STOCK_CSV_CAP,
+        offset=0,
+        entrega=entrega_norm,
+    )
+    product_ids = [int(p["product_id"]) for p in products]
+    sold_map = units_sold_by_product_for_event(event_id, product_ids=product_ids)
+    pending_map = pending_delivery_units_by_product_for_event(event_id, product_ids=product_ids)
+
+    header = [
+        "Produto",
+        "Vendas",
+        "Estoque",
+        "Mínimo",
+        "Situação",
+        "SKU",
+        "Categoria",
+        "Preço (R$)",
+        "Valor em Estoque (R$)",
+        "Retirada Pendente (un.)",
+        "ID Interno",
+    ]
+    rows = []
+    for p in products:
+        pid = int(p["product_id"])
+        stock = int(p.get("stock") or 0)
+        min_stock = int(p.get("min_stock") or 0)
+        price = float(p.get("price") or 0)
+        status_info = _event_product_status({
+            "stock": stock,
+            "min_stock": min_stock,
+            "product_active": p.get("product_active", True),
+        })
+        rows.append([
+            _csv_cell(p.get("name")),
+            int(sold_map.get(pid, 0)),
+            stock,
+            min_stock,
+            _csv_cell(status_info["label"]),
+            _csv_cell(p.get("sku")),
+            _csv_cell(p.get("category")),
+            _csv_fmt_brl(price),
+            _csv_fmt_brl(stock * price),
+            int(pending_map.get(pid, 0)),
+            pid,
+        ])
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_ev = re.sub(r"[^a-zA-Z0-9_-]+", "_", (event.get("name") or str(event_id)))[:40].strip("_") or str(event_id)
+    fname = f"estoque_evento_{event_id}_{safe_ev}_{ts}.csv"
+    return _csv_attachment_response(fname, header, rows)
+
+
 @app.route("/admin/eventos/<int:event_id>/estoque/<int:product_id>")
 @admin_required
 def admin_event_stock_product(event_id: int, product_id: int):
@@ -3198,7 +3280,7 @@ def admin_event_add_product(event_id: int):
         flash(f"Produto \"{q}\" não encontrado no catálogo nem na Wake Commerce.", "error")
         return redirect(_url_for_admin_event_stock_list(event_id, preserved))
     try:
-        add_product_to_event(event_id, int(product["id"]), 0, 0)
+        add_product_to_event(event_id, int(product["id"]), 0)
         suffix = " (variante importada da Wake)" if from_wake else ""
         flash(f"Produto \"{product['name']}\" adicionado ao evento{suffix}.", "success")
     except ValueError as exc:
@@ -3385,7 +3467,6 @@ def admin_event_import_xls(event_id: int):
                 event_id,
                 int(product["id"]),
                 qty,
-                0,
                 link_audit_reason=EVENT_IMPORT_XLS_MOTIVO_REF,
                 link_audit_reference=None,
                 created_by=import_actor,
@@ -3458,6 +3539,66 @@ def admin_event_stock_entry(event_id: int, product_id: int):
             return jsonify({"error": str(exc)}), 400
         flash(str(exc), "error")
     return redirect(request.referrer or fallback)
+
+
+@app.route("/admin/eventos/<int:event_id>/produtos/entrada-em-lote", methods=["POST"])
+@admin_required
+def admin_event_stock_bulk_entry(event_id: int):
+    """Registra entrada de estoque para vários produtos do evento de uma só vez.
+
+    Espera ``product_ids`` (lista de IDs marcados) + um campo ``qty_<id>`` por
+    produto + um único ``reason`` (Motivo / Ref) aplicado a todas as entradas.
+    """
+    if _event_or_404(event_id) is None:
+        return redirect(url_for("admin_events"))
+    preserved = _event_stock_return_filters_from_form()
+    fallback = _url_for_admin_event_stock_list(event_id, preserved)
+
+    reason = (request.form.get("reason") or "").strip()
+    if not reason:
+        flash("Informe o Motivo / Ref. da entrada em lote.", "error")
+        return redirect(fallback)
+
+    product_ids = request.form.getlist("product_ids")
+    if not product_ids:
+        flash("Selecione ao menos um produto para adicionar estoque.", "error")
+        return redirect(fallback)
+
+    admin_user = _current_admin_user()
+    ok_count = 0
+    ok_units = 0
+    errors: list[str] = []
+    for raw_id in product_ids:
+        product_id = _parse_int(raw_id, 0)
+        if product_id <= 0:
+            continue
+        qty = _parse_int(request.form.get(f"qty_{product_id}"), 0)
+        if qty <= 0:
+            errors.append(f"#{product_id}: quantidade inválida.")
+            continue
+        try:
+            register_event_stock_entry(
+                event_id,
+                product_id,
+                qty,
+                reason=reason,
+                created_by=admin_user,
+            )
+            ok_count += 1
+            ok_units += qty
+        except ValueError as exc:
+            errors.append(f"#{product_id}: {exc}")
+
+    if ok_count:
+        flash(f"Entrada registrada em {ok_count} produto(s), {ok_units} unidade(s) no total.", "success")
+    if errors:
+        short = errors[:5]
+        tail = f" (+{len(errors) - 5})" if len(errors) > 5 else ""
+        flash("Falha em: " + "; ".join(short) + tail, "error")
+    elif not ok_count:
+        flash("Nenhuma entrada registrada.", "error")
+
+    return redirect(fallback)
 
 
 @app.route("/admin/eventos/<int:event_id>/produtos/<int:product_id>/saida", methods=["POST"])
@@ -3978,6 +4119,7 @@ def admin_api_event_stock(event_id: int):
                 "promo_tooltip": promo_tooltips.get(int(p["product_id"]), ""),
                 "promo_name": promo_names.get(int(p["product_id"]), ""),
                 "pending_delivery_units": int(p.get("pending_delivery_units") or 0),
+                "units_sold": int(p.get("units_sold") or 0),
             }
             for p in products
         ],

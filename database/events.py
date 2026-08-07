@@ -5,7 +5,7 @@ import sqlite3
 from datetime import date as _date
 from typing import Dict, List, Optional, Tuple
 
-from .connection import _now_iso, get_conn
+from .connection import DEFAULT_MIN_STOCK, _now_iso, get_conn
 from .event_stock import _apply_event_movement
 from .products import _product_row_to_client
 from .sku_helpers import _default_sku_for_id
@@ -184,7 +184,7 @@ def add_product_to_event(
     event_id: int,
     product_id: int,
     stock: int = 0,
-    min_stock: int = 0,
+    min_stock: int = DEFAULT_MIN_STOCK,
     *,
     link_audit_reason: Optional[str] = None,
     link_audit_reference: Optional[str] = None,
@@ -277,7 +277,7 @@ def update_event_product_stock(
     event_id: int,
     product_id: int,
     stock: int,
-    min_stock: int = 0,
+    min_stock: int = DEFAULT_MIN_STOCK,
 ) -> None:
     """Atualiza o estoque e mínimo de um produto dentro de um evento."""
     now = _now_iso()
@@ -689,6 +689,7 @@ def get_event_sales_dashboard(
 EXPORT_MOVEMENTS_CSV_CAP = 100_000
 EXPORT_SALES_SUMMARY_CSV_CAP = 50_000
 EXPORT_SALES_ITEMS_CSV_CAP = 200_000
+EXPORT_STOCK_CSV_CAP = 50_000
 
 
 def list_transactions_summary_for_event_period(

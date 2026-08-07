@@ -4,7 +4,7 @@ from __future__ import annotations
 import sqlite3
 from typing import List
 
-from .connection import _now_iso, get_conn
+from .connection import DEFAULT_MIN_STOCK, _now_iso, get_conn
 from .sku_helpers import _default_sku_for_id
 
 _SCHEMA = """
@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS products (
     price        REAL    NOT NULL DEFAULT 0,
     image        TEXT,
     stock        INTEGER NOT NULL DEFAULT 0,
-    min_stock    INTEGER NOT NULL DEFAULT 0,
+    min_stock    INTEGER NOT NULL DEFAULT 5,
     active       INTEGER NOT NULL DEFAULT 1,
     created_at   TEXT    NOT NULL,
     updated_at   TEXT    NOT NULL,
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS event_products (
     event_id         INTEGER NOT NULL,
     product_id       INTEGER NOT NULL,
     stock            INTEGER NOT NULL DEFAULT 0,
-    min_stock        INTEGER NOT NULL DEFAULT 0,
+    min_stock        INTEGER NOT NULL DEFAULT 5,
     backorder_limit  INTEGER NOT NULL DEFAULT -1,
     created_at       TEXT    NOT NULL,
     updated_at       TEXT    NOT NULL,
@@ -252,7 +252,7 @@ def _ensure_events_tables(conn: sqlite3.Connection) -> None:
             event_id         INTEGER NOT NULL,
             product_id       INTEGER NOT NULL,
             stock            INTEGER NOT NULL DEFAULT 0,
-            min_stock        INTEGER NOT NULL DEFAULT 0,
+            min_stock        INTEGER NOT NULL DEFAULT 5,
             backorder_limit  INTEGER NOT NULL DEFAULT -1,
             created_at       TEXT    NOT NULL,
             updated_at       TEXT    NOT NULL,
@@ -583,6 +583,22 @@ def _consolidate_legacy_movement_types(conn: sqlite3.Connection) -> None:
     )
 
 
+def _ensure_min_stock_default_five(conn: sqlite3.Connection) -> None:
+    """Migração única: produtos com mínimo 0 passam a usar o padrão (5 un.)."""
+    version = int(conn.execute("PRAGMA user_version").fetchone()[0])
+    if version >= 1:
+        return
+    conn.execute(
+        "UPDATE products SET min_stock = ? WHERE min_stock = 0",
+        (DEFAULT_MIN_STOCK,),
+    )
+    conn.execute(
+        "UPDATE event_products SET min_stock = ? WHERE min_stock = 0",
+        (DEFAULT_MIN_STOCK,),
+    )
+    conn.execute("PRAGMA user_version = 1")
+
+
 def init_db() -> None:
     """Cria as tabelas, aplica migrações leves e remove resíduos do seed antigo."""
     with get_conn() as conn:
@@ -609,6 +625,7 @@ def init_db() -> None:
         _consolidate_legacy_movement_types(conn)
         _purge_invalid_product_ids(conn)
         _purge_legacy_demo_products(conn)
+        _ensure_min_stock_default_five(conn)
 
 
 def _purge_invalid_product_ids(conn: sqlite3.Connection) -> None:

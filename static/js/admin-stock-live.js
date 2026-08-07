@@ -434,10 +434,14 @@
                 const product = byId.get(String(row.dataset.productId));
                 if (!product) return;
                 const qty = row.querySelector('[data-stock-qty]');
+                const sales = row.querySelector('[data-stock-sales]');
                 const promoWrap = row.querySelector('[data-stock-promo-wrap]');
                 const promoIcon = row.querySelector('[data-stock-promo-icon]');
                 const promoTipPanel = row.querySelector('[data-stock-promo-tooltip-panel]');
                 if (qty) qty.innerHTML = `<strong>${escapeHtml(product.estoque)}</strong>`;
+                if (sales && Object.prototype.hasOwnProperty.call(product, 'units_sold')) {
+                    sales.textContent = String(Number(product.units_sold) || 0);
+                }
                 updateStockStatusCell(row, product);
                 const deliveryWrap = row.querySelector('[data-stock-delivery-wrap]');
                 const deliveryCount = row.querySelector('[data-stock-delivery-count]');

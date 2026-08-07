@@ -41,11 +41,12 @@ from .badges import (
     event_badge_style_pairs,
     normalize_event_badge_color,
 )
-from .connection import DB_PATH, get_conn
+from .connection import DB_PATH, DEFAULT_MIN_STOCK, get_conn
 from .events import (
     EXPORT_MOVEMENTS_CSV_CAP,
     EXPORT_SALES_ITEMS_CSV_CAP,
     EXPORT_SALES_SUMMARY_CSV_CAP,
+    EXPORT_STOCK_CSV_CAP,
     add_product_to_event,
     add_seller_to_event,
     archive_event,
@@ -141,6 +142,7 @@ from .transactions import (
     list_transactions_for_event,
     list_transactions_for_seller,
     pending_delivery_units_by_product_for_event,
+    units_sold_by_product_for_event,
     refund_transaction,
     reset_totem_to_default_state,
     update_pending_transaction,
@@ -164,7 +166,9 @@ __all__ = [
     "EXPORT_MOVEMENTS_CSV_CAP",
     "EXPORT_SALES_ITEMS_CSV_CAP",
     "EXPORT_SALES_SUMMARY_CSV_CAP",
+    "EXPORT_STOCK_CSV_CAP",
     "DB_PATH",
+    "DEFAULT_MIN_STOCK",
     "add_product_to_event",
     "add_seller_to_event",
     "archive_event",
@@ -236,6 +240,7 @@ __all__ = [
     "max_stock_movement_id_filtered",
     "normalize_event_badge_color",
     "pending_delivery_units_by_product_for_event",
+    "units_sold_by_product_for_event",
     "refund_transaction",
     "register_event_stock_adjustment",
     "register_event_stock_entry",
