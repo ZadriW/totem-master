@@ -1,0 +1,152 @@
+{% extends "admin/_layout.html" %}
+
+{% block title %}Transações — {{ event.name }} | Dental Odonto Master{% endblock %}
+
+{% block admin_body %}
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <a class="admin-breadcrumb" href="{{ url_for('admin_event_detail', event_id=event.id) }}">
+                <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                {{ event.name }}
+            </a>
+            <h2 class="admin-section__title">Exportar vendas (CSV)</h2>
+            <p class="admin-section__subtitle">
+                Pedidos confirmados com movimentação de venda neste evento. Opcional: período pela data do pedido.
+                Campos vazios exportam o histórico completo (até os limites do servidor).
+            </p>
+        </div>
+    </header>
+    <form class="admin-filters" method="get" action="{{ url_for('admin_event_sales_export_csv', event_id=event.id) }}" aria-label="Exportar vendas em CSV">
+        <label class="admin-filter">
+            <span class="admin-filter__label">Data inicial</span>
+            <input type="date" name="data_inicio" class="admin-filter__input">
+        </label>
+        <label class="admin-filter">
+            <span class="admin-filter__label">Data final</span>
+            <input type="date" name="data_fim" class="admin-filter__input">
+        </label>
+        <label class="admin-filter">
+            <span class="admin-filter__label">Detalhe</span>
+            <select name="nivel" class="admin-filter__input" title="Um arquivo por pedido ou uma linha por item vendido">
+                <option value="pedidos">Resumo por pedido</option>
+                <option value="itens">Uma linha por item</option>
+            </select>
+        </label>
+        <div class="admin-filters__actions">
+            <button type="submit" class="admin-btn admin-btn--primary">
+                <i class="fa-solid fa-file-csv" aria-hidden="true"></i>
+                Baixar CSV
+            </button>
+        </div>
+    </form>
+</section>
+
+<section class="admin-section">
+    <header class="admin-section__header admin-section__header--row">
+        <div>
+            <h1 class="admin-section__title">Histórico de transações</h1>
+            <p class="admin-section__subtitle">
+                Pedidos registrados neste evento (campo <em>evento</em> na transação).
+                Toque em uma linha para ver itens e totais.
+            </p>
+        </div>
+    </header>
+
+    <form class="admin-filters" method="get"
+          action="{{ url_for('admin_event_transactions', event_id=event.id) }}">
+        <label class="admin-filter">
+            <span class="admin-filter__label">Venda por vendedor</span>
+            <select name="vendedor" class="admin-filter__input">
+                <option value="0" {% if filters.vendedor == 0 %}selected{% endif %}>Todos</option>
+                {% for s in movement_filter_sellers %}
+                <option value="{{ s.id }}" {% if filters.vendedor == s.id %}selected{% endif %}>
+                    {{ s.name }}{% if not s.active %} (inativo){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label class="admin-filter">
+            <span class="admin-filter__label">Status</span>
+            <select name="status" class="admin-filter__input">
+                <option value="todos" {% if filters.status == 'todos' %}selected{% endif %}>Todos</option>
+                <option value="confirmado" {% if filters.status == 'confirmado' %}selected{% endif %}>Pago</option>
+                <option value="pendente" {% if filters.status == 'pendente' %}selected{% endif %}>Pendente</option>
+                <option value="cancelado" {% if filters.status == 'cancelado' %}selected{% endif %}>Cancelado</option>
+                <option value="estornado" {% if filters.status == 'estornado' %}selected{% endif %}>Estornado</option>
+                <option value="entregue" {% if filters.status == 'entregue' %}selected{% endif %}>Entregue</option>
+            </select>
+        </label>
+
+        <label class="admin-filter">
+            <span class="admin-filter__label">Entrega futura</span>
+            <select name="entrega" class="admin-filter__input"
+                    title="Pedidos com itens aguardando retirada (estoque ainda não baixado)">
+                <option value="todos" {% if filters.entrega == 'todos' %}selected{% endif %}>Todas</option>
+                <option value="parcial" {% if filters.entrega == 'parcial' %}selected{% endif %}>Retirada pendente</option>
+            </select>
+        </label>
+
+        <label class="admin-filter">
+            <span class="admin-filter__label">Data do pedido</span>
+            <input type="date" name="data" class="admin-filter__input"
+                   value="{{ filters.data }}"
+                   title="Filtrar pelo dia da transação (data de registro no sistema); deixe vazio para todos os dias">
+        </label>
+
+        <label class="admin-filter">
+            <span class="admin-filter__label">Por página</span>
+            <select name="per_page" class="admin-filter__input" title="Quantidade de transações por página">
+                {% for n in allowed_per_page %}
+                <option value="{{ n }}" {% if filters.per_page == n %}selected{% endif %}>{{ n }} transações</option>
+                {% endfor %}
+            </select>
+        </label>
+
+        <label class="admin-filter admin-filter--wide">
+            <span class="admin-filter__label">Código do pedido</span>
+            <span class="admin-filter__wrap">
+                <i class="fa-solid fa-receipt admin-filter__icon" aria-hidden="true"></i>
+                <input
+                    type="search"
+                    name="pedido"
+                    value="{{ filters.pedido }}"
+                    class="admin-filter__input"
+                    placeholder="Código do pedido ou nome do cliente…"
+                    autocomplete="off"
+                    inputmode="search"
+                    aria-describedby="hint-filtro-pedido-event-tx"
+                >
+            </span>
+            <span id="hint-filtro-pedido-event-tx" class="admin-filter__hint">
+                Busca pelo número do pedido (ex.: OM260422-1234) ou pelo nome do cliente.
+            </span>
+        </label>
+
+        <input type="hidden" name="page" value="1" aria-hidden="true">
+
+        <div class="admin-filters__actions">
+            <button type="submit" class="admin-btn admin-btn--primary">
+                <i class="fa-solid fa-filter" aria-hidden="true"></i>
+                Aplicar
+            </button>
+            <a href="{{ url_for('admin_event_transactions', event_id=event.id) }}" class="admin-btn admin-btn--ghost">Limpar</a>
+        </div>
+    </form>
+
+    <div
+        data-admin-event-tx-live
+        data-api-url="{{ url_for('admin_api_event_transactions', event_id=event.id) }}"
+        data-poll-ms="20000"
+        aria-live="polite"
+    >
+        {% include 'admin/partials/event_transactions_live.html' %}
+    </div>
+</section>
+
+{% endblock %}
+
+{% block admin_scripts %}
+<script src="{{ url_for('static', filename='js/admin-tx-live.js') }}"></script>
+{% endblock %}

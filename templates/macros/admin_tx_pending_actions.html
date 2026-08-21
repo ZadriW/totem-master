@@ -1,0 +1,29 @@
+{# Ações para pedidos pendentes (refazer carrinho / descartar). #}
+{% macro admin_tx_pending_actions(tx) %}
+{% if tx.status == 'pendente' %}
+<a
+    href="{{ url_for('seller_restore_pending_checkout', tx_id=tx.id) }}"
+    class="admin-tx__restore-cart"
+    aria-label="Refazer carrinho e retomar o pagamento deste pedido"
+    title="Refazer carrinho"
+>
+    <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
+</a>
+<form
+    method="post"
+    action="{{ url_for('seller_cancel_pending_transaction', tx_id=tx.id) }}"
+    class="admin-tx__discard-form"
+    data-confirm="Descartar este pedido pendente? O carrinho não poderá ser refeito por aqui."
+>
+    {% include 'partials/csrf_field.html' %}
+    <button
+        type="submit"
+        class="admin-tx__discard-cart"
+        aria-label="Apagar carrinho e descartar pedido pendente"
+        title="Apagar carrinho"
+    >
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
+</form>
+{% endif %}
+{% endmacro %}

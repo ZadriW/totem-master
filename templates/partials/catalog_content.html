@@ -1,0 +1,240 @@
+{# Conteúdo do catálogo (topbar + grid + carrinho). Requer: products, catalog_brand_href, catalog_brand_aria #}
+{% from "macros/admin_brand_logo.html" import admin_brand_logo %}
+<header class="topbar">
+    <a class="topbar__brand" href="{{ catalog_brand_href }}" aria-label="{{ catalog_brand_aria }}">
+        {{ admin_brand_logo() }}
+    </a>
+
+    <div class="topbar__search">
+        <svg class="topbar__search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input
+            id="searchInput"
+            type="search"
+            placeholder="Buscar produto..."
+            autocomplete="off"
+        >
+    </div>
+
+    <button
+        class="topbar__cart"
+        type="button"
+        id="openCartBtn"
+        aria-label="Abrir carrinho"
+    >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="21" r="1"></circle>
+            <circle cx="20" cy="21" r="1"></circle>
+            <path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"></path>
+        </svg>
+        <span class="topbar__cart-count" id="cartCount">0</span>
+    </button>
+</header>
+
+<div
+    id="catalogAddToast"
+    class="catalog-toast"
+    role="status"
+    aria-live="polite"
+    aria-atomic="true"
+    aria-hidden="true"
+>
+    <span class="catalog-toast__icon" aria-hidden="true">
+        <i class="fa-solid fa-circle-check"></i>
+    </span>
+    <span class="catalog-toast__text">Produto adicionado ao carrinho!</span>
+</div>
+
+<main class="catalog">
+    <div class="catalog__header">
+        <h1 class="catalog__title">Catálogo de Produtos</h1>
+        <p class="catalog__subtitle" id="resultsInfo">{{ products|length }} produtos disponíveis</p>
+    </div>
+
+    <div class="product-grid" id="productGrid">
+        {% for product in products %}
+        {% set sm = (product.estoque_minimo | default(5)) | int %}
+        {% set q = product.estoque | int %}
+        {% if q <= 0 %}
+            {% set stock_tone = 'empty' %}
+        {% elif sm > 0 and q < sm %}
+            {% set stock_tone = 'low' %}
+        {% else %}
+            {% set stock_tone = 'ok' %}
+        {% endif %}
+        {% set em_promo = product.em_promocao | default(false) %}
+        {% set pending_n = product.pending_delivery_units or 0 %}
+        {% set bl = product.backorder_limit | default(-1) | int %}
+        {% set backorder_blocked = bl == 0 and q <= 0 %}
+        <article
+            class="product-card{% if em_promo %} product-card--promo{% endif %}{% if backorder_blocked %} product-card--backorder-blocked{% endif %}"
+            data-id="{{ product.id }}"
+            data-category="{{ product.categoria }}"
+            data-name="{{ product.nome|lower }}"
+            data-variante="{{ (product.variante or '')|lower }}"
+            data-sku="{{ (product.sku or '')|lower }}"
+            data-estoque="{{ product.estoque }}"
+            data-estoque-min="{{ sm }}"
+            data-preco="{{ product.preco }}"
+            data-backorder-limit="{{ bl }}"
+        >
+            <div class="product-card__image">
+                <div class="product-card__promo-badge-slot" data-promo-badge-root>
+                    {% if em_promo and product.promo_badge %}
+                    <div class="product-card__promo-badge">
+                        <i class="fa-solid fa-tag" aria-hidden="true"></i>
+                        {{ product.promo_badge }}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="product-card__delivery-badge-slot" data-delivery-badge-root>
+                    {% if pending_n > 0 %}
+                    <div class="product-card__delivery-badge"
+                         title="{{ pending_n }} un. aguardando retirada">
+                        <span class="admin-badge admin-badge--warn admin-tx__delivery-badge" aria-label="Retirada pendente">
+                            <i class="fa-solid fa-box-open" aria-hidden="true"></i>
+                        </span>
+                        <span class="admin-stock__delivery-count">{{ pending_n }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                <img src="{{ product.imagem }}" alt="{{ product.nome }}" loading="lazy">
+            </div>
+            <div class="product-card__body">
+                <span class="product-card__category">{{ product.categoria }}</span>
+                <h2 class="product-card__name">{{ product.nome }}</h2>
+                {% if product.variante %}<p class="product-card__variant">{{ product.variante }}</p>{% endif %}
+                {% if product.sku %}
+                <div class="product-card__meta-line">
+                    <span class="product-card__sku">SKU {{ product.sku }}</span>
+                    <span class="product-card__stock product-card__stock--{{ stock_tone }}" data-stock-display>{{ product.estoque }} no estoque.</span>
+                </div>
+                {% else %}
+                <span class="product-card__stock product-card__stock--{{ stock_tone }} product-card__stock--alone" data-stock-display>{{ product.estoque }} no estoque.</span>
+                {% endif %}
+                <span class="product-card__backorder-info{% if bl == 0 %} product-card__backorder-info--blocked{% endif %}" data-backorder-info
+                      {% if bl < 0 %}hidden{% endif %}>
+                    <i class="fa-solid {% if bl == 0 %}fa-ban{% else %}fa-truck-clock{% endif %}" aria-hidden="true"></i>
+                    <span data-backorder-msg>
+                        {% if bl == 0 %}
+                        Vendas futuras bloqueadas
+                        {% else %}
+                        <span data-backorder-limit-value>{{ bl }}</span> vendas futuras disp.
+                        {% endif %}
+                    </span>
+                </span>
+                <div data-catalog-pricing>
+                    {% set promo_tipo = product.promo_tipo | default('') %}
+                    {% if em_promo and promo_tipo in ('percent', 'fixed') and product.preco_original is defined and product.preco_original > product.preco + 0.001 %}
+                    {# percent / fixed: preço unitário efetivamente reduzido — exibe riscado + novo #}
+                    <div class="product-card__price-wrap">
+                        <span class="product-card__price-original">R$ {{ '%.2f'|format(product.preco_original)|replace('.', ',') }}</span>
+                        <p class="product-card__price product-card__price--promo">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
+                    </div>
+                    {% elif em_promo and promo_tipo in ('bogo', 'min_bundle', 'exact_bundle') %}
+                    {# Desconto por quantidade: exibe preço de lista + nome da promo #}
+                    <div class="product-card__price-wrap">
+                        <p class="product-card__price">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
+                        {% if product.promo_nome %}<span class="product-card__promo-name">{{ product.promo_nome }}</span>{% endif %}
+                    </div>
+                    {% else %}
+                    <p class="product-card__price">R$ {{ '%.2f'|format(product.preco)|replace('.', ',') }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="product-card__actions">
+                <div class="product-card__counter" role="group" aria-label="Quantidade">
+                    <button type="button" class="product-card__counter-btn" data-action="dec" aria-label="Diminuir quantidade">
+                        <span aria-hidden="true">&minus;</span>
+                    </button>
+                    <input
+                        class="product-card__counter-input"
+                        type="number"
+                        min="1"
+                        max="{{ product.estoque }}"
+                        value="1"
+                        inputmode="numeric"
+                        aria-label="Quantidade a adicionar"
+                    >
+                    <button type="button" class="product-card__counter-btn" data-action="inc" aria-label="Aumentar quantidade">
+                        <span aria-hidden="true">+</span>
+                    </button>
+                </div>
+                <button class="product-card__button" type="button" data-id="{{ product.id }}" aria-label="Adicionar ao carrinho"{% if backorder_blocked %} disabled{% endif %}>
+                    <i class="fa-solid fa-cart-plus" aria-hidden="true"></i>
+                </button>
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+
+    <p class="catalog__empty" id="emptyState" hidden>
+        Nenhum produto encontrado para sua busca.
+    </p>
+</main>
+
+<div class="cart-backdrop" id="cartBackdrop" aria-hidden="true"></div>
+
+<aside
+    class="cart-drawer"
+    id="cartDrawer"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="cartDrawerTitle"
+    aria-hidden="true"
+>
+    <header class="cart-drawer__header">
+        <h2 class="cart-drawer__title" id="cartDrawerTitle">
+            <i class="fa-solid fa-cart-shopping" aria-hidden="true"></i>
+            Meu carrinho
+            <span class="cart-drawer__title-count" id="cartDrawerCount">0</span>
+        </h2>
+        <button type="button" class="cart-drawer__close" id="cartDrawerClose" aria-label="Fechar carrinho">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+    </header>
+
+    <div class="cart-drawer__body">
+        <div class="cart-drawer__empty" id="cartDrawerEmpty">
+            <div class="cart-drawer__empty-icon">
+                <i class="fa-solid fa-basket-shopping" aria-hidden="true"></i>
+            </div>
+            <p class="cart-drawer__empty-title">Seu carrinho está vazio</p>
+            <p class="cart-drawer__empty-text">
+                Adicione produtos do catálogo para continuar.
+            </p>
+        </div>
+        <div class="cart-drawer__items" id="cartDrawerItems" hidden></div>
+        <div class="cart-drawer__warning" id="cartDrawerBackorderWarning" hidden role="alert">
+            <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+            <p>Remova os produtos com <strong>vendas futuras bloqueadas</strong> ou reduza a quantidade ao estoque disponível para finalizar a compra.</p>
+        </div>
+    </div>
+
+    <footer class="cart-drawer__footer">
+        <div class="cart-drawer__summary">
+            <span class="cart-drawer__summary-label">Total</span>
+            <span class="cart-drawer__summary-value" id="cartDrawerTotal">R$ 0,00</span>
+        </div>
+        <button
+            type="button"
+            class="cart-drawer__checkout"
+            id="cartDrawerCheckout"
+            disabled
+        >
+            Finalizar compra
+            <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+        </button>
+        <button
+            type="button"
+            class="cart-drawer__clear"
+            id="cartDrawerClear"
+            disabled
+        >
+            <i class="fa-solid fa-trash-can" aria-hidden="true"></i>
+            Limpar carrinho
+        </button>
+    </footer>
+</aside>
