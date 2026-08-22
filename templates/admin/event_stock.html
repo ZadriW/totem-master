@@ -28,6 +28,15 @@
             </p>
         </div>
         <div class="admin-section__header-actions" style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+            <form method="post" action="{{ url_for('admin_sync_catalog_wake') }}">
+                {% include 'partials/csrf_field.html' %}
+                <button type="submit" class="admin-btn admin-btn--ghost"
+                        title="Atualiza nomes, SKUs, preços e imagens a partir da Wake Commerce. Estoque e eventos não são alterados."
+                        onclick="return confirm('Sincronizar catálogo com a Wake Commerce?\n\nIsso atualiza nomes, SKUs, preços-base e imagens.\nEstoque, vendas e promoções NÃO serão afetados.');">
+                    <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i>
+                    Sincronizar Wake
+                </button>
+            </form>
             <form method="post" action="{{ url_for('admin_event_cache_product_images', event_id=event.id) }}">
                 {% include 'partials/csrf_field.html' %}
                 {{ event_stock_preserved_filters(filters, pagination) }}
@@ -285,6 +294,7 @@
                             </span>
                         </span>
                         {% if p.variant_name %}<span class="admin-stock__variant">{{ p.variant_name }}</span>{% endif %}
+                        {% if p.subtitle %}<span class="admin-stock__subtitle">{{ p.subtitle }}</span>{% endif %}
                         <small class="admin-stock__meta">
                             ID: {{ p.product_id }} | SKU: <code class="admin-stock__sku-code">{{ p.sku or '—' }}</code>
                         </small>

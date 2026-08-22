@@ -493,7 +493,8 @@ def list_event_products_slice(
                 p.price          AS library_price,
                 COALESCE(ep.price, p.price) AS price,
                 p.active         AS product_active,
-                p.variant_name
+                p.variant_name,
+                p.subtitle
             {_EVENT_PRODUCTS_ADMIN_FROM}
             {extra}
             ORDER BY p.name COLLATE NOCASE

@@ -158,6 +158,11 @@
         return PP.recalculateItems(items);
     }
 
+    function findPaidItem(items, id) {
+        const idStr = String(id);
+        return items.find((i) => String(i.id) === idStr && !i.bogo_auto_free);
+    }
+
     const Cart = {
         KEY: STORAGE_KEY,
         EVENT: EVENT_NAME,
@@ -190,7 +195,7 @@
                 };
             }
             const items = recalculateAll(readRaw());
-            const existing = items.find(i => String(i.id) === String(product.id));
+            const existing = findPaidItem(items, product.id);
             const nextQty = existing
                 ? clampQty(existing.quantidade + desired, product.estoque, bl)
                 : desired;
@@ -212,7 +217,7 @@
             const quantidade = clampQty(qty, product.estoque, bl);
             const items = recalculateAll(readRaw());
             const idStr = String(product.id);
-            const existing = items.find(i => String(i.id) === idStr);
+            const existing = findPaidItem(items, idStr);
             if (existing) {
                 existing.quantidade = clampQty(
                     existing.quantidade + quantidade,
@@ -229,18 +234,16 @@
 
         updateQty(id, qty) {
             const items = recalculateAll(readRaw());
-            const idStr = String(id);
-            const item = items.find(i => String(i.id) === idStr);
-            if (!item || item.bogo_auto_free) return;
+            const item = findPaidItem(items, id);
+            if (!item) return;
             item.quantidade = clampQty(qty, item.estoque, getBackorderLimit(item));
             writeRaw(recalculateAll(items));
         },
 
         increment(id, step = 1) {
             const items = recalculateAll(readRaw());
-            const idStr = String(id);
-            const item = items.find(i => String(i.id) === idStr);
-            if (!item || item.bogo_auto_free) return;
+            const item = findPaidItem(items, id);
+            if (!item) return;
             item.quantidade = clampQty(
                 item.quantidade + step,
                 item.estoque,
@@ -252,8 +255,8 @@
         decrement(id, step = 1) {
             const items = recalculateAll(readRaw());
             const idStr = String(id);
-            const item = items.find(i => String(i.id) === idStr);
-            if (!item || item.bogo_auto_free) return;
+            const item = findPaidItem(items, idStr);
+            if (!item) return;
             const next = item.quantidade - step;
             if (next <= 0) {
                 writeRaw(recalculateAll(items.filter(i => String(i.id) !== idStr)));
@@ -266,8 +269,8 @@
         remove(id) {
             const idStr = String(id);
             const items = readRaw();
-            const item = items.find(i => String(i.id) === idStr);
-            if (item && item.bogo_auto_free) return;
+            const item = findPaidItem(items, idStr);
+            if (!item) return;
             writeRaw(recalculateAll(items.filter(i => String(i.id) !== idStr)));
         },
 
@@ -350,10 +353,14 @@
         /** Aplica cotação do servidor (POST /api/carrinho/cotacao). */
         applyServerQuote(quote) {
             if (!quote || !Array.isArray(quote.items)) return;
-            const byId = new Map(quote.items.map(row => [String(row.id), row]));
+            const quoteRows = quote.items.slice();
             const prev = readRaw();
             const items = prev.map(item => {
-                const row = byId.get(String(item.id));
+                const idx = quoteRows.findIndex((row) => (
+                    String(row.id) === String(item.id)
+                    && !!row.bogo_auto_free === !!item.bogo_auto_free
+                ));
+                const row = idx >= 0 ? quoteRows.splice(idx, 1)[0] : null;
                 if (!row) return item;
                 return {
                     ...item,
@@ -367,7 +374,7 @@
                     promo_rule_value: Number(row.promo_rule_value ?? item.promo_rule_value) || item.promo_rule_value || 0,
                     promo_min_qty: Number(row.promo_min_qty ?? item.promo_min_qty) || item.promo_min_qty || 1,
                     promo_free_qty: Number(row.promo_free_qty ?? item.promo_free_qty) || item.promo_free_qty || 0,
-                    bogo_auto_free: !!item.bogo_auto_free,
+                    bogo_auto_free: !!item.bogo_auto_free || !!row.bogo_auto_free,
                 };
             });
             const pricingChanged = items.length !== prev.length || items.some((item, i) => {

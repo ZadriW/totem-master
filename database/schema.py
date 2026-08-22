@@ -522,12 +522,13 @@ def _ensure_sellers_columns(conn: sqlite3.Connection) -> None:
 
 
 def _ensure_products_wake_columns(conn: sqlite3.Connection) -> None:
-    """Colunas Wake em ``products`` (variante principal, nome da variante)."""
+    """Colunas Wake em ``products`` (variante principal, nome da variante, subtítulo)."""
     cols = _table_columns(conn, "products")
     for field, ddl in {
         "wake_product_id": "INTEGER",
         "variant_name": "TEXT",
         "main_variant": "INTEGER NOT NULL DEFAULT 0",
+        "subtitle": "TEXT",
     }.items():
         if field not in cols:
             conn.execute(f"ALTER TABLE products ADD COLUMN {field} {ddl}")

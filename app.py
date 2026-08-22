@@ -167,6 +167,8 @@ from database import (
     reset_totem_to_default_state,
     restore_event,
     set_product_active,
+    sync_catalog_from_wake,
+    get_distinct_wake_product_ids,
     upsert_wake_variant,
     update_event,
     update_event_product_backorder_limit,
@@ -3364,6 +3366,71 @@ def admin_products_cache_images():
         flash("Não foi possível baixar as imagens. Tente novamente com internet.", "error")
         return redirect(url_for("admin_products"))
     _flash_image_cache_stats(stats)
+    return redirect(url_for("admin_products"))
+
+
+@app.route("/admin/catalogo/sincronizar-wake", methods=["POST"])
+@admin_required
+def admin_sync_catalog_wake():
+    """Sincroniza nomes/SKU/preço/imagem/variante com a Wake Commerce.
+
+    NÃO altera estoque, vendas, promoções nem vínculos com eventos.
+    Requer internet e WAKE_TOKEN configurado.
+    """
+    from database.products import get_local_ids_without_wake_mapping
+
+    if not wake_api.wake_token_configured():
+        flash(
+            "Token Wake (WAKE_TOKEN) não configurado. "
+            "Defina a variável de ambiente antes de sincronizar.",
+            "error",
+        )
+        return _redirect_back_admin()
+
+    all_variants: list = []
+
+    # Etapa 1: Buscar famílias via wake_product_id já mapeados
+    wake_pids = get_distinct_wake_product_ids()
+    if wake_pids:
+        try:
+            family_variants = wake_api.fetch_all_local_families_from_wake(wake_pids)
+            all_variants.extend(family_variants)
+        except Exception as exc:
+            app.logger.exception("Sync Wake: falha ao buscar famílias")
+            flash(f"Erro ao consultar famílias Wake: {exc}", "error")
+            return _redirect_back_admin()
+
+    # Etapa 2: Buscar por productVariantId para produtos sem wake_product_id
+    unmapped_ids = get_local_ids_without_wake_mapping()
+    if unmapped_ids:
+        already_synced = {int(v.get("variant_id") or v.get("id") or 0) for v in all_variants}
+        to_fetch = [vid for vid in unmapped_ids if vid not in already_synced]
+        if to_fetch:
+            try:
+                extra = wake_api.fetch_variants_by_ids(to_fetch)
+                all_variants.extend(extra)
+            except Exception as exc:
+                app.logger.warning("Sync Wake: falha ao buscar variantes extras: %s", exc)
+
+    if not all_variants:
+        flash("Nenhuma variante retornada pela Wake. Verifique o token e a internet.", "error")
+        return _redirect_back_admin()
+
+    stats = sync_catalog_from_wake(all_variants)
+    flash(
+        f"Sincronização concluída: {stats['updated']} atualizado(s), "
+        f"{stats['inserted']} novo(s), {stats['skipped']} ignorado(s). "
+        "Estoque e eventos preservados.",
+        "success",
+    )
+    return _redirect_back_admin()
+
+
+def _redirect_back_admin():
+    """Redireciona para a página de origem ou biblioteca de produtos."""
+    ref = request.referrer
+    if ref:
+        return redirect(ref)
     return redirect(url_for("admin_products"))
 
 

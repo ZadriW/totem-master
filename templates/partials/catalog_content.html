@@ -109,6 +109,7 @@
                 <span class="product-card__category">{{ product.categoria }}</span>
                 <h2 class="product-card__name">{{ product.nome }}</h2>
                 {% if not tem_opcoes and product.variante %}<p class="product-card__variant">{{ product.variante }}</p>{% endif %}
+                {% if product.subtitle %}<p class="product-card__subtitle">{{ product.subtitle }}</p>{% endif %}
                 {% if tem_opcoes %}
                 <div class="product-card__meta-line">
                     <span class="product-card__sku">{{ product.opcoes_count or (product.opcoes|length) }} opções</span>

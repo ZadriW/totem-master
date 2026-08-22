@@ -144,11 +144,32 @@
         return buy > 0 && free > 0 && buy !== free;
     }
 
-    function isCrossBogoPromo(promo) {
+    function isSameSkuBogo(item) {
+        if (!item || String(item.promo_tipo || '') !== 'bogo') return false;
+        const buy = parseInt(String(item.promo_bogo_buy_id), 10) || 0;
+        const free = parseInt(String(item.promo_bogo_free_id), 10) || 0;
+        return buy > 0 && free > 0 && buy === free;
+    }
+
+    function isBogoPairPromo(promo) {
         if (!promo || String(promo.promo_tipo || '') !== 'bogo') return false;
         const buy = parseInt(String(promo.promo_bogo_buy_id), 10) || 0;
         const free = parseInt(String(promo.promo_bogo_free_id), 10) || 0;
-        return buy > 0 && free > 0 && buy !== free;
+        return buy > 0 && free > 0;
+    }
+
+    function isCrossBogoPromo(promo) {
+        if (!isBogoPairPromo(promo)) return false;
+        const buy = parseInt(String(promo.promo_bogo_buy_id), 10) || 0;
+        const free = parseInt(String(promo.promo_bogo_free_id), 10) || 0;
+        return buy !== free;
+    }
+
+    function isSameSkuBogoPromo(promo) {
+        if (!isBogoPairPromo(promo)) return false;
+        const buy = parseInt(String(promo.promo_bogo_buy_id), 10) || 0;
+        const free = parseInt(String(promo.promo_bogo_free_id), 10) || 0;
+        return buy === free;
     }
 
     function stampPromoFields(target, promo) {
@@ -178,9 +199,19 @@
         }
 
         const listSubtotal = round2(listPrice * qty);
+        if (next.bogo_auto_free) {
+            next.preco = 0;
+            next.subtotal = 0;
+            next.economia = round2(listPrice * qty);
+            next.promo_aplicada = true;
+            next.bogo_free_units = qty;
+            next.em_promocao = true;
+            return next;
+        }
+
         const candidates = promosOf(next).filter((promo) => {
             if (!promo.promo_tipo || promo.promo_tipo === 'combo_bundle') return false;
-            if (isCrossBogoPromo(promo)) return false;
+            if (isBogoPairPromo(promo)) return false;
             return true;
         });
 
@@ -239,24 +270,26 @@
         return list.find((p) => String(p.id) === want) || null;
     }
 
-    function clampGiftQty(qty, product, existing) {
+    function clampGiftQty(qty, product, existing, reservedPaidQty) {
         let n = Math.max(0, parseInt(String(qty), 10) || 0);
         if (n <= 0) return 0;
         const stock = Number(product?.estoque ?? existing?.estoque);
         const blRaw = Number(product?.backorder_limit ?? existing?.backorder_limit);
         const bl = Number.isFinite(blRaw) ? blRaw : -1;
         const stockN = Number.isFinite(stock) ? Math.max(0, Math.floor(stock)) : null;
+        const reserved = Math.max(0, parseInt(String(reservedPaidQty), 10) || 0);
+        const available = stockN == null ? null : Math.max(0, stockN - reserved);
         if (window.__SELLER_BACKORDER__) {
             if (bl === 0) {
-                if (stockN == null) return n;
-                if (stockN <= 0) return 0;
-                return Math.min(n, stockN);
+                if (available == null) return n;
+                if (available <= 0) return 0;
+                return Math.min(n, available);
             }
             return n;
         }
-        if (stockN != null) {
-            if (stockN <= 0) return 0;
-            return Math.min(n, stockN);
+        if (available != null) {
+            if (available <= 0) return 0;
+            return Math.min(n, available);
         }
         return n;
     }
@@ -302,13 +335,14 @@
             if (item.bogo_auto_free) return;
             const buy = parseInt(String(item.promo_bogo_buy_id), 10) || 0;
             const free = parseInt(String(item.promo_bogo_free_id), 10) || 0;
-            if (String(item.promo_tipo || '') !== 'bogo' || !buy || !free || buy === free) return;
+            if (String(item.promo_tipo || '') !== 'bogo' || !buy || !free) return;
             if (String(item.id) !== String(buy)) return;
             const key = [buy, free, item.promo_min_qty || 0, item.promo_free_qty || 0].join('|');
             if (!groups[key]) {
                 groups[key] = {
                     buyId: buy,
                     freeId: free,
+                    sameSku: buy === free,
                     buyQty: 0,
                     meta: item,
                 };
@@ -323,10 +357,16 @@
             const freeQ = Math.max(0, parseInt(String(g.meta.promo_free_qty), 10) || 0);
             const granted = freeQ > 0 ? Math.floor(g.buyQty / minQ) * freeQ : 0;
             const freeId = String(g.freeId);
-            const existingIdx = list.findIndex((i) => String(i.id) === freeId);
+            const keepKey = g.sameSku ? `same:${freeId}` : freeId;
+            const existingIdx = list.findIndex((i) => {
+                if (String(i.id) !== freeId) return false;
+                return g.sameSku ? !!i.bogo_auto_free : true;
+            });
             const existing = existingIdx >= 0 ? list[existingIdx] : null;
-            const product = lookupCatalogProduct(g.freeId) || (existing && !existing.bogo_auto_free ? null : existing);
-            const qty = clampGiftQty(granted, product || existing, existing);
+            const product = lookupCatalogProduct(g.freeId)
+                || (existing && !existing.bogo_auto_free ? null : existing);
+            const reservedPaid = g.sameSku ? g.buyQty : 0;
+            const qty = clampGiftQty(granted, product || existing, existing, reservedPaid);
 
             if (qty <= 0) {
                 if (existing && existing.bogo_auto_free) {
@@ -335,13 +375,13 @@
                 return;
             }
 
-            keepFree.add(freeId);
+            keepFree.add(keepKey);
 
-            if (!existing) {
-                const source = lookupCatalogProduct(g.freeId);
+            if (!existing || (g.sameSku && existing && !existing.bogo_auto_free)) {
+                const source = lookupCatalogProduct(g.freeId) || existing || g.meta;
                 if (!source) return;
                 const gift = buildGiftItem(source, g.meta, qty);
-                const buyIdx = list.findIndex((i) => String(i.id) === String(g.buyId));
+                const buyIdx = list.findIndex((i) => String(i.id) === String(g.buyId) && !i.bogo_auto_free);
                 list.splice(buyIdx >= 0 ? buyIdx + 1 : list.length, 0, gift);
                 return;
             }
@@ -369,7 +409,8 @@
 
         return list.filter((item) => {
             if (!item.bogo_auto_free) return true;
-            return keepFree.has(String(item.id));
+            const id = String(item.id);
+            return keepFree.has(id) || keepFree.has(`same:${id}`);
         });
     }
 
@@ -382,11 +423,12 @@
             used.add(idx);
             const buy = parseInt(String(item.promo_bogo_buy_id), 10) || 0;
             const free = parseInt(String(item.promo_bogo_free_id), 10) || 0;
-            if (String(item.promo_tipo || '') !== 'bogo' || !buy || !free || buy === free) return;
+            if (String(item.promo_tipo || '') !== 'bogo' || !buy || !free) return;
             if (String(item.id) !== String(buy)) return;
             items.forEach((gift, j) => {
                 if (used.has(j)) return;
                 if (String(gift.id) !== String(free)) return;
+                if (buy === free && !gift.bogo_auto_free) return;
                 out.push(gift);
                 used.add(j);
             });
@@ -673,7 +715,7 @@
     function renderLineItemHtml(item, formatBRL, articleClass, options = {}) {
         const qty = Number(item.quantidade) || 0;
         const freeUnits = parseInt(String(item.bogo_free_units), 10) || 0;
-        const isFullyFree = freeUnits > 0 && freeUnits >= qty;
+        const isFullyFree = !!item.bogo_auto_free || (freeUnits > 0 && freeUnits >= qty);
         const bogoFreeMeta = formatBogoFreeQtyMeta(item, formatBRL);
         const bundleMeta = formatBundleQtyMeta(item, formatBRL);
         const unit = formatBRL(item.preco);

@@ -482,6 +482,7 @@
             >
                 <div class="product-card__body">
                     <h2 class="product-card__name">${escapeCatalogHtml(product.variante || product.nome || '')}</h2>
+                    ${product.subtitle ? `<p class="product-card__subtitle">${escapeCatalogHtml(product.subtitle)}</p>` : ''}
                     ${sku}
                     ${backorder}
                     <div data-catalog-pricing>${renderPricingBlockMarkup(product)}</div>

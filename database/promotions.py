@@ -657,12 +657,33 @@ def _is_cross_bogo(promo: dict) -> bool:
     return bool(buy_id and free_id and buy_id != free_id)
 
 
-def _apply_bogo_cross_product(promo: dict, result: List[Dict]) -> List[int]:
-    """Compre X do SKU A, leve Y do SKU B grátis. Retorna índices com desconto."""
+def _is_same_sku_bogo(promo: dict) -> bool:
     buy_id = _int_or_none(promo.get("bogo_buy_product_id"))
     free_id = _int_or_none(promo.get("bogo_free_product_id"))
-    if not buy_id or not free_id or buy_id == free_id:
+    return bool(buy_id and free_id and buy_id == free_id)
+
+
+def _is_bogo_pair(promo: dict) -> bool:
+    buy_id = _int_or_none(promo.get("bogo_buy_product_id"))
+    free_id = _int_or_none(promo.get("bogo_free_product_id"))
+    return bool(buy_id and free_id)
+
+
+def _is_bogo_gift_line(item: Dict) -> bool:
+    return bool(item.get("bogo_auto_free"))
+
+
+def _apply_bogo_cross_product(promo: dict, result: List[Dict]) -> List[int]:
+    """Compre X do SKU A, leve Y do SKU B grátis. Retorna índices com desconto.
+
+    Também cobre o mesmo SKU (compre 1, leve 2): a linha paga não entra
+    em ``free_indices``; só as linhas ``bogo_auto_free``.
+    """
+    buy_id = _int_or_none(promo.get("bogo_buy_product_id"))
+    free_id = _int_or_none(promo.get("bogo_free_product_id"))
+    if not buy_id or not free_id:
         return []
+    same_sku = buy_id == free_id
     min_q = max(1, int(promo.get("min_qty") or 1))
     free_q = max(0, int(promo.get("free_qty") or 0))
     if free_q <= 0:
@@ -676,9 +697,10 @@ def _apply_bogo_cross_product(promo: dict, result: List[Dict]) -> List[int]:
         if pid is None or qty <= 0:
             continue
         pid_i = int(pid)
-        if pid_i == buy_id:
+        is_gift = _is_bogo_gift_line(it)
+        if pid_i == buy_id and not is_gift:
             buy_qty += qty
-        if pid_i == free_id:
+        if pid_i == free_id and (is_gift if same_sku else True):
             free_indices.append(i)
     if buy_qty < min_q or not free_indices:
         return []
@@ -713,11 +735,16 @@ def _inject_bogo_gift_items(
     promo: dict,
     result: List[Dict],
 ) -> None:
-    """Inclui o SKU grátis (Y) quando o SKU pago (X) atinge o mínimo da promoção."""
+    """Inclui o SKU grátis (Y) quando o SKU pago (X) atinge o mínimo da promoção.
+
+    No mesmo SKU, a linha paga nunca é reaproveitada: cria/atualiza uma
+    linha ``bogo_auto_free`` à parte.
+    """
     buy_id = _int_or_none(promo.get("bogo_buy_product_id"))
     free_id = _int_or_none(promo.get("bogo_free_product_id"))
-    if not buy_id or not free_id or buy_id == free_id:
+    if not buy_id or not free_id:
         return
+    same_sku = buy_id == free_id
     min_q = max(1, int(promo.get("min_qty") or 1))
     free_q = max(0, int(promo.get("free_qty") or 0))
     if free_q <= 0:
@@ -731,9 +758,10 @@ def _inject_bogo_gift_items(
         if pid is None or qty <= 0:
             continue
         pid_i = int(pid)
-        if pid_i == buy_id:
+        is_gift = _is_bogo_gift_line(it)
+        if pid_i == buy_id and not is_gift:
             buy_qty += qty
-        if pid_i == free_id:
+        if pid_i == free_id and (is_gift if same_sku else True):
             free_item = it
 
     granted = (buy_qty // min_q) * free_q
@@ -741,6 +769,13 @@ def _inject_bogo_gift_items(
         return
 
     if free_item is not None:
+        if same_sku:
+            lp = float(free_item.get("original_price") or free_item.get("unit_price") or 0)
+            free_item["quantity"] = granted
+            free_item["bogo_auto_free"] = True
+            free_item["subtotal"] = 0.0
+            free_item["unit_price"] = 0.0
+            return
         current = int(free_item.get("quantity") or 0)
         if current < granted:
             lp = float(free_item.get("original_price") or free_item.get("unit_price") or 0)
@@ -774,6 +809,7 @@ def _inject_bogo_gift_items(
             "quantity": granted,
             "subtotal": round(lp * granted, 2),
             "promotion_id": None,
+            "bogo_auto_free": True,
         }
     )
 
@@ -861,9 +897,9 @@ def apply_promotions_to_items_in_conn(
             if result[i].get("promotion_id") is not None:
                 handled_by_cross.add(i)
 
-    # --- bogo cruzado: compre SKU A, leve SKU B grátis ---
+    # --- bogo: compre SKU A, leve SKU B grátis (incluindo o mesmo SKU) ---
     for promo_id, promo in promo_defs.items():
-        if promo["rule_type"] != "bogo" or not _is_cross_bogo(promo):
+        if promo["rule_type"] != "bogo" or not _is_bogo_pair(promo):
             continue
         _inject_bogo_gift_items(conn, event_id, promo, result)
         applied = _apply_bogo_cross_product(promo, result)
@@ -871,6 +907,8 @@ def apply_promotions_to_items_in_conn(
 
     for i, new_item in enumerate(result):
         if i in handled_by_cross:
+            continue
+        if _is_bogo_gift_line(new_item):
             continue
         pid = new_item.get("product_id")
         list_price = float(new_item.get("original_price") or new_item.get("unit_price") or 0.0)
@@ -884,7 +922,7 @@ def apply_promotions_to_items_in_conn(
         for promo in product_promos[pid]:
             if promo["rule_type"] == "combo_bundle":
                 continue
-            if promo["rule_type"] == "bogo" and _is_cross_bogo(promo):
+            if promo["rule_type"] == "bogo" and _is_bogo_pair(promo):
                 continue
             if promo["rule_type"] == "bogo":
                 buy_id = _int_or_none(promo.get("bogo_buy_product_id"))
@@ -995,6 +1033,7 @@ def quote_cart_items_for_event(event_id: int, cart_items: List[Dict]) -> Dict:
                 "unit_price": list_p,
                 "quantity": qty,
                 "subtotal": round(list_p * qty, 2),
+                "bogo_auto_free": bool(raw.get("bogo_auto_free")),
             }
         )
 
@@ -1025,21 +1064,24 @@ def quote_cart_items_for_event(event_id: int, cart_items: List[Dict]) -> Dict:
                 promo_free_qtys[int(r["id"])] = int(r["free_qty"] or 0)
 
     out_items: List[Dict] = []
-    for src, row in zip(normalized, priced):
+    for row in priced:
         pid = int(row["product_id"])
         qty = int(row["quantity"])
-        list_p = float(row.get("original_price") or src["unit_price"] or 0)
+        list_p = float(row.get("original_price") or row.get("unit_price") or 0)
         eff_unit = float(row.get("unit_price") or 0)
         subtotal = float(row.get("subtotal") or 0)
         promo_id = row.get("promotion_id")
-        has_promo = promo_id is not None and subtotal < round(list_p * qty, 2) - 0.001
+        is_gift = bool(row.get("bogo_auto_free"))
+        has_promo = is_gift or (
+            promo_id is not None and subtotal < round(list_p * qty, 2) - 0.001
+        )
         out_items.append(
             {
                 "id": pid,
                 "quantidade": qty,
                 "preco_lista": list_p,
-                "preco": eff_unit,
-                "subtotal": subtotal,
+                "preco": 0.0 if is_gift else eff_unit,
+                "subtotal": 0.0 if is_gift else subtotal,
                 "em_promocao": has_promo,
                 "promotion_id": int(promo_id) if promo_id is not None else None,
                 "promo_nome": promo_names.get(int(promo_id), "") if promo_id else "",
@@ -1047,7 +1089,8 @@ def quote_cart_items_for_event(event_id: int, cart_items: List[Dict]) -> Dict:
                 "promo_rule_value": promo_values.get(int(promo_id), 0) if promo_id else 0,
                 "promo_min_qty": promo_min_qtys.get(int(promo_id), 1) if promo_id else 0,
                 "promo_free_qty": promo_free_qtys.get(int(promo_id), 0) if promo_id else 0,
-                "economia": round(max(0.0, list_p * qty - subtotal), 2),
+                "economia": round(max(0.0, list_p * qty - (0.0 if is_gift else subtotal)), 2),
+                "bogo_auto_free": is_gift,
             }
         )
 

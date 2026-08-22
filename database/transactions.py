@@ -118,7 +118,10 @@ def _public_items_from_normalized(
         list_p = float(i.get("original_price") or i.get("unit_price") or 0)
         subtotal = float(i.get("subtotal") or 0)
         promo_id = i.get("promotion_id")
-        has_promo = promo_id is not None and subtotal < round(list_p * qty, 2) - 0.001
+        is_gift = bool(i.get("bogo_auto_free"))
+        has_promo = is_gift or (
+            promo_id is not None and subtotal < round(list_p * qty, 2) - 0.001
+        )
         out.append(
             {
                 "id": int(pid),
@@ -229,6 +232,7 @@ def create_transaction(
                 "unit_price": price,
                 "quantity": qty,
                 "subtotal": round(price * qty, 2),
+                "bogo_auto_free": bool(raw.get("bogo_auto_free")),
             }
         )
 
@@ -483,6 +487,7 @@ def update_pending_transaction(
                 "unit_price": price,
                 "quantity": qty,
                 "subtotal": round(price * qty, 2),
+                "bogo_auto_free": bool(raw.get("bogo_auto_free")),
             }
         )
 
