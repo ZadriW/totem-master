@@ -157,7 +157,8 @@
             (<strong>PREÇO</strong>, <strong>VALOR UNITÁRIO</strong> ou <strong>VALOR UNIDADE</strong>).
             Planilha só de estoque não altera preços já definidos no evento.
             Sem cabeçalho de preço, produtos novos usam o preço-base da biblioteca.
-            Sem quantidade, sobe com estoque 0. Duplicatas são somadas.
+            Sem quantidade, sobe com estoque 0. Duplicatas na planilha são somadas.
+            Se o produto já estiver no evento, a quantidade importada é somada ao estoque atual.
         </p>
         <form method="post"
               action="{{ url_for('admin_event_import_xls', event_id=event.id) }}"

@@ -146,6 +146,7 @@ from database import (
     list_products_admin,
     list_products_admin_slice,
     list_products_for_client,
+    summarize_catalog_option_groups,
     list_sellers,
     list_stock_movements,
     list_transaction_items_for_event_period,
@@ -949,6 +950,7 @@ def seller_sale():
         _attach_pending_delivery_units(
             products, seller_ev["id"], seller_id=_current_seller_id(),
         )
+        summarize_catalog_option_groups(products)
         # No modo evento, estoque + preços + promoções vêm do mesmo polling (15s).
         catalog_stock_api_url = ""
         catalog_promo_refresh_api_url = url_for(
@@ -1486,6 +1488,7 @@ def seller_api_event_catalog_promos_refresh():
     _attach_pending_delivery_units(
         products, seller_ev["id"], seller_id=_current_seller_id(),
     )
+    summarize_catalog_option_groups(products)
     return jsonify({"products": products})
 
 
@@ -3645,7 +3648,8 @@ def admin_event_import_xls(event_id: int):
     que já estavam no catálogo do evento. Sem cabeçalho de preço, produtos novos
     herdam o preço-base da biblioteca e os já existentes mantêm o preço atual.
     Sem quantidade reconhecida, adiciona o produto com estoque 0.
-    SKUs duplicados têm seus estoques somados antes da importação.
+    SKUs duplicados na planilha têm seus estoques somados antes da importação.
+    Produto já no evento: a quantidade da planilha entra como entrada (soma ao estoque atual).
     """
     event = _event_or_404(event_id)
     preserved = _event_stock_return_filters_from_form()
@@ -3715,13 +3719,12 @@ def admin_event_import_xls(event_id: int):
             added.append(f"{product['name']}{qty_label}{price_label}")
             total_units_imported += qty
         except ValueError:
-            # Já no evento: atualiza o preço da planilha; se o estoque atual é 0
-            # e a planilha tem quantidade, aplica a entrada agora.
+            # Já no evento: soma a quantidade da planilha ao estoque atual e
+            # atualiza o preço quando a planilha traz cabeçalho de preço.
             stock_applied = False
             if qty > 0:
                 existing_ep = get_product_in_event(event_id, product_id)
-                current_stock = int((existing_ep or {}).get("estoque") or 0)
-                if existing_ep is not None and current_stock <= 0:
+                if existing_ep is not None:
                     try:
                         register_event_stock_entry(
                             event_id,
@@ -3730,7 +3733,7 @@ def admin_event_import_xls(event_id: int):
                             reason=EVENT_IMPORT_XLS_MOTIVO_REF,
                             created_by=import_actor,
                         )
-                        added.append(f"{product['name']} ({qty} un.)")
+                        added.append(f"{product['name']} (+{qty} un.)")
                         total_units_imported += qty
                         stock_applied = True
                     except ValueError:

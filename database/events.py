@@ -7,7 +7,11 @@ from typing import Dict, List, Optional, Tuple
 
 from .connection import DEFAULT_MIN_STOCK, _now_iso, get_conn
 from .event_stock import _apply_event_movement
-from .products import _product_catalog_like_clause, _product_row_to_client
+from .products import (
+    _product_catalog_like_clause,
+    _product_row_to_client,
+    prepare_catalog_variant_groups,
+)
 from .sku_helpers import _default_sku_for_id
 import product_images
 
@@ -1222,7 +1226,7 @@ def list_event_products_for_client(event_id: int) -> List[Dict]:
         d["abaixo_minimo"] = d["estoque_minimo"] > 0 and d["estoque"] < d["estoque_minimo"]
         d["sem_estoque"] = d["estoque"] <= 0
         result.append(d)
-    return result
+    return prepare_catalog_variant_groups(result)
 
 
 def list_active_event_product_stocks(event_id: int) -> List[Dict]:

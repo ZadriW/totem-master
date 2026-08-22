@@ -117,6 +117,7 @@
             promo_bogo_free_id: promo ? promo.promo_bogo_free_id : 0,
             promo_bogo_buy_sku: promo ? promo.promo_bogo_buy_sku : '',
             promo_bogo_free_sku: promo ? promo.promo_bogo_free_sku : '',
+            promos: promo && Array.isArray(promo.promos) ? promo.promos : [],
         };
         return PP ? PP.applyPromoToItem(base) : base;
     }
@@ -146,6 +147,7 @@
             promo_bogo_free_id: promo ? promo.promo_bogo_free_id : 0,
             promo_bogo_buy_sku: promo ? promo.promo_bogo_buy_sku : '',
             promo_bogo_free_sku: promo ? promo.promo_bogo_free_sku : '',
+            promos: promo && Array.isArray(promo.promos) ? promo.promos : (item.promos || []),
         };
         return PP ? PP.applyPromoToItem(merged) : merged;
     }
@@ -362,6 +364,9 @@
                     promo_aplicada: !!row.em_promocao,
                     promo_nome: row.promo_nome || item.promo_nome || '',
                     promo_tipo: row.promo_tipo || item.promo_tipo || '',
+                    promo_rule_value: Number(row.promo_rule_value ?? item.promo_rule_value) || item.promo_rule_value || 0,
+                    promo_min_qty: Number(row.promo_min_qty ?? item.promo_min_qty) || item.promo_min_qty || 1,
+                    promo_free_qty: Number(row.promo_free_qty ?? item.promo_free_qty) || item.promo_free_qty || 0,
                     bogo_auto_free: !!item.bogo_auto_free,
                 };
             });

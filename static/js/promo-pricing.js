@@ -102,20 +102,39 @@
         return packBit || extraBit;
     }
 
-    function promoMetaFromProduct(product) {
-        if (!product || !product.em_promocao) return null;
+    function promoEntryFromFields(src) {
+        if (!src) return null;
+        const tipoNorm = String(src.promo_tipo || '').trim();
+        if (!tipoNorm) return null;
         return {
-            promo_tipo: product.promo_tipo || '',
-            promo_rule_value: Number(product.promo_rule_value) || 0,
-            promo_min_qty: Math.max(1, parseInt(String(product.promo_min_qty), 10) || 1),
-            promo_free_qty: Math.max(0, parseInt(String(product.promo_free_qty), 10) || 0),
-            promo_nome: product.promo_nome || '',
-            promo_badge: product.promo_badge || '',
-            promo_bogo_buy_id: parseInt(String(product.promo_bogo_buy_id), 10) || 0,
-            promo_bogo_free_id: parseInt(String(product.promo_bogo_free_id), 10) || 0,
-            promo_bogo_buy_sku: product.promo_bogo_buy_sku || '',
-            promo_bogo_free_sku: product.promo_bogo_free_sku || '',
+            promo_id: parseInt(String(src.promo_id || 0), 10) || 0,
+            promo_tipo: tipoNorm,
+            promo_rule_value: Number(src.promo_rule_value != null ? src.promo_rule_value : src.rule_value) || 0,
+            promo_min_qty: Math.max(1, parseInt(String(src.promo_min_qty != null ? src.promo_min_qty : src.min_qty), 10) || 1),
+            promo_free_qty: Math.max(0, parseInt(String(src.promo_free_qty != null ? src.promo_free_qty : src.free_qty), 10) || 0),
+            promo_nome: src.promo_nome || '',
+            promo_badge: src.promo_badge || '',
+            promo_bogo_buy_id: parseInt(String(src.promo_bogo_buy_id || src.bogo_buy_product_id || 0), 10) || 0,
+            promo_bogo_free_id: parseInt(String(src.promo_bogo_free_id || src.bogo_free_product_id || 0), 10) || 0,
+            promo_bogo_buy_sku: src.promo_bogo_buy_sku || src.bogo_buy_sku || '',
+            promo_bogo_free_sku: src.promo_bogo_free_sku || src.bogo_free_sku || '',
         };
+    }
+
+    function promosOf(product) {
+        if (!product) return [];
+        if (Array.isArray(product.promos) && product.promos.length) {
+            return product.promos.map(promoEntryFromFields).filter(Boolean);
+        }
+        const one = promoEntryFromFields(product);
+        if (one && one.promo_tipo) return [one];
+        return [];
+    }
+
+    function promoMetaFromProduct(product) {
+        const list = promosOf(product);
+        if (!list.length) return null;
+        return { ...list[0], promos: list };
     }
 
     function isCrossBogo(item) {
@@ -125,15 +144,47 @@
         return buy > 0 && free > 0 && buy !== free;
     }
 
+    function isCrossBogoPromo(promo) {
+        if (!promo || String(promo.promo_tipo || '') !== 'bogo') return false;
+        const buy = parseInt(String(promo.promo_bogo_buy_id), 10) || 0;
+        const free = parseInt(String(promo.promo_bogo_free_id), 10) || 0;
+        return buy > 0 && free > 0 && buy !== free;
+    }
+
+    function stampPromoFields(target, promo) {
+        if (!promo) return target;
+        target.promo_id = promo.promo_id || 0;
+        target.promo_tipo = promo.promo_tipo || '';
+        target.promo_rule_value = promo.promo_rule_value || 0;
+        target.promo_min_qty = promo.promo_min_qty || 1;
+        target.promo_free_qty = promo.promo_free_qty || 0;
+        target.promo_nome = promo.promo_nome || '';
+        target.promo_badge = promo.promo_badge || target.promo_badge || '';
+        target.promo_bogo_buy_id = promo.promo_bogo_buy_id || 0;
+        target.promo_bogo_free_id = promo.promo_bogo_free_id || 0;
+        target.promo_bogo_buy_sku = promo.promo_bogo_buy_sku || '';
+        target.promo_bogo_free_sku = promo.promo_bogo_free_sku || '';
+        return target;
+    }
+
     function applyPromoToItem(item) {
         const next = { ...item };
         const qty = Math.max(1, parseInt(String(next.quantidade), 10) || 1);
         const listPrice = Number(next.preco_lista ?? next.preco_original ?? next.preco) || 0;
         next.preco_lista = listPrice;
         next.quantidade = qty;
+        if (Array.isArray(item.promos) && item.promos.length) {
+            next.promos = item.promos;
+        }
 
         const listSubtotal = round2(listPrice * qty);
-        if (!next.em_promocao || !next.promo_tipo || isCrossBogo(next)) {
+        const candidates = promosOf(next).filter((promo) => {
+            if (!promo.promo_tipo || promo.promo_tipo === 'combo_bundle') return false;
+            if (isCrossBogoPromo(promo)) return false;
+            return true;
+        });
+
+        if (!candidates.length) {
             next.preco = listPrice;
             next.subtotal = listSubtotal;
             next.economia = 0;
@@ -141,31 +192,38 @@
             return next;
         }
 
-        const effSubtotal = computeEffectiveSubtotal(
-            next.promo_tipo,
-            next.promo_rule_value,
-            next.promo_min_qty,
-            next.promo_free_qty,
-            listPrice,
-            qty,
-        );
-        const hasDiscount = effSubtotal < listSubtotal - 0.001;
-        if (hasDiscount) {
-            next.subtotal = effSubtotal;
-            next.economia = round2(listSubtotal - effSubtotal);
+        let best = null;
+        let bestSubtotal = listSubtotal;
+        candidates.forEach((promo) => {
+            const eff = computeEffectiveSubtotal(
+                promo.promo_tipo,
+                promo.promo_rule_value,
+                promo.promo_min_qty,
+                promo.promo_free_qty,
+                listPrice,
+                qty,
+            );
+            if (eff < bestSubtotal - 0.001) {
+                bestSubtotal = eff;
+                best = promo;
+            }
+        });
+
+        if (best) {
+            stampPromoFields(next, best);
+            next.subtotal = bestSubtotal;
+            next.economia = round2(listSubtotal - bestSubtotal);
             next.promo_aplicada = true;
             const isPack = next.promo_tipo === 'exact_bundle' || next.promo_tipo === 'min_bundle';
             if (isPack) {
                 const { extra } = packGroupsAndExtra(qty, next.promo_min_qty);
-                // Não diluir o preço do kit nas unidades avulsas (6ª un. permanece no preço de lista).
                 next.preco = extra > 0
                     ? listPrice
-                    : (qty > 0 ? round2(effSubtotal / qty) : listPrice);
+                    : (qty > 0 ? round2(bestSubtotal / qty) : listPrice);
             } else {
-                next.preco = qty > 0 ? round2(effSubtotal / qty) : listPrice;
+                next.preco = qty > 0 ? round2(bestSubtotal / qty) : listPrice;
             }
         } else {
-            // Regra não atingida (ex.: qty < min_qty) ou bundle mais caro → preço de lista.
             next.subtotal = listSubtotal;
             next.preco = listPrice;
             next.economia = 0;
@@ -388,18 +446,26 @@
     function applyComboBundle(all) {
         const comboGroups = {};
         all.forEach((item, idx) => {
-            if (!item.em_promocao || item.promo_tipo !== 'combo_bundle') return;
-            const key = [
-                item.promo_nome || '',
-                item.promo_rule_value || 0,
-            ].join('|');
-            if (!comboGroups[key]) comboGroups[key] = [];
-            comboGroups[key].push(idx);
+            promosOf(item).forEach((promo) => {
+                if (promo.promo_tipo !== 'combo_bundle') return;
+                const key = [
+                    promo.promo_id || 0,
+                    promo.promo_nome || '',
+                    promo.promo_rule_value || 0,
+                ].join('|');
+                if (!comboGroups[key]) {
+                    comboGroups[key] = { indices: [], meta: promo };
+                }
+                if (!comboGroups[key].indices.includes(idx)) {
+                    comboGroups[key].indices.push(idx);
+                }
+            });
         });
 
-        Object.values(comboGroups).forEach(indices => {
+        Object.values(comboGroups).forEach((group) => {
+            const indices = group.indices;
             if (indices.length < 2) return;
-            const comboTotal = Math.max(0, Number(all[indices[0]].promo_rule_value) || 0);
+            const comboTotal = Math.max(0, Number(group.meta.promo_rule_value) || 0);
             if (comboTotal <= 0) return;
 
             const qtyPerItem = indices.map(i =>
@@ -418,6 +484,12 @@
             const promoSub = round2(numCombos * comboTotal);
             if (promoSub >= originalComboSub) return;
 
+            let currentGroup = 0;
+            indices.forEach(i => {
+                currentGroup += Number(all[i].subtotal) || 0;
+            });
+            let proposedGroup = 0;
+            const proposed = [];
             indices.forEach(i => {
                 const qty = Math.max(0, parseInt(String(all[i].quantidade), 10) || 0);
                 const lp = Number(all[i].preco_lista) || 0;
@@ -426,9 +498,18 @@
                 const share = originalComboSub > 0 ? round2(inCombo * lp) / originalComboSub : 0;
                 const itemPromo = round2(promoSub * share);
                 const itemTotal = round2(itemPromo + extra * lp);
-                const itemOrig = round2(lp * qty);
+                proposed.push(itemTotal);
+                proposedGroup += itemTotal;
+            });
+            if (proposedGroup >= currentGroup - 0.001) return;
 
+            indices.forEach((i, n) => {
+                const qty = Math.max(0, parseInt(String(all[i].quantidade), 10) || 0);
+                const lp = Number(all[i].preco_lista) || 0;
+                const itemOrig = round2(lp * qty);
+                const itemTotal = proposed[n];
                 if (itemTotal < itemOrig) {
+                    stampPromoFields(all[i], group.meta);
                     all[i].subtotal = itemTotal;
                     all[i].economia = round2(itemOrig - itemTotal);
                     all[i].promo_aplicada = true;
@@ -447,26 +528,37 @@
 
         const bundleGroups = {};
         all.forEach((item, idx) => {
-            if (!item.em_promocao || item.promo_tipo !== 'exact_bundle') return;
-            const key = [
-                item.promo_nome || '',
-                item.promo_min_qty || 0,
-                item.promo_rule_value || 0,
-            ].join('|');
-            if (!bundleGroups[key]) bundleGroups[key] = [];
-            bundleGroups[key].push(idx);
+            promosOf(item).forEach((promo) => {
+                if (promo.promo_tipo !== 'exact_bundle') return;
+                const key = [
+                    promo.promo_id || 0,
+                    promo.promo_nome || '',
+                    promo.promo_min_qty || 0,
+                    promo.promo_rule_value || 0,
+                ].join('|');
+                if (!bundleGroups[key]) {
+                    bundleGroups[key] = { indices: [], meta: promo };
+                }
+                if (!bundleGroups[key].indices.includes(idx)) {
+                    bundleGroups[key].indices.push(idx);
+                }
+            });
         });
 
-        Object.values(bundleGroups).forEach(indices => {
-            const minQ = Math.max(2, parseInt(String(all[indices[0]].promo_min_qty), 10) || 2);
-            const packTotal = Math.max(0, Number(all[indices[0]].promo_rule_value) || 0);
+        Object.values(bundleGroups).forEach((group) => {
+            const indices = group.indices;
+            if (indices.length < 2) return;
+            const minQ = Math.max(2, parseInt(String(group.meta.promo_min_qty), 10) || 2);
+            const packTotal = Math.max(0, Number(group.meta.promo_rule_value) || 0);
             let totalQty = 0;
             let originalSubtotal = 0;
+            let currentSubtotal = 0;
             indices.forEach(i => {
                 const q = Math.max(0, parseInt(String(all[i].quantidade), 10) || 0);
                 const lp = Number(all[i].preco_lista) || 0;
                 totalQty += q;
                 originalSubtotal += round2(lp * q);
+                currentSubtotal += Number(all[i].subtotal) || 0;
             });
             const groups = Math.floor(totalQty / minQ);
             if (groups <= 0) return;
@@ -485,7 +577,8 @@
             }
             const bundleSub = round2(groups * packTotal);
             const promoTotal = round2(bundleSub + extraSub);
-            const applyDiscount = promoTotal < originalSubtotal - 0.001;
+            if (promoTotal >= originalSubtotal - 0.001) return;
+            if (promoTotal >= currentSubtotal - 0.001) return;
 
             indices.forEach(i => {
                 const q = Math.max(0, parseInt(String(all[i].quantidade), 10) || 0);
@@ -495,12 +588,11 @@
                 all[i].bundle_groups = groups;
                 all[i].bundle_extra = extra;
                 all[i].bundle_item_extra = extraOnItem;
-
-                if (!applyDiscount) return;
                 const itemOrig = round2(lp * q);
                 const share = originalSubtotal > 0 ? itemOrig / originalSubtotal : 0;
                 const itemPromo = round2(promoTotal * share);
                 if (itemPromo < itemOrig) {
+                    stampPromoFields(all[i], group.meta);
                     all[i].subtotal = itemPromo;
                     all[i].economia = round2(itemOrig - itemPromo);
                     all[i].promo_aplicada = true;

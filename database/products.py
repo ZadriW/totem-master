@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 import unicodedata
+from collections import defaultdict
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from .connection import DEFAULT_MIN_STOCK, _now_iso, get_conn
@@ -542,6 +543,14 @@ def _product_row_to_client(row: sqlite3.Row) -> Dict:
         vn = (row["variant_name"] or "").strip()
     except (KeyError, IndexError):
         vn = ""
+    try:
+        wake_pid = int(row["wake_product_id"] or 0)
+    except (KeyError, IndexError, TypeError, ValueError):
+        wake_pid = 0
+    try:
+        main_variant = bool(int(row["main_variant"] or 0))
+    except (KeyError, IndexError, TypeError, ValueError):
+        main_variant = False
     return {
         "id": pid,
         "sku": sku,
@@ -554,7 +563,175 @@ def _product_row_to_client(row: sqlite3.Row) -> Dict:
         "estoque": int(row["stock"] or 0),
         "estoque_minimo": int(row["min_stock"] or 0),
         "ativo": bool(row["active"]),
+        "wake_product_id": wake_pid,
+        "main_variant": main_variant,
+        "tem_opcoes": False,
+        "catalog_oculto": False,
+        "opcoes": [],
     }
+
+
+def _is_name_variant_child(parent_name: str, child_name: str) -> bool:
+    pname = _fold_product_name(parent_name)
+    cname = _fold_product_name(child_name)
+    return bool(
+        pname
+        and len(pname) >= 12
+        and cname.startswith(pname + " ")
+        and len(cname) >= len(pname) + 8
+    )
+
+
+def _catalog_children_of_parent(parent: Dict, products: List[Dict], parent_ids: set) -> List[Dict]:
+    pid = int(parent["id"])
+    wake = int(parent.get("wake_product_id") or 0)
+    children: List[Dict] = []
+    for cand in products:
+        cid = int(cand["id"])
+        if cid == pid or cid in parent_ids:
+            continue
+        cwake = int(cand.get("wake_product_id") or 0)
+        same_wake = wake > 0 and cwake == wake
+        name_child = _is_name_variant_child(parent.get("nome") or "", cand.get("nome") or "")
+        if same_wake or name_child:
+            children.append(cand)
+    children.sort(key=lambda c: ((c.get("variante") or c.get("nome") or ""), int(c["id"])))
+    return children
+
+
+def _mark_catalog_family(head: Dict, members: List[Dict], *, include_head: bool) -> None:
+    option_ids: List[int] = []
+    if include_head:
+        option_ids.append(int(head["id"]))
+    for child in members:
+        cid = int(child["id"])
+        if cid == int(head["id"]):
+            continue
+        child["catalog_oculto"] = True
+        child["opcao_de"] = int(head["id"])
+        option_ids.append(cid)
+    if not option_ids:
+        return
+    head["tem_opcoes"] = True
+    head["catalog_oculto"] = False
+    head["opcoes"] = option_ids
+    search_bits = [head.get("nome") or "", head.get("sku") or "", head.get("variante") or ""]
+    by_id = {int(m["id"]): m for m in members}
+    by_id[int(head["id"])] = head
+    for oid in option_ids:
+        opt = by_id.get(oid)
+        if not opt:
+            continue
+        search_bits.extend([opt.get("nome") or "", opt.get("sku") or "", opt.get("variante") or ""])
+    head["busca_opcoes"] = " ".join(search_bits)
+
+
+def summarize_catalog_option_groups(products: List[Dict]) -> None:
+    """Atualiza preço/estoque resumidos do card-pai a partir das variantes."""
+    by_id = {int(p["id"]): p for p in products}
+    for p in products:
+        ids = [int(i) for i in (p.get("opcoes") or [])]
+        if not ids:
+            continue
+        children = [by_id[i] for i in ids if i in by_id]
+        if not children:
+            continue
+        prices = [float(c.get("preco") or 0) for c in children]
+        stocks = [int(c.get("estoque") or 0) for c in children]
+        p["opcoes_count"] = len(children)
+        p["estoque_opcoes"] = sum(stocks)
+        p["preco_a_partir"] = min(prices) if prices else float(p.get("preco") or 0)
+        p["precos_opcoes_variam"] = (max(prices) - min(prices) > 0.001) if prices else False
+        pending = sum(int(c.get("pending_delivery_units") or 0) for c in children)
+        p["pending_delivery_units"] = max(int(p.get("pending_delivery_units") or 0), pending)
+        if any(c.get("em_promocao") for c in children) and not p.get("em_promocao"):
+            p["em_promocao"] = True
+            for c in children:
+                if c.get("promo_badge"):
+                    p["promo_badge"] = c.get("promo_badge") or ""
+                    p["promo_nome"] = c.get("promo_nome") or ""
+                    p["promo_tipo"] = c.get("promo_tipo") or ""
+                    break
+
+
+def _detect_variant_parent_ids_from_products(products: List[Dict]) -> set:
+    """Mesma regra de ``_detect_variant_parent_ids``, só sobre a lista já carregada.
+
+    Não abre conexão extra — o catálogo na LAN não pode varrer a tabela
+    ``products`` a cada request/polling.
+    """
+    found: set = set()
+    by_wake: Dict[int, List[Dict]] = defaultdict(list)
+    for p in products:
+        wake = int(p.get("wake_product_id") or 0)
+        if wake > 0:
+            by_wake[wake].append(p)
+    for wake, group in by_wake.items():
+        if len(group) < 2:
+            continue
+        for p in group:
+            if int(p["id"]) == wake:
+                found.add(int(p["id"]))
+
+    folded = [(int(p["id"]), _fold_product_name(p.get("nome") or "")) for p in products]
+    for pid, pname in folded:
+        if pid in found or len(pname) < 12:
+            continue
+        child_ids = [
+            cid
+            for cid, cname in folded
+            if cid != pid and cname.startswith(pname + " ") and len(cname) >= len(pname) + 8
+        ]
+        if child_ids and pid < min(child_ids):
+            found.add(pid)
+    return found
+
+
+def prepare_catalog_variant_groups(products: List[Dict]) -> List[Dict]:
+    """Marca famílias pai/variante: um card no catálogo, variantes só no modal.
+
+    Mutates ``products`` in place and returns the same list.
+    """
+    if not products:
+        return products
+
+    for p in products:
+        p["tem_opcoes"] = False
+        p["catalog_oculto"] = False
+        p["opcoes"] = []
+        p["busca_opcoes"] = ""
+        p.pop("opcao_de", None)
+
+    parent_ids = _detect_variant_parent_ids_from_products(products)
+    by_id = {int(p["id"]): p for p in products}
+
+    for parent_id in parent_ids:
+        parent = by_id.get(int(parent_id))
+        if parent is None:
+            continue
+        children = _catalog_children_of_parent(parent, products, parent_ids)
+        if not children:
+            continue
+        _mark_catalog_family(parent, children, include_head=False)
+
+    by_wake: Dict[int, List[Dict]] = defaultdict(list)
+    for p in products:
+        if p.get("catalog_oculto") or p.get("tem_opcoes"):
+            continue
+        wake = int(p.get("wake_product_id") or 0)
+        if wake > 0:
+            by_wake[wake].append(p)
+    for _wake, group in by_wake.items():
+        visible = [p for p in group if not p.get("catalog_oculto")]
+        if len(visible) < 2:
+            continue
+        if any(p.get("tem_opcoes") for p in visible):
+            continue
+        head = min(visible, key=lambda p: (len(p.get("nome") or ""), int(p["id"])))
+        _mark_catalog_family(head, visible, include_head=True)
+
+    summarize_catalog_option_groups(products)
+    return products
 
 
 def list_products_for_client(
@@ -581,7 +758,7 @@ def list_products_for_client(
 
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
-    return [_product_row_to_client(r) for r in rows]
+    return prepare_catalog_variant_groups([_product_row_to_client(r) for r in rows])
 
 
 def list_active_product_stocks() -> List[Dict[str, int]]:

@@ -1873,6 +1873,7 @@ def get_pending_transaction_restore_payload(tx_id: int, seller_id: int) -> Optio
                     entry["promo_min_qty"] = enriched.get("promo_min_qty") or 1
                     entry["promo_free_qty"] = enriched.get("promo_free_qty") or 0
                     entry["promo_badge"] = enriched.get("promo_badge") or ""
+                    entry["promos"] = list(enriched.get("promos") or [])
                     if not entry["promo_nome"]:
                         entry["promo_nome"] = enriched.get("promo_nome") or ""
 
